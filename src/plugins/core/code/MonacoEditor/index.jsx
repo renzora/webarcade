@@ -52,6 +52,127 @@ function MonacoEditor({
   ];
 
 
+  const configureTypeScript = (monaco) => {
+    // Configure TypeScript/JavaScript compiler options for ES6+ and JSX
+    monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
+      target: monaco.languages.typescript.ScriptTarget.ESNext,
+      module: monaco.languages.typescript.ModuleKind.ESNext,
+      allowNonTsExtensions: true,
+      allowJs: true,
+      checkJs: false,
+      jsx: monaco.languages.typescript.JsxEmit.Preserve,
+      jsxFactory: 'React.createElement',
+      jsxFragmentFactory: 'React.Fragment',
+      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+      allowSyntheticDefaultImports: true,
+      esModuleInterop: true,
+    });
+
+    monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+      target: monaco.languages.typescript.ScriptTarget.ESNext,
+      module: monaco.languages.typescript.ModuleKind.ESNext,
+      allowNonTsExtensions: true,
+      jsx: monaco.languages.typescript.JsxEmit.Preserve,
+      jsxFactory: 'React.createElement',
+      jsxFragmentFactory: 'React.Fragment',
+      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+      allowSyntheticDefaultImports: true,
+      esModuleInterop: true,
+      lib: ['es2020', 'dom', 'dom.iterable'],
+    });
+
+    // Enable diagnostic features with JSX-friendly settings
+    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+      noSemanticValidation: false,
+      noSyntaxValidation: false,
+      diagnosticCodesToIgnore: [
+        1108, // Return statement can only be used within a function body
+        1375, // 'await' expressions are only allowed at the top level of a file
+        2307, // Cannot find module
+        2304, // Cannot find name
+        2552, // Cannot find name. Did you mean...?
+        2339, // Property does not exist on type
+        2769, // No overload matches this call
+        2571, // Object is of type 'unknown'
+        6133, // Variable is declared but never used
+        7016, // Could not find a declaration file for module
+        7026, // JSX element implicitly has type 'any'
+        7031, // Binding element implicitly has an 'any' type
+      ]
+    });
+
+    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+      noSemanticValidation: false,
+      noSyntaxValidation: false,
+      diagnosticCodesToIgnore: [
+        2307, // Cannot find module
+        2304, // Cannot find name
+        2552, // Cannot find name. Did you mean...?
+        2339, // Property does not exist on type
+        2769, // No overload matches this call
+        6133, // Variable is declared but never used
+        7016, // Could not find a declaration file for module
+        7026, // JSX element implicitly has type 'any'
+        7031, // Binding element implicitly has an 'any' type
+      ]
+    });
+
+    // Add type definitions for common libraries
+    const solidJSTypes = `
+      declare module 'solid-js' {
+        export function createSignal<T>(initialValue: T): [() => T, (v: T) => void];
+        export function createEffect(fn: () => void): void;
+        export function createMemo<T>(fn: () => T): () => T;
+        export function onMount(fn: () => void): void;
+        export function onCleanup(fn: () => void): void;
+        export function Show(props: { when: any; fallback?: any; children: any }): any;
+        export function For<T>(props: { each: T[]; fallback?: any; children: (item: T, index: () => number) => any }): any;
+        export function Switch(props: { fallback?: any; children: any }): any;
+        export function Match(props: { when: any; children: any }): any;
+        export function Index<T>(props: { each: T[]; fallback?: any; children: (item: () => T, index: number) => any }): any;
+      }
+      declare module 'solid-js/web' {
+        export function render(code: () => any, element: HTMLElement): void;
+      }
+    `;
+
+    // Add basic JSX type definitions to help Monaco understand JSX syntax
+    const jsxTypes = `
+      declare namespace JSX {
+        interface IntrinsicElements {
+          [elemName: string]: any;
+        }
+        interface Element extends HTMLElement {}
+        interface ElementClass {
+          render: any;
+        }
+        interface ElementAttributesProperty {
+          props: {};
+        }
+        interface ElementChildrenAttribute {
+          children: {};
+        }
+      }
+
+      // Global HTML element interfaces
+      interface HTMLAttributes {
+        class?: string;
+        className?: string;
+        style?: any;
+        id?: string;
+        onClick?: (e: any) => void;
+        onChange?: (e: any) => void;
+        onInput?: (e: any) => void;
+        [key: string]: any;
+      }
+    `;
+
+    monaco.languages.typescript.javascriptDefaults.addExtraLib(solidJSTypes, 'ts:solid-js.d.ts');
+    monaco.languages.typescript.typescriptDefaults.addExtraLib(solidJSTypes, 'ts:solid-js.d.ts');
+    monaco.languages.typescript.javascriptDefaults.addExtraLib(jsxTypes, 'ts:jsx-runtime.d.ts');
+    monaco.languages.typescript.typescriptDefaults.addExtraLib(jsxTypes, 'ts:jsx-runtime.d.ts');
+  };
+
   const registerScriptingLanguage = (monaco) => {
     // Register tokens provider for syntax highlighting
     monaco.languages.setMonarchTokensProvider('javascript', {
@@ -131,12 +252,13 @@ function MonacoEditor({
 
     // Add completion provider for scripting API - with higher priority
     const customSuggestions = [
+      // SolidJS specific
       {
         label: 'props',
         kind: monaco.languages.CompletionItemKind.Variable,
         documentation: 'Component properties',
         insertText: 'props',
-        sortText: '0000'  // High priority
+        sortText: '0000'
       },
       {
         label: 'children',
@@ -146,32 +268,142 @@ function MonacoEditor({
         sortText: '0001'
       },
       {
-        label: 'onClick',
-        kind: monaco.languages.CompletionItemKind.Property,
-        documentation: 'Click event handler',
-        insertText: 'onClick',
-        sortText: '0002'
-      },
-      {
-        label: 'onMount',
-        kind: monaco.languages.CompletionItemKind.Function,
-        documentation: 'SolidJS onMount lifecycle',
-        insertText: 'onMount',
-        sortText: '0003'
-      },
-      {
         label: 'createSignal',
         kind: monaco.languages.CompletionItemKind.Function,
         documentation: 'SolidJS reactive signal',
-        insertText: 'createSignal',
-        sortText: '0004'
+        insertText: 'createSignal(${1:initialValue})',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        sortText: '0002'
       },
       {
         label: 'createEffect',
         kind: monaco.languages.CompletionItemKind.Function,
         documentation: 'SolidJS reactive effect',
-        insertText: 'createEffect',
+        insertText: 'createEffect(() => {\n\t${1}\n})',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        sortText: '0003'
+      },
+      {
+        label: 'createMemo',
+        kind: monaco.languages.CompletionItemKind.Function,
+        documentation: 'SolidJS memoized value',
+        insertText: 'createMemo(() => ${1})',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        sortText: '0004'
+      },
+      {
+        label: 'onMount',
+        kind: monaco.languages.CompletionItemKind.Function,
+        documentation: 'SolidJS onMount lifecycle',
+        insertText: 'onMount(() => {\n\t${1}\n})',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
         sortText: '0005'
+      },
+      {
+        label: 'onCleanup',
+        kind: monaco.languages.CompletionItemKind.Function,
+        documentation: 'SolidJS cleanup on component unmount',
+        insertText: 'onCleanup(() => {\n\t${1}\n})',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        sortText: '0006'
+      },
+      {
+        label: 'Show',
+        kind: monaco.languages.CompletionItemKind.Function,
+        documentation: 'SolidJS conditional rendering component',
+        insertText: '<Show when={${1:condition}}>\n\t${2}\n</Show>',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        sortText: '0007'
+      },
+      {
+        label: 'For',
+        kind: monaco.languages.CompletionItemKind.Function,
+        documentation: 'SolidJS list rendering component',
+        insertText: '<For each={${1:array}}>\n\t{(${2:item}) => ${3}}\n</For>',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        sortText: '0008'
+      },
+      // Event handlers
+      {
+        label: 'onClick',
+        kind: monaco.languages.CompletionItemKind.Property,
+        documentation: 'Click event handler',
+        insertText: 'onClick={(e) => ${1}}',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        sortText: '0009'
+      },
+      {
+        label: 'onChange',
+        kind: monaco.languages.CompletionItemKind.Property,
+        documentation: 'Change event handler',
+        insertText: 'onChange={(e) => ${1}}',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        sortText: '0010'
+      },
+      {
+        label: 'onInput',
+        kind: monaco.languages.CompletionItemKind.Property,
+        documentation: 'Input event handler',
+        insertText: 'onInput={(e) => ${1}}',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        sortText: '0011'
+      },
+      // ES6+ features
+      {
+        label: 'async/await',
+        kind: monaco.languages.CompletionItemKind.Snippet,
+        documentation: 'Async function with await',
+        insertText: 'async () => {\n\tconst ${1:result} = await ${2:promise};\n\t${3}\n}',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        sortText: '0012'
+      },
+      {
+        label: 'arrowFunction',
+        kind: monaco.languages.CompletionItemKind.Snippet,
+        documentation: 'Arrow function',
+        insertText: '(${1:params}) => ${2:expression}',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        sortText: '0013'
+      },
+      {
+        label: 'destructuring',
+        kind: monaco.languages.CompletionItemKind.Snippet,
+        documentation: 'Object destructuring',
+        insertText: 'const { ${1:prop} } = ${2:object}',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        sortText: '0014'
+      },
+      {
+        label: 'spread',
+        kind: monaco.languages.CompletionItemKind.Snippet,
+        documentation: 'Spread operator',
+        insertText: '...${1:array}',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        sortText: '0015'
+      },
+      {
+        label: 'template',
+        kind: monaco.languages.CompletionItemKind.Snippet,
+        documentation: 'Template literal',
+        insertText: '`${${1:expression}}`',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        sortText: '0016'
+      },
+      {
+        label: 'import',
+        kind: monaco.languages.CompletionItemKind.Snippet,
+        documentation: 'ES6 import statement',
+        insertText: "import { ${1:export} } from '${2:module}'",
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        sortText: '0017'
+      },
+      {
+        label: 'export',
+        kind: monaco.languages.CompletionItemKind.Snippet,
+        documentation: 'ES6 export statement',
+        insertText: 'export ${1:const} ${2:name} = ${3:value}',
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        sortText: '0018'
       },
       ...scriptingKeywords.map((keyword, index) => ({
         label: keyword,
@@ -414,10 +646,13 @@ function MonacoEditor({
       });
 
       const monaco = await loader.init();
-      
+
+      // Configure TypeScript for ES6+ and JSX support
+      configureTypeScript(monaco);
+
       // Create and register DaisyUI theme
       createDaisyUITheme(monaco);
-      
+
       // Register custom language features
       registerScriptingLanguage(monaco);
 

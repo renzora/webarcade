@@ -6,6 +6,13 @@ dist
 # Project data
 projects/
 
+# Database and data files
+data/
+bridge/data/
+*.db
+*.db-shm
+*.db-wal
+
 # Tauri build artifacts
 src-tauri/target
 src-tauri/gen
@@ -43,5 +50,18 @@ prompt.txt
 AGENTS.md
 
 # Sensitive config files
-config/.twitch_key
-config/twitch_config.toml
+config/*
+!config/*.example
+!config/README.md
+*.toml
+!Cargo.toml
+!**/Cargo.toml
+!*.toml.example
+
+# SSL Certificates and private keys
+*.pem
+*.key
+*.crt
+*.cert
+*.p12
+*.pfx

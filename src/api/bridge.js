@@ -4,7 +4,14 @@
  * and direct connection in production
  */
 
-const BRIDGE_BASE_URL = import.meta.env.PROD ? 'http://localhost:3001' : '';
+// Static constants for overlays (always use direct connection)
+export const WEBARCADE_WS = 'ws://localhost:3002';
+export const BRIDGE_API = 'http://localhost:3001';
+
+// Dynamic base URL for main app (uses import.meta which may not be available in overlays)
+const BRIDGE_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.PROD)
+  ? 'http://localhost:3001'
+  : '';
 
 export async function bridgeFetch(path, options = {}) {
   const url = `${BRIDGE_BASE_URL}${path}`;

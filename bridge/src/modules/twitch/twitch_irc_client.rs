@@ -5,6 +5,7 @@ use tokio::sync::{broadcast, RwLock};
 use twitch_irc::login::StaticLoginCredentials;
 use twitch_irc::message::{PrivmsgMessage, ServerMessage};
 use twitch_irc::{ClientConfig, SecureTCPTransport, TwitchIRCClient};
+use chrono::Datelike;
 
 use super::twitch_auth::TwitchAuth;
 use super::twitch_config::TwitchConfigManager;
@@ -15,6 +16,8 @@ pub struct ChatMessage {
     pub channel: String,
     pub username: String,
     pub user_id: String,
+    pub display_name: Option<String>,
+    pub profile_image_url: Option<String>,
     pub message: String,
     pub timestamp: i64,
     pub badges: Vec<String>,
@@ -23,6 +26,9 @@ pub struct ChatMessage {
     pub is_vip: bool,
     pub color: Option<String>,
     pub emotes: Vec<EmoteInfo>,
+    pub location_flag: Option<String>,
+    pub is_birthday: bool,
+    pub level: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,11 +38,48 @@ pub struct EmoteInfo {
     pub positions: Vec<(usize, usize)>,
 }
 
+/// Level up event data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LevelUpEvent {
+    pub username: String,
+    pub channel: String,
+    pub old_level: i64,
+    pub new_level: i64,
+    pub total_xp: i64,
+    pub xp_needed: i64,
+}
+
+/// Wheel spin option
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WheelOption {
+    pub text: String,
+    pub color: String,
+}
+
+/// Wheel spin event data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WheelSpinEvent {
+    pub channel: String,
+    pub winner: String,
+    pub options: Vec<WheelOption>,
+    pub triggered_by: Option<String>,
+}
+
+/// Effect trigger event data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EffectTriggerEvent {
+    pub channel: String,
+    pub triggered_by: String,
+}
+
 /// Twitch event types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TwitchEvent {
     ChatMessage(ChatMessage),
+    LevelUp(LevelUpEvent),
+    WheelSpin(WheelSpinEvent),
+    EffectTrigger(EffectTriggerEvent),
     Connected { channels: Vec<String> },
     Disconnected { reason: String },
     UserJoined { channel: String, username: String },
@@ -314,8 +357,10 @@ impl TwitchIRCManager {
 
         ChatMessage {
             channel: msg.channel_login,
-            username: msg.sender.login,
-            user_id: msg.sender.id,
+            username: msg.sender.login.clone(),
+            user_id: msg.sender.id.clone(),
+            display_name: Some(msg.sender.name.clone()),
+            profile_image_url: None, // Will be populated by caching layer
             message: msg.message_text,
             timestamp: chrono::Utc::now().timestamp(),
             badges,
@@ -324,6 +369,140 @@ impl TwitchIRCManager {
             is_vip,
             color: msg.name_color.map(|c| c.to_string()),
             emotes,
+            location_flag: None, // Will be populated by message enrichment
+            is_birthday: false,  // Will be populated by message enrichment
+            level: None,         // Will be populated by message enrichment
+        }
+    }
+
+    /// Convert location name to flag image URL
+    /// Returns a URL to a flag image from flagcdn.com
+    pub fn get_location_flag(location: &str) -> Option<String> {
+        let location_lower = location.to_lowercase().trim().to_string();
+
+        // Helper to create flag URL from two-letter code
+        let make_flag_url = |code: &str| -> String {
+            format!("https://flagcdn.com/16x12/{}.png", code.to_lowercase())
+        };
+
+        // Common country mappings to ISO 3166-1 alpha-2 codes
+        let code = match location_lower.as_str() {
+            // Short codes
+            "us" | "usa" => "us",
+            "ca" => "ca",
+            "uk" | "gb" => "gb",
+            "au" => "au",
+            "de" => "de",
+            "fr" => "fr",
+            "es" => "es",
+            "it" => "it",
+            "jp" => "jp",
+            "cn" => "cn",
+            "kr" => "kr",
+            "mx" => "mx",
+            "br" => "br",
+            "ar" => "ar",
+            "in" => "in",
+            "ru" => "ru",
+            "pl" => "pl",
+            "nl" => "nl",
+            "se" => "se",
+            "no" => "no",
+            "dk" => "dk",
+            "fi" => "fi",
+            "pt" => "pt",
+            "gr" => "gr",
+            "tr" => "tr",
+            "ie" => "ie",
+            "nz" => "nz",
+            "sg" => "sg",
+            "ph" => "ph",
+            "th" => "th",
+            "vn" => "vn",
+            "id" => "id",
+            "my" => "my",
+            "za" => "za",
+            "eg" => "eg",
+            "il" => "il",
+            "sa" => "sa",
+            "ae" => "ae",
+            "ch" => "ch",
+            "at" => "at",
+            "be" => "be",
+            "cz" => "cz",
+            "ro" => "ro",
+            "hu" => "hu",
+            "ua" => "ua",
+            "cl" => "cl",
+            "co" => "co",
+            "pe" => "pe",
+            "ve" => "ve",
+            // Full names and partial matches
+            s if s.contains("usa") || s.contains("united states") || s.contains("america") => "us",
+            s if s.contains("canada") => "ca",
+            s if s.contains("uk") || s.contains("united kingdom") || s.contains("england") || s.contains("britain") => "gb",
+            s if s.contains("australia") => "au",
+            s if s.contains("germany") => "de",
+            s if s.contains("france") => "fr",
+            s if s.contains("spain") => "es",
+            s if s.contains("italy") => "it",
+            s if s.contains("japan") => "jp",
+            s if s.contains("china") => "cn",
+            s if s.contains("korea") || s.contains("south korea") => "kr",
+            s if s.contains("mexico") => "mx",
+            s if s.contains("brazil") => "br",
+            s if s.contains("argentina") => "ar",
+            s if s.contains("india") => "in",
+            s if s.contains("russia") => "ru",
+            s if s.contains("poland") => "pl",
+            s if s.contains("netherlands") || s.contains("holland") => "nl",
+            s if s.contains("sweden") => "se",
+            s if s.contains("norway") => "no",
+            s if s.contains("denmark") => "dk",
+            s if s.contains("finland") => "fi",
+            s if s.contains("portugal") => "pt",
+            s if s.contains("greece") => "gr",
+            s if s.contains("turkey") => "tr",
+            s if s.contains("ireland") => "ie",
+            s if s.contains("new zealand") => "nz",
+            s if s.contains("singapore") => "sg",
+            s if s.contains("philippines") => "ph",
+            s if s.contains("thailand") => "th",
+            s if s.contains("vietnam") => "vn",
+            s if s.contains("indonesia") => "id",
+            s if s.contains("malaysia") => "my",
+            s if s.contains("south africa") => "za",
+            s if s.contains("egypt") => "eg",
+            s if s.contains("israel") => "il",
+            s if s.contains("saudi arabia") => "sa",
+            s if s.contains("uae") || s.contains("emirates") => "ae",
+            s if s.contains("switzerland") => "ch",
+            s if s.contains("austria") => "at",
+            s if s.contains("belgium") => "be",
+            s if s.contains("czech") => "cz",
+            s if s.contains("romania") => "ro",
+            s if s.contains("hungary") => "hu",
+            s if s.contains("ukraine") => "ua",
+            s if s.contains("chile") => "cl",
+            s if s.contains("colombia") => "co",
+            s if s.contains("peru") => "pe",
+            s if s.contains("venezuela") => "ve",
+            _ => return None, // No match
+        };
+
+        Some(make_flag_url(code))
+    }
+
+    /// Check if today is the user's birthday
+    pub fn is_birthday_today(birthday: &str) -> bool {
+        let now = chrono::Utc::now();
+        let today_month_day = format!("{:02}-{:02}", now.month(), now.day());
+
+        // Birthday format is YYYY-MM-DD, extract MM-DD
+        if let Some(month_day) = birthday.get(5..10) {
+            month_day == today_month_day
+        } else {
+            false
         }
     }
 }
@@ -338,6 +517,8 @@ mod tests {
             channel: "test_channel".to_string(),
             username: "test_user".to_string(),
             user_id: "12345".to_string(),
+            display_name: Some("TestUser".to_string()),
+            profile_image_url: Some("https://example.com/avatar.png".to_string()),
             message: "Hello, world!".to_string(),
             timestamp: 1234567890,
             badges: vec!["moderator/1".to_string()],
@@ -346,6 +527,9 @@ mod tests {
             is_vip: false,
             color: Some("#FF0000".to_string()),
             emotes: vec![],
+            location_flag: Some("🇺🇸".to_string()),
+            is_birthday: false,
+            level: Some(5),
         };
 
         let json = serde_json::to_string(&msg).unwrap();
@@ -361,6 +545,8 @@ mod tests {
             channel: "test".to_string(),
             username: "user".to_string(),
             user_id: "123".to_string(),
+            display_name: None,
+            profile_image_url: None,
             message: "test".to_string(),
             timestamp: 1234567890,
             badges: vec![],
@@ -369,6 +555,9 @@ mod tests {
             is_vip: false,
             color: None,
             emotes: vec![],
+            location_flag: None,
+            is_birthday: false,
+            level: None,
         });
 
         let json = serde_json::to_string(&event).unwrap();

@@ -10,7 +10,7 @@ use super::twitch_config::{TwitchConfig, TwitchConfigManager};
 const TWITCH_AUTH_URL: &str = "https://id.twitch.tv/oauth2/authorize";
 const TWITCH_TOKEN_URL: &str = "https://id.twitch.tv/oauth2/token";
 const TWITCH_VALIDATE_URL: &str = "https://id.twitch.tv/oauth2/validate";
-const REDIRECT_URI: &str = "https://localhost:3000/twitch/callback";
+const REDIRECT_URI: &str = "http://localhost:3001/twitch/callback";
 
 /// OAuth token response from Twitch
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -302,18 +302,95 @@ impl TwitchAuth {
         Ok(has_token && !is_expired)
     }
 
-    /// Get default scopes for bot functionality
+    /// Get default scopes for bot functionality (ALL SCOPES)
     pub fn get_default_scopes() -> Vec<String> {
         vec![
-            "chat:read".to_string(),
-            "chat:edit".to_string(),
-            "channel:moderate".to_string(),
-            "whispers:read".to_string(),
-            "whispers:edit".to_string(),
-            "channel:read:subscriptions".to_string(),
+            // Analytics
+            "analytics:read:extensions".to_string(),
+            "analytics:read:games".to_string(),
+
+            // Bits
             "bits:read".to_string(),
+
+            // Channel
+            "channel:bot".to_string(),
+            "channel:edit:commercial".to_string(),
+            "channel:manage:ads".to_string(),
+            "channel:manage:broadcast".to_string(),
+            "channel:manage:extensions".to_string(),
+            "channel:manage:moderators".to_string(),
+            "channel:manage:polls".to_string(),
+            "channel:manage:predictions".to_string(),
+            "channel:manage:raids".to_string(),
+            "channel:manage:redemptions".to_string(),
+            "channel:manage:schedule".to_string(),
+            "channel:manage:videos".to_string(),
+            "channel:manage:vips".to_string(),
+            "channel:moderate".to_string(),
+            "channel:read:ads".to_string(),
+            "channel:read:charity".to_string(),
+            "channel:read:editors".to_string(),
+            "channel:read:goals".to_string(),
+            "channel:read:guest_star".to_string(),
+            "channel:read:hype_train".to_string(),
+            "channel:read:polls".to_string(),
+            "channel:read:predictions".to_string(),
             "channel:read:redemptions".to_string(),
+            "channel:read:stream_key".to_string(),
+            "channel:read:subscriptions".to_string(),
+            "channel:read:vips".to_string(),
+
+            // Chat
+            "chat:edit".to_string(),
+            "chat:read".to_string(),
+
+            // Clips
+            "clips:edit".to_string(),
+
+            // Moderation
+            "moderation:read".to_string(),
+            "moderator:manage:announcements".to_string(),
+            "moderator:manage:automod".to_string(),
+            "moderator:manage:automod_settings".to_string(),
+            "moderator:manage:banned_users".to_string(),
+            "moderator:manage:blocked_terms".to_string(),
+            "moderator:manage:chat_messages".to_string(),
+            "moderator:manage:chat_settings".to_string(),
+            "moderator:manage:guest_star".to_string(),
+            "moderator:manage:shield_mode".to_string(),
+            "moderator:manage:shoutouts".to_string(),
+            "moderator:manage:unban_requests".to_string(),
+            "moderator:manage:warnings".to_string(),
+            "moderator:read:automod_settings".to_string(),
+            "moderator:read:blocked_terms".to_string(),
+            "moderator:read:chat_settings".to_string(),
+            "moderator:read:chatters".to_string(),
             "moderator:read:followers".to_string(),
+            "moderator:read:guest_star".to_string(),
+            "moderator:read:shield_mode".to_string(),
+            "moderator:read:shoutouts".to_string(),
+            "moderator:read:suspicious_users".to_string(),
+            "moderator:read:unban_requests".to_string(),
+            "moderator:read:warnings".to_string(),
+
+            // User
+            "user:bot".to_string(),
+            "user:edit".to_string(),
+            "user:edit:broadcast".to_string(),
+            "user:edit:follows".to_string(),
+            "user:manage:blocked_users".to_string(),
+            "user:manage:chat_color".to_string(),
+            "user:manage:whispers".to_string(),
+            "user:read:blocked_users".to_string(),
+            "user:read:broadcast".to_string(),
+            "user:read:email".to_string(),
+            "user:read:follows".to_string(),
+            "user:read:subscriptions".to_string(),
+            "user:write:chat".to_string(),
+
+            // Whispers
+            "whispers:edit".to_string(),
+            "whispers:read".to_string(),
         ]
     }
 }

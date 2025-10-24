@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 
@@ -8,6 +9,10 @@ use super::twitch_auth::TwitchAuth;
 use super::twitch_commands::{Command, CommandSystem, SimpleCommand};
 use super::twitch_config::TwitchConfigManager;
 use super::twitch_irc_client::{TwitchEvent, TwitchIRCManager};
+use super::stream_tracker::StreamTracker;
+use super::text_command_timer::TextCommandTimer;
+use crate::commands::database::Database;
+use crate::commands::levels;
 
 /// Status of the Twitch bot
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,6 +46,9 @@ pub struct TwitchManager {
     status: Arc<RwLock<BotStatus>>,
     stats: Arc<RwLock<BotStats>>,
     start_time: Arc<RwLock<Option<i64>>>,
+    profile_cache: Arc<RwLock<HashMap<String, String>>>, // user_id -> profile_image_url
+    stream_tracker: Option<Arc<StreamTracker>>, // Optional: only if database is available
+    text_command_timer: Option<Arc<TextCommandTimer>>, // Optional: only if database is available
 }
 
 impl TwitchManager {
@@ -72,33 +80,142 @@ impl TwitchManager {
             authenticated_user: None,
         }));
 
+        let profile_cache = Arc::new(RwLock::new(HashMap::new()));
+
+        // Initialize stream tracker and text command timer if database is available
+        let (stream_tracker, text_command_timer) = match Database::new() {
+            Ok(db) => {
+                let tracker = Some(Arc::new(StreamTracker::new(
+                    api.clone(),
+                    db.clone(),
+                    config_manager.clone(),
+                )));
+                let timer = Some(Arc::new(TextCommandTimer::new(
+                    db,
+                    irc_manager.clone(),
+                    config_manager.clone(),
+                )));
+                (tracker, timer)
+            }
+            Err(_) => (None, None),
+        };
+
         let manager = Self {
             config_manager,
             auth,
-            api,
+            api: api.clone(),
             irc_manager,
             command_system,
             event_sender: event_sender.clone(),
             status: status.clone(),
             stats: stats.clone(),
             start_time: Arc::new(RwLock::new(None)),
+            profile_cache: profile_cache.clone(),
+            stream_tracker: stream_tracker.clone(),
+            text_command_timer: text_command_timer.clone(),
         };
 
         // Spawn event forwarder
         let event_sender_clone = event_sender.clone();
         let command_system_clone = manager.command_system.clone();
+        let irc_manager_clone = manager.irc_manager.clone();
         let stats_clone = stats.clone();
+        let profile_cache_clone = profile_cache.clone();
+        let api_clone = api.clone();
+        let stream_tracker_clone = stream_tracker.clone();
+
+        // Initialize database for XP tracking
+        let db = Database::new().ok();
 
         tokio::spawn(async move {
-            while let Ok(event) = irc_event_receiver.recv().await {
+            while let Ok(mut event) = irc_event_receiver.recv().await {
+                // Enrich chat messages with profile images and user data
+                if let TwitchEvent::ChatMessage(ref mut msg) = event {
+                    // Check cache first for profile image
+                    let mut cache = profile_cache_clone.write().await;
+                    if !cache.contains_key(&msg.user_id) {
+                        // Fetch from API
+                        if let Ok(Some(user)) = api_clone.get_user_by_id(&msg.user_id).await {
+                            cache.insert(msg.user_id.clone(), user.profile_image_url.clone());
+                            msg.profile_image_url = Some(user.profile_image_url);
+                        }
+                    } else {
+                        msg.profile_image_url = cache.get(&msg.user_id).cloned();
+                    }
+                    drop(cache);
+
+                    // Enrich with database user data (location, birthday, level)
+                    if let Some(ref database) = db {
+                        // Get location
+                        if let Ok(Some(location)) = database.get_user_location(&msg.channel, &msg.username) {
+                            msg.location_flag = TwitchIRCManager::get_location_flag(&location);
+                        }
+
+                        // Check birthday
+                        if let Ok(Some(birthday)) = database.get_user_birthday(&msg.channel, &msg.username) {
+                            msg.is_birthday = TwitchIRCManager::is_birthday_today(&birthday);
+                        }
+
+                        // Get level
+                        if let Ok(Some((level, _, _, _))) = database.get_user_level(&msg.channel, &msg.username) {
+                            msg.level = Some(level);
+                        }
+                    }
+                }
+
                 // Update stats based on event
                 match &event {
                     TwitchEvent::ChatMessage(msg) => {
                         let mut stats = stats_clone.write().await;
                         stats.total_messages += 1;
+                        drop(stats);
+
+                        // Mark user as active for watchtime tracking
+                        if let Some(ref tracker) = stream_tracker_clone {
+                            tracker.mark_user_active(&msg.username).await;
+                        }
+
+                        // Award XP for non-command messages
+                        if !msg.message.starts_with("!") {
+                            if let Some(ref database) = db {
+                                if let Some((old_level, new_level, total_xp, xp_needed)) = levels::award_message_xp(database, &msg.channel, &msg.username, &irc_manager_clone).await {
+                                    // Broadcast level up event
+                                    let level_up_event = TwitchEvent::LevelUp(super::twitch_irc_client::LevelUpEvent {
+                                        username: msg.username.clone(),
+                                        channel: msg.channel.clone(),
+                                        old_level,
+                                        new_level,
+                                        total_xp,
+                                        xp_needed,
+                                    });
+                                    let _ = event_sender_clone.send(level_up_event);
+                                }
+                            }
+                        }
+
+                        // Handle TTS for eligible messages
+                        if !msg.message.starts_with("!") {
+                            if let Some(ref database) = db {
+                                // Check if TTS is enabled
+                                if let Ok(true) = database.is_tts_enabled(&msg.channel) {
+                                    // Check if user has TTS privileges
+                                    let is_broadcaster = msg.badges.iter().any(|b| b.starts_with("broadcaster"));
+                                    if let Ok(true) = database.has_tts_privilege(&msg.channel, &msg.username, is_broadcaster) {
+                                        // Get user's voice preference
+                                        let voice = database.get_tts_voice(&msg.channel, &msg.username)
+                                            .unwrap_or_else(|_| "Brian".to_string());
+
+                                        // Speak the message
+                                        use crate::commands::tts_command;
+                                        tts_command::speak_text(&msg.message, &voice);
+                                    }
+                                }
+                            }
+                        }
 
                         // Check if it's a command
                         if msg.message.starts_with("!") {
+                            let mut stats = stats_clone.write().await;
                             stats.total_commands += 1;
                             drop(stats);
 
@@ -180,6 +297,18 @@ impl TwitchManager {
             *start_time = Some(chrono::Utc::now().timestamp());
         }
 
+        // Start automatic stream tracker
+        if let Some(ref tracker) = self.stream_tracker {
+            tracker.start().await?;
+            log::info!("🎬 Automatic stream & watchtime tracking started");
+        }
+
+        // Start text command timer
+        if let Some(ref timer) = self.text_command_timer {
+            timer.start().await?;
+            log::info!("⏰ Text command auto-post timer started");
+        }
+
         log::info!("Twitch bot started successfully");
 
         Ok(())
@@ -188,6 +317,18 @@ impl TwitchManager {
     /// Stop the Twitch bot
     pub async fn stop(&self) -> Result<()> {
         log::info!("Stopping Twitch bot...");
+
+        // Stop stream tracker
+        if let Some(ref tracker) = self.stream_tracker {
+            tracker.stop().await;
+            log::info!("Stream tracker stopped");
+        }
+
+        // Stop text command timer
+        if let Some(ref timer) = self.text_command_timer {
+            timer.stop().await;
+            log::info!("Text command timer stopped");
+        }
 
         self.irc_manager.stop().await?;
 
@@ -318,6 +459,9 @@ impl Clone for TwitchManager {
             status: self.status.clone(),
             stats: self.stats.clone(),
             start_time: self.start_time.clone(),
+            profile_cache: self.profile_cache.clone(),
+            stream_tracker: self.stream_tracker.clone(),
+            text_command_timer: self.text_command_timer.clone(),
         }
     }
 }

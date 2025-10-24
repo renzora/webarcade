@@ -192,7 +192,7 @@ if (!isProduction) {
     allowedHosts: 'all',
     proxy: [
       {
-        context: ['/system', '/health', '/twitch'],
+        context: ['/system', '/health', '/twitch', '/database', '/hue', '/withings'],
         target: 'http://localhost:3001',
         changeOrigin: true,
         secure: false,

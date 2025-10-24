@@ -9,9 +9,7 @@ use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 use log::{info, error};
 
-mod modules;
-mod commands;
-use modules::*;
+use webarcade_bridge::{*, commands};
 
 
 #[tokio::main]
@@ -61,47 +59,53 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Initializing memory cache");
     let memory_cache = Arc::new(tokio::sync::Mutex::new(MemoryCache::new()));
 
+    // Initialize database
+    info!("Initializing database");
+    let database = commands::database::Database::new()
+        .expect("Failed to initialize database");
+    let database = Arc::new(database);
+
     // Initialize Twitch manager
     info!("Initializing Twitch integration");
     let (twitch_manager, mut twitch_receiver) = TwitchManager::new();
     let twitch_manager = Arc::new(twitch_manager);
+
+    // Initialize Withings API
+    info!("Initializing Withings API");
+    let withings_api = Arc::new(WithingsAPI::new());
+
+    // Initialize Discord manager
+    info!("Initializing Discord integration");
+    let discord_manager = Arc::new(DiscordManager::new(database.clone()));
 
     // Register custom commands
     info!("🎮 Registering custom Twitch commands");
     let command_system = twitch_manager.get_command_system();
     commands::register_all_commands(&command_system).await;
 
-    // Start TTS event listener (silent - no console spam)
+    // Load text commands for all configured channels
+    info!("📝 Loading custom text commands from database");
+    let config_manager = twitch_manager.get_config_manager();
+    if let Ok(config) = config_manager.load() {
+        for channel in &config.channels {
+            commands::load_channel_text_commands(&command_system, channel).await;
+        }
+    }
+
+    // TTS is now handled in twitch_manager.rs - this receiver is for other events if needed
     tokio::spawn(async move {
-        use modules::twitch::TwitchEvent;
-        use commands::database::Database;
-        use commands::tts_command::speak_text;
-
-        let db = match Database::new() {
-            Ok(db) => db,
-            Err(_) => return,
-        };
-
-        while let Ok(event) = twitch_receiver.recv().await {
-            if let TwitchEvent::ChatMessage(msg) = event {
-                // Check if TTS is enabled for this channel
-                if let Ok(true) = db.is_tts_enabled(&msg.channel) {
-                    // Check if message is from broadcaster
-                    let is_broadcaster = msg.badges.iter().any(|b| b.starts_with("broadcaster"));
-
-                    // Check if user has TTS privileges
-                    if let Ok(true) = db.has_tts_privilege(&msg.channel, &msg.username, is_broadcaster) {
-                        speak_text(&msg.message);
-                    }
-                }
-            }
+        while let Ok(_event) = twitch_receiver.recv().await {
+            // Other event handling can go here if needed
         }
     });
 
     // Set state in handlers module
     set_startup_time(startup_time);
     set_memory_cache(memory_cache);
+    set_database(database.clone());
     set_twitch_manager(twitch_manager.clone());
+    set_withings_api(withings_api.clone());
+    set_discord_manager(discord_manager.clone());
 
     // Set Twitch manager for WebSocket server
     modules::websocket_server::set_twitch_manager(Some(twitch_manager)).await;

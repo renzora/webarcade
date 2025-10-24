@@ -14,6 +14,21 @@ pub type WsSink = SplitSink<WebSocketStream<TcpStream>, Message>;
 // Global managers for WebSocket access
 static TWITCH_MANAGER: tokio::sync::OnceCell<Option<Arc<TwitchManager>>> = tokio::sync::OnceCell::const_new();
 
+// Timer broadcast channel
+static TIMER_BROADCAST: std::sync::OnceLock<broadcast::Sender<serde_json::Value>> = std::sync::OnceLock::new();
+
+pub fn get_timer_broadcast_sender() -> broadcast::Sender<serde_json::Value> {
+    TIMER_BROADCAST.get_or_init(|| {
+        let (sender, _) = broadcast::channel(100);
+        sender
+    }).clone()
+}
+
+pub fn broadcast_timer_state(state: serde_json::Value) {
+    let sender = get_timer_broadcast_sender();
+    let _ = sender.send(state);
+}
+
 pub async fn set_twitch_manager(manager: Option<Arc<TwitchManager>>) {
     let _ = TWITCH_MANAGER.set(manager);
 }
@@ -48,12 +63,22 @@ async fn handle_websocket_connection(stream: TcpStream, client_addr: SocketAddr)
 
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
 
-    // Send initial connection message
-    let welcome_msg = serde_json::json!({
+    // Send initial connection message with channel info
+    let mut welcome_msg = serde_json::json!({
         "type": "connected",
         "message": "WebSocket connection established"
     });
-    
+
+    // Try to get channel from Twitch manager config
+    if let Some(twitch_manager) = get_twitch_manager().await {
+        let config_manager = twitch_manager.get_config_manager();
+        if let Ok(config) = config_manager.load() {
+            if let Some(first_channel) = config.channels.first() {
+                welcome_msg["channel"] = serde_json::json!(first_channel);
+            }
+        }
+    }
+
     if let Ok(welcome_text) = serde_json::to_string(&welcome_msg) {
         if let Err(e) = ws_sender.send(Message::Text(welcome_text)).await {
             error!("Failed to send welcome message to {}: {}", client_addr, e);
@@ -77,6 +102,10 @@ async fn handle_websocket_connection(stream: TcpStream, client_addr: SocketAddr)
         twitch_receiver_opt = Some(receiver);
         info!("📡 WebSocket client {} subscribed to Twitch events", client_addr);
     }
+
+    // Get timer event receiver
+    let mut timer_receiver = get_timer_broadcast_sender().subscribe();
+    info!("📡 WebSocket client {} subscribed to timer events", client_addr);
 
     info!("📡 WebSocket client {} subscribed to file changes", client_addr);
 
@@ -164,6 +193,40 @@ async fn handle_websocket_connection(stream: TcpStream, client_addr: SocketAddr)
                     Err(broadcast::error::RecvError::Closed) => {
                         info!("📡 Twitch event broadcaster closed for {}", client_addr);
                         twitch_receiver_opt = None;
+                    }
+                }
+            }
+
+            // Handle timer events
+            timer_event = timer_receiver.recv() => {
+                match timer_event {
+                    Ok(state) => {
+                        debug!("📡 Broadcasting timer state to {}", client_addr);
+
+                        let ws_message = serde_json::json!({
+                            "type": "timer_state",
+                            "name": state.get("name"),
+                            "isRunning": state.get("isRunning"),
+                            "isPaused": state.get("isPaused"),
+                            "timeRemaining": state.get("timeRemaining"),
+                            "isPomodoro": state.get("isPomodoro"),
+                            "currentPhase": state.get("currentPhase"),
+                            "pomodoroCount": state.get("pomodoroCount")
+                        });
+
+                        if let Ok(message_text) = serde_json::to_string(&ws_message) {
+                            if let Err(e) = ws_sender.send(Message::Text(message_text)).await {
+                                error!("Failed to send timer state to {}: {}", client_addr, e);
+                                break;
+                            }
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(count)) => {
+                        warn!("📡 WebSocket client {} lagged {} timer messages", client_addr, count);
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
+                        info!("📡 Timer broadcaster closed for {}", client_addr);
+                        break;
                     }
                 }
             }

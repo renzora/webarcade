@@ -33,6 +33,7 @@ pub struct StreamInfo {
     pub user_name: String,
     pub game_id: String,
     pub game_name: String,
+    #[serde(rename = "type")]
     pub stream_type: String,
     pub title: String,
     pub viewer_count: u64,
@@ -40,6 +41,10 @@ pub struct StreamInfo {
     pub language: String,
     pub thumbnail_url: String,
     pub is_mature: bool,
+    #[serde(default)]
+    pub tag_ids: Vec<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 /// Channel information
@@ -62,6 +67,14 @@ pub struct Follower {
     pub user_login: String,
     pub user_name: String,
     pub followed_at: String,
+}
+
+/// Chatter information (user currently in chat)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Chatter {
+    pub user_id: String,
+    pub user_login: String,
+    pub user_name: String,
 }
 
 /// Subscription information
@@ -222,6 +235,42 @@ impl TwitchAPI {
         );
 
         let response: ApiResponse<Follower> = self.make_request(&endpoint).await?;
+
+        Ok(response.data)
+    }
+
+    /// Check if a specific user follows the broadcaster and when they followed
+    /// Returns None if the user doesn't follow, or Some(followed_at) if they do
+    pub async fn get_user_follow_status(
+        &self,
+        broadcaster_id: &str,
+        user_id: &str,
+    ) -> Result<Option<String>> {
+        let endpoint = format!(
+            "/channels/followers?broadcaster_id={}&user_id={}",
+            broadcaster_id, user_id
+        );
+
+        let response: ApiResponse<Follower> = self.make_request(&endpoint).await?;
+
+        // If data is not empty, user is following
+        Ok(response.data.into_iter().next().map(|f| f.followed_at))
+    }
+
+    /// Get list of users currently in chat (including lurkers)
+    /// Requires moderator:read:chatters scope
+    /// Returns up to 1000 chatters (can paginate for more)
+    pub async fn get_chatters(
+        &self,
+        broadcaster_id: &str,
+        moderator_id: &str,
+    ) -> Result<Vec<Chatter>> {
+        let endpoint = format!(
+            "/chat/chatters?broadcaster_id={}&moderator_id={}&first=1000",
+            broadcaster_id, moderator_id
+        );
+
+        let response: ApiResponse<Chatter> = self.make_request(&endpoint).await?;
 
         Ok(response.data)
     }

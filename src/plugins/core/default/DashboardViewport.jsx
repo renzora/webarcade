@@ -1,5 +1,5 @@
 import { createSignal, createEffect, onCleanup, Show } from 'solid-js';
-import { IconCpu, IconDatabase, IconActivity, IconChartLine, IconBrandTwitch, IconPlayerPlay, IconPlayerStop, IconCheck, IconX } from '@tabler/icons-solidjs';
+import { IconCpu, IconDatabase, IconActivity, IconBrandTwitch, IconPlayerPlay, IconPlayerStop, IconCheck, IconX } from '@tabler/icons-solidjs';
 import twitchStore from '@/plugins/core/twitch/TwitchStore.jsx';
 
 export default function DashboardViewport() {
@@ -64,12 +64,12 @@ export default function DashboardViewport() {
     onCleanup(() => clearInterval(interval));
   });
 
-  // Auto-start bot if configured and not running
+  // Auto-start bot if configured and not connected
   createEffect(() => {
     const config = twitchConfig();
     const status = twitchStatus();
 
-    if (!autoStartAttempted() && config?.has_token && status.status !== 'running') {
+    if (!autoStartAttempted() && config?.has_token && status.status !== 'connected') {
       setAutoStartAttempted(true);
       console.log('[Dashboard] Auto-starting Twitch bot...');
       handleStartBot();
@@ -140,25 +140,11 @@ export default function DashboardViewport() {
     );
   };
 
-  const stats = systemStats();
-  const history = statsHistory();
-
   return (
     <div class="h-full overflow-y-auto bg-gradient-to-br from-base-300 to-base-200">
       <div class="max-w-6xl mx-auto p-8 space-y-6">
-        {/* Header */}
-        <div class="text-center py-6">
-          <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary/20 mb-4">
-            <IconChartLine size={40} class="text-primary" />
-          </div>
-          <h1 class="text-4xl font-bold mb-2">System Dashboard</h1>
-          <p class="text-lg text-base-content/70">
-            Real-time performance monitoring
-          </p>
-        </div>
-
         {/* Stats Cards */}
-        {stats ? (
+        {systemStats() ? (
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* CPU Card */}
             <div class="card bg-base-100 shadow-xl">
@@ -175,19 +161,19 @@ export default function DashboardViewport() {
 
                 <div class="space-y-2">
                   <div class="flex items-baseline gap-2">
-                    <span class={`text-4xl font-bold ${getUsageColor(Math.round(stats.cpu_usage))}`}>
-                      {Math.round(stats.cpu_usage)}%
+                    <span class={`text-4xl font-bold ${getUsageColor(Math.round(systemStats().cpu_usage))}`}>
+                      {Math.round(systemStats().cpu_usage)}%
                     </span>
                   </div>
 
                   <progress
-                    class={`progress w-full ${getProgressColor(Math.round(stats.cpu_usage))}`}
-                    value={stats.cpu_usage}
+                    class={`progress w-full ${getProgressColor(Math.round(systemStats().cpu_usage))}`}
+                    value={systemStats().cpu_usage}
                     max="100"
                   />
 
                   <div class="flex justify-center">
-                    {renderMiniChart(history, 'cpu')}
+                    {renderMiniChart(statsHistory(), 'cpu')}
                   </div>
                 </div>
               </div>
@@ -208,19 +194,19 @@ export default function DashboardViewport() {
 
                 <div class="space-y-2">
                   <div class="flex items-baseline gap-2">
-                    <span class={`text-4xl font-bold ${getUsageColor(Math.round(stats.memory_usage))}`}>
-                      {Math.round(stats.memory_usage)}%
+                    <span class={`text-4xl font-bold ${getUsageColor(Math.round(systemStats().memory_usage))}`}>
+                      {Math.round(systemStats().memory_usage)}%
                     </span>
                   </div>
 
                   <progress
-                    class={`progress w-full ${getProgressColor(Math.round(stats.memory_usage))}`}
-                    value={stats.memory_usage}
+                    class={`progress w-full ${getProgressColor(Math.round(systemStats().memory_usage))}`}
+                    value={systemStats().memory_usage}
                     max="100"
                   />
 
                   <div class="flex justify-center">
-                    {renderMiniChart(history, 'memory')}
+                    {renderMiniChart(statsHistory(), 'memory')}
                   </div>
                 </div>
               </div>
@@ -239,22 +225,22 @@ export default function DashboardViewport() {
                   </div>
                 </div>
 
-                {stats.gpu_usage !== null && stats.gpu_usage !== undefined ? (
+                {systemStats().gpu_usage !== null && systemStats().gpu_usage !== undefined ? (
                   <div class="space-y-2">
                     <div class="flex items-baseline gap-2">
-                      <span class={`text-4xl font-bold ${getUsageColor(Math.round(stats.gpu_usage))}`}>
-                        {Math.round(stats.gpu_usage)}%
+                      <span class={`text-4xl font-bold ${getUsageColor(Math.round(systemStats().gpu_usage))}`}>
+                        {Math.round(systemStats().gpu_usage)}%
                       </span>
                     </div>
 
                     <progress
-                      class={`progress w-full ${getProgressColor(Math.round(stats.gpu_usage))}`}
-                      value={stats.gpu_usage}
+                      class={`progress w-full ${getProgressColor(Math.round(systemStats().gpu_usage))}`}
+                      value={systemStats().gpu_usage}
                       max="100"
                     />
 
                     <div class="flex justify-center">
-                      {renderMiniChart(history, 'gpu')}
+                      {renderMiniChart(statsHistory(), 'gpu')}
                     </div>
                   </div>
                 ) : (
@@ -290,9 +276,9 @@ export default function DashboardViewport() {
                     </p>
                   </div>
                 </div>
-                <div class={`badge badge-lg gap-2 ${twitchStatus().status === 'running' ? 'badge-success' : 'badge-error'}`}>
-                  {twitchStatus().status === 'running' ? <IconCheck size={16} /> : <IconX size={16} />}
-                  {twitchStatus().status === 'running' ? 'Running' : 'Stopped'}
+                <div class={`badge badge-lg gap-2 ${twitchStatus().status === 'connected' ? 'badge-success' : 'badge-error'}`}>
+                  {twitchStatus().status === 'connected' ? <IconCheck size={16} /> : <IconX size={16} />}
+                  {twitchStatus().status === 'connected' ? 'Connected' : 'Disconnected'}
                 </div>
               </div>
 
@@ -325,7 +311,7 @@ export default function DashboardViewport() {
 
               <div class="flex gap-3">
                 <Show
-                  when={twitchStatus().status === 'running'}
+                  when={twitchStatus().status === 'connected'}
                   fallback={
                     <button
                       class={`btn btn-success flex-1 gap-2 ${startingBot() ? 'loading' : ''}`}
@@ -352,7 +338,7 @@ export default function DashboardViewport() {
         </Show>
 
         {/* System Information */}
-        {stats && (
+        {systemStats() && (
           <div class="card bg-base-100 shadow-xl">
             <div class="card-body">
               <h2 class="card-title text-2xl mb-4">System Information</h2>
@@ -371,7 +357,7 @@ export default function DashboardViewport() {
                 </div>
                 <div>
                   <p class="text-xs text-base-content/60 mb-1">History</p>
-                  <p class="font-semibold">{history.length}/{MAX_HISTORY} points</p>
+                  <p class="font-semibold">{statsHistory().length}/{MAX_HISTORY} points</p>
                 </div>
               </div>
             </div>

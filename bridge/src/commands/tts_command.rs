@@ -6,29 +6,68 @@ use std::path::PathBuf;
 use std::fs;
 use std::io::BufReader;
 use rodio::{Decoder, OutputStream, Sink};
+use tokio::sync::mpsc;
+use std::sync::OnceLock;
 
-/// Speak text using external TTS API and rodio audio playback
-pub fn speak_text(text: &str) {
-    let text = text.to_string();
+/// TTS message for queueing
+#[derive(Debug, Clone)]
+struct TTSMessage {
+    text: String,
+    voice: String,
+}
 
-    tokio::spawn(async move {
-        // URL encode the text
-        let encoded_text = percent_encoding::utf8_percent_encode(
-            &text,
-            percent_encoding::NON_ALPHANUMERIC
-        ).to_string();
+/// Global TTS queue sender
+static TTS_QUEUE: OnceLock<mpsc::UnboundedSender<TTSMessage>> = OnceLock::new();
 
-        // Use StreamElements TTS API
-        let tts_url = format!(
-            "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text={}",
-            encoded_text
-        );
+/// Initialize TTS queue
+fn get_tts_queue() -> &'static mpsc::UnboundedSender<TTSMessage> {
+    TTS_QUEUE.get_or_init(|| {
+        let (tx, mut rx) = mpsc::unbounded_channel::<TTSMessage>();
 
-        // Download and play the audio file
-        if let Err(e) = download_and_play_tts(&tts_url).await {
-            log::error!("TTS playback failed: {}", e);
-        }
-    });
+        // Spawn the queue processor
+        tokio::spawn(async move {
+            log::info!("🔊 TTS queue processor started");
+
+            while let Some(msg) = rx.recv().await {
+                log::debug!("Processing TTS message: {} (voice: {})", msg.text, msg.voice);
+
+                // URL encode the text
+                let encoded_text = percent_encoding::utf8_percent_encode(
+                    &msg.text,
+                    percent_encoding::NON_ALPHANUMERIC
+                ).to_string();
+
+                // Use StreamElements TTS API
+                let tts_url = format!(
+                    "https://api.streamelements.com/kappa/v2/speech?voice={}&text={}",
+                    msg.voice, encoded_text
+                );
+
+                // Download and play the audio file (blocking until complete)
+                if let Err(e) = download_and_play_tts(&tts_url).await {
+                    log::error!("TTS playback failed: {}", e);
+                }
+            }
+
+            log::info!("🔇 TTS queue processor stopped");
+        });
+
+        tx
+    })
+}
+
+/// Speak text using external TTS API and rodio audio playback (queued)
+pub fn speak_text(text: &str, voice: &str) {
+    let msg = TTSMessage {
+        text: text.to_string(),
+        voice: voice.to_string(),
+    };
+
+    // Send to queue (non-blocking)
+    let queue = get_tts_queue();
+    if let Err(e) = queue.send(msg) {
+        log::error!("Failed to queue TTS message: {}", e);
+    }
 }
 
 async fn download_and_play_tts(url: &str) -> Result<(), Box<dyn std::error::Error>> {

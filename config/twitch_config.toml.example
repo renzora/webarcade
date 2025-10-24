@@ -1,0 +1,10 @@
+# Twitch Configuration Example
+# Copy this file to twitch_config.toml and fill in your actual values
+
+access_token = "your_access_token_here"
+refresh_token = "your_refresh_token_here"
+client_id = "your_client_id_here"
+client_secret = "enc:your_encrypted_client_secret_here"
+bot_username = "your_bot_username"
+channels = ["your_channel_name"]
+token_expires_at = 0

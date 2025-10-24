@@ -42,6 +42,7 @@ reqwest = { version = "0.12", features = ["json"] }
 toml = "0.8"
 url = "2.5"
 rand = "0.8"
+fastrand = "2.0"
 aes-gcm = "0.10"
 # System utilities
 dirs = "5.0"
@@ -49,6 +50,8 @@ dirs = "5.0"
 rusqlite = { version = "0.32", features = ["bundled"] }
 # Audio playback
 rodio = "0.17"
+# Discord integration
+serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "rustls_backend", "model", "cache"] }
 
 [features]
 default = []
