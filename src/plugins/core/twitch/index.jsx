@@ -1,5 +1,5 @@
 import { createPlugin } from '@/api/plugin';
-import { IconBrandTwitch, IconMessage, IconSettings, IconDeviceTv, IconList, IconChecklist, IconVolume, IconBulb, IconSparkles, IconTerminal2, IconClock, IconUsers, IconDatabase, IconWheel, IconScale, IconBrandDiscord, IconMusic, IconMessageCircle, IconBrandAmazon, IconRobot } from '@tabler/icons-solidjs';
+import { IconBrandTwitch, IconMessage, IconSettings, IconDeviceTv, IconList, IconChecklist, IconVolume, IconBulb, IconSparkles, IconTerminal2, IconClock, IconUsers, IconDatabase, IconWheel, IconScale, IconBrandDiscord, IconMusic, IconMessageCircle, IconBrandAmazon, IconRobot, IconTarget } from '@tabler/icons-solidjs';
 import TwitchSettingsViewport from './TwitchSettingsViewport.jsx';
 import TwitchChatViewport from './TwitchChatViewport.jsx';
 import OverlayManagerViewport from './OverlayManagerViewport.jsx';
@@ -21,6 +21,7 @@ import DiscordCommandsViewport from './DiscordCommandsViewport.jsx';
 import SongRequestsViewport from './SongRequestsViewport.jsx';
 import ConfessionsViewport from './ConfessionsViewport.jsx';
 import AlexaViewport from './AlexaViewport.jsx';
+import GoalsViewport from './GoalsViewport.jsx';
 import twitchStore from './TwitchStore.jsx';
 
 export default createPlugin({
@@ -84,6 +85,14 @@ export default createPlugin({
       component: CountersViewport,
       icon: IconList,
       description: 'Manage and track stream counters'
+    });
+
+    // Register Goals viewport
+    api.viewport('twitch-goals', {
+      label: 'Goals Tracker',
+      component: GoalsViewport,
+      icon: IconTarget,
+      description: 'Track and manage stream goals with Twitch integration'
     });
 
     // Register Wheel viewport

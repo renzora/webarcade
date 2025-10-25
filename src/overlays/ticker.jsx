@@ -80,7 +80,7 @@ function TickerOverlay() {
         {/* Status Elements - Left Side */}
         <div class="flex items-center gap-3 px-4 flex-shrink-0">
           {/* LIVE 24/7 Indicator */}
-          <div class="bg-gradient-to-r from-red-600 to-red-700 px-3 py-1.5 rounded-lg shadow-2xl border-2 border-red-400 flex items-center gap-2">
+          <div class="bg-gradient-to-r from-red-600 to-red-700 px-3 py-1.5 rounded-lg shadow-2xl border border-red-400 flex items-center gap-2">
             <div class="relative">
               <div class="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse shadow-lg"></div>
               <div class="absolute inset-0 w-2.5 h-2.5 bg-red-400 rounded-full animate-ping"></div>
@@ -90,8 +90,15 @@ function TickerOverlay() {
             </span>
           </div>
 
+          {/* Days Since Stream Started */}
+          <div class="bg-gradient-to-r from-cyan-900/95 to-teal-900/95 px-3 py-1.5 rounded-lg shadow-xl border border-cyan-500">
+            <div class="text-lg font-bold text-white drop-shadow-lg">
+              Day {streamDays()}
+            </div>
+          </div>
+
           {/* Current Time with UK Flag */}
-          <div class="bg-gradient-to-r from-indigo-900/95 to-blue-900/95 px-3 py-1.5 rounded-lg shadow-xl border-2 border-indigo-500 flex items-center gap-2">
+          <div class="bg-gradient-to-r from-indigo-900/95 to-blue-900/95 px-3 py-1.5 rounded-lg shadow-xl border border-indigo-500 flex items-center gap-2">
             <svg width="24" height="18" viewBox="0 0 60 30" xmlns="http://www.w3.org/2000/svg">
               <clipPath id="s"><path d="M0,0 v30 h60 v-30 z"/></clipPath>
               <clipPath id="t"><path d="M30,15 h30 v15 z v-15 h-30 z h-30 v15 z v-15 h30 z"/></clipPath>
@@ -106,13 +113,6 @@ function TickerOverlay() {
             <span class="text-lg font-mono font-bold text-white tracking-wider drop-shadow-lg">
               {currentTime()}
             </span>
-          </div>
-
-          {/* Days Since Stream Started */}
-          <div class="bg-gradient-to-r from-cyan-900/95 to-teal-900/95 px-3 py-1.5 rounded-lg shadow-xl border-2 border-cyan-500">
-            <div class="text-lg font-bold text-white drop-shadow-lg">
-              Day {streamDays()}
-            </div>
           </div>
 
           {/* Separator */}

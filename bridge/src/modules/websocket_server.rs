@@ -29,6 +29,25 @@ pub fn broadcast_timer_state(state: serde_json::Value) {
     let _ = sender.send(state);
 }
 
+// Goals broadcast channel
+static GOALS_BROADCAST: std::sync::OnceLock<broadcast::Sender<serde_json::Value>> = std::sync::OnceLock::new();
+
+pub fn get_goals_broadcast_sender() -> broadcast::Sender<serde_json::Value> {
+    GOALS_BROADCAST.get_or_init(|| {
+        let (sender, _) = broadcast::channel(100);
+        sender
+    }).clone()
+}
+
+pub fn broadcast_goals_update(goals: serde_json::Value) {
+    let sender = get_goals_broadcast_sender();
+    let message = serde_json::json!({
+        "type": "goals_update",
+        "goals": goals
+    });
+    let _ = sender.send(message);
+}
+
 pub async fn set_twitch_manager(manager: Option<Arc<TwitchManager>>) {
     let _ = TWITCH_MANAGER.set(manager);
 }
@@ -106,6 +125,10 @@ async fn handle_websocket_connection(stream: TcpStream, client_addr: SocketAddr)
     // Get timer event receiver
     let mut timer_receiver = get_timer_broadcast_sender().subscribe();
     info!("📡 WebSocket client {} subscribed to timer events", client_addr);
+
+    // Get goals event receiver
+    let mut goals_receiver = get_goals_broadcast_sender().subscribe();
+    info!("📡 WebSocket client {} subscribed to goals events", client_addr);
 
     info!("📡 WebSocket client {} subscribed to file changes", client_addr);
 
@@ -226,6 +249,29 @@ async fn handle_websocket_connection(stream: TcpStream, client_addr: SocketAddr)
                     }
                     Err(broadcast::error::RecvError::Closed) => {
                         info!("📡 Timer broadcaster closed for {}", client_addr);
+                        break;
+                    }
+                }
+            }
+
+            // Handle goals events
+            goals_event = goals_receiver.recv() => {
+                match goals_event {
+                    Ok(message) => {
+                        debug!("📡 Broadcasting goals update to {}", client_addr);
+
+                        if let Ok(message_text) = serde_json::to_string(&message) {
+                            if let Err(e) = ws_sender.send(Message::Text(message_text)).await {
+                                error!("Failed to send goals update to {}: {}", client_addr, e);
+                                break;
+                            }
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(count)) => {
+                        warn!("📡 WebSocket client {} lagged {} goals messages", client_addr, count);
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
+                        info!("📡 Goals broadcaster closed for {}", client_addr);
                         break;
                     }
                 }

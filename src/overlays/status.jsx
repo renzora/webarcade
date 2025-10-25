@@ -52,7 +52,7 @@ function StatusOverlay() {
       {/* Status Bar - Top Left - Inline */}
       <div class="absolute top-4 left-4 flex items-center gap-3">
         {/* LIVE 24/7 Indicator */}
-        <div class="bg-gradient-to-r from-red-600 to-red-700 px-4 py-2 rounded-lg shadow-2xl border-2 border-red-400 flex items-center gap-2 backdrop-blur-sm">
+        <div class="flex items-center gap-2">
           {/* Animated Red Dot */}
           <div class="relative">
             <div class="w-3 h-3 bg-red-500 rounded-full animate-pulse shadow-lg"></div>
@@ -63,8 +63,8 @@ function StatusOverlay() {
           </span>
         </div>
 
-        {/* Current Time */}
-        <div class="bg-gradient-to-r from-purple-900/95 to-blue-900/95 px-4 py-2 rounded-lg shadow-xl border-2 border-purple-500 backdrop-blur-sm flex items-center gap-3">
+        {/* Current Time and Day Combined */}
+        <div class="flex items-center gap-3">
           <svg width="32" height="24" viewBox="0 0 60 30" xmlns="http://www.w3.org/2000/svg">
             <clipPath id="s"><path d="M0,0 v30 h60 v-30 z"/></clipPath>
             <clipPath id="t"><path d="M30,15 h30 v15 z v-15 h-30 z h-30 v15 z v-15 h30 z"/></clipPath>
@@ -77,15 +77,8 @@ function StatusOverlay() {
             </g>
           </svg>
           <span class="text-2xl font-mono font-bold text-white tracking-wider drop-shadow-lg">
-            {currentTime()}
+            {currentTime()} • Day {streamDays()}
           </span>
-        </div>
-
-        {/* Days Since Stream Started */}
-        <div class="bg-gradient-to-r from-blue-900/95 to-cyan-900/95 px-4 py-2 rounded-lg shadow-xl border-2 border-blue-500 backdrop-blur-sm">
-          <div class="text-2xl font-bold text-white drop-shadow-lg">
-            Day {streamDays()}
-          </div>
         </div>
       </div>
 

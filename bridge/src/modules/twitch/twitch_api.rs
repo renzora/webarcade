@@ -93,6 +93,8 @@ struct ApiResponse<T> {
     data: Vec<T>,
     #[serde(default)]
     pagination: Option<Pagination>,
+    #[serde(default)]
+    total: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -239,6 +241,19 @@ impl TwitchAPI {
         Ok(response.data)
     }
 
+    /// Get total follower count for a broadcaster
+    pub async fn get_follower_count(&self, broadcaster_id: &str) -> Result<u64> {
+        let endpoint = format!(
+            "/channels/followers?broadcaster_id={}&first=1",
+            broadcaster_id
+        );
+
+        let response: ApiResponse<Follower> = self.make_request(&endpoint).await?;
+
+        // The total field contains the total follower count
+        Ok(response.total.unwrap_or(0))
+    }
+
     /// Check if a specific user follows the broadcaster and when they followed
     /// Returns None if the user doesn't follow, or Some(followed_at) if they do
     pub async fn get_user_follow_status(
@@ -290,6 +305,20 @@ impl TwitchAPI {
         let response: ApiResponse<Subscription> = self.make_request(&endpoint).await?;
 
         Ok(response.data)
+    }
+
+    /// Get total subscriber count for a broadcaster
+    pub async fn get_subscriber_count(&self, broadcaster_id: &str) -> Result<u64> {
+        let endpoint = format!(
+            "/subscriptions?broadcaster_id={}&first=1",
+            broadcaster_id
+        );
+
+        let response: ApiResponse<Subscription> = self.make_request(&endpoint).await?;
+
+        // The total field contains the total subscriber count
+        // Note: This includes gifted subs and doesn't subtract broadcaster's own sub
+        Ok(response.total.unwrap_or(0))
     }
 
     /// Update channel information (title, game, etc.)

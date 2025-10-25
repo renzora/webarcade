@@ -84,6 +84,22 @@ pub struct TickerEventsConfig {
     pub updated_at: i64,
 }
 
+/// Goal data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Goal {
+    pub id: i64,
+    pub channel: String,
+    pub title: String,
+    pub description: Option<String>,
+    #[serde(rename = "type")]
+    pub goal_type: String,
+    pub target: i64,
+    pub current: i64,
+    pub is_sub_goal: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
 /// Thread-safe database connection pool
 pub struct Database {
     conn: Arc<Mutex<Connection>>,
@@ -625,6 +641,29 @@ impl Database {
             [],
         )?;
 
+        // Create goals table
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS goals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                type TEXT NOT NULL,
+                target INTEGER NOT NULL,
+                current INTEGER NOT NULL DEFAULT 0,
+                is_sub_goal INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )",
+            [],
+        )?;
+
+        // Create index for goals
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_goals_channel ON goals(channel)",
+            [],
+        )?;
+
         // Migrate data from watchtime and user_levels to users table
         // This will only run if the users table is empty
         let user_count: i64 = conn.query_row(
@@ -1136,9 +1175,35 @@ impl Database {
                     self.is_tts_user(channel, username)
                 }
             }
-            "everyone" => Ok(true),
+            "everyone" => {
+                // In everyone mode, allow if:
+                // - broadcaster
+                // - whitelisted
+                // - has set their voice
+                if is_broadcaster {
+                    Ok(true)
+                } else if self.is_tts_user(channel, username).unwrap_or(false) {
+                    Ok(true)
+                } else {
+                    self.has_custom_voice(channel, username)
+                }
+            }
             _ => Ok(false)
         }
+    }
+
+    /// Check if user has set a custom voice (not using default)
+    pub fn has_custom_voice(&self, channel: &str, username: &str) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let username_lower = username.to_lowercase();
+
+        let exists: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM tts_users WHERE channel = ?1 AND username = ?2 AND voice IS NOT NULL)",
+            [channel, &username_lower],
+            |row| row.get(0)
+        )?;
+
+        Ok(exists)
     }
 
     /// Get TTS voice preference for a user (returns default if not set)
@@ -3500,6 +3565,134 @@ impl Database {
             ],
         )?;
 
+        Ok(())
+    }
+
+    // ========== Goals Methods ==========
+
+    /// Get all goals for a channel
+    pub fn get_goals(&self, channel: &str) -> Result<Vec<Goal>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, channel, title, description, type, target, current, is_sub_goal, created_at, updated_at
+             FROM goals
+             WHERE channel = ?1
+             ORDER BY created_at DESC"
+        )?;
+
+        let goals = stmt.query_map(params![channel], |row| {
+            Ok(Goal {
+                id: row.get(0)?,
+                channel: row.get(1)?,
+                title: row.get(2)?,
+                description: row.get(3)?,
+                goal_type: row.get(4)?,
+                target: row.get(5)?,
+                current: row.get(6)?,
+                is_sub_goal: row.get::<_, i64>(7)? == 1,
+                created_at: row.get(8)?,
+                updated_at: row.get(9)?,
+            })
+        })?
+        .collect::<Result<Vec<_>>>()?;
+
+        Ok(goals)
+    }
+
+    /// Get a single goal by ID
+    pub fn get_goal_by_id(&self, id: i64) -> Result<Option<Goal>> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn.query_row(
+            "SELECT id, channel, title, description, type, target, current, is_sub_goal, created_at, updated_at
+             FROM goals
+             WHERE id = ?1",
+            params![id],
+            |row| {
+                Ok(Goal {
+                    id: row.get(0)?,
+                    channel: row.get(1)?,
+                    title: row.get(2)?,
+                    description: row.get(3)?,
+                    goal_type: row.get(4)?,
+                    target: row.get(5)?,
+                    current: row.get(6)?,
+                    is_sub_goal: row.get::<_, i64>(7)? == 1,
+                    created_at: row.get(8)?,
+                    updated_at: row.get(9)?,
+                })
+            }
+        ).optional()?;
+
+        Ok(result)
+    }
+
+    /// Create a new goal
+    pub fn create_goal(&self, channel: &str, title: &str, description: Option<&str>, goal_type: &str, target: i64, current: i64, is_sub_goal: bool) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().timestamp();
+
+        conn.execute(
+            "INSERT INTO goals (channel, title, description, type, target, current, is_sub_goal, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                channel,
+                title,
+                description,
+                goal_type,
+                target,
+                current,
+                if is_sub_goal { 1 } else { 0 },
+                now,
+                now
+            ],
+        )?;
+
+        Ok(conn.last_insert_rowid())
+    }
+
+    /// Update a goal
+    pub fn update_goal(&self, id: i64, title: &str, description: Option<&str>, goal_type: &str, target: i64, current: i64, is_sub_goal: bool) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().timestamp();
+
+        conn.execute(
+            "UPDATE goals
+             SET title = ?1, description = ?2, type = ?3, target = ?4, current = ?5, is_sub_goal = ?6, updated_at = ?7
+             WHERE id = ?8",
+            params![
+                title,
+                description,
+                goal_type,
+                target,
+                current,
+                if is_sub_goal { 1 } else { 0 },
+                now,
+                id
+            ],
+        )?;
+
+        Ok(())
+    }
+
+    /// Update goal progress
+    pub fn update_goal_progress(&self, id: i64, current: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().timestamp();
+
+        conn.execute(
+            "UPDATE goals
+             SET current = ?1, updated_at = ?2
+             WHERE id = ?3",
+            params![current, now, id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Delete a goal
+    pub fn delete_goal(&self, id: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM goals WHERE id = ?1", params![id])?;
         Ok(())
     }
 }

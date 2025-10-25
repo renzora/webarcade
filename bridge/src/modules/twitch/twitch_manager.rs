@@ -215,16 +215,26 @@ impl TwitchManager {
                             if let Some(ref database) = db {
                                 // Check if TTS is enabled
                                 if let Ok(true) = database.is_tts_enabled(&msg.channel) {
-                                    // Check if user has TTS privileges
-                                    let is_broadcaster = msg.badges.iter().any(|b| b.starts_with("broadcaster"));
-                                    if let Ok(true) = database.has_tts_privilege(&msg.channel, &msg.username, is_broadcaster) {
-                                        // Get user's voice preference
-                                        let voice = database.get_tts_voice(&msg.channel, &msg.username)
-                                            .unwrap_or_else(|_| "Brian".to_string());
+                                    // Filter out bot's own messages
+                                    let is_bot_message = {
+                                        let stats = stats_clone.read().await;
+                                        stats.authenticated_user.as_ref()
+                                            .map(|bot_name| bot_name.to_lowercase() == msg.username.to_lowercase())
+                                            .unwrap_or(false)
+                                    };
 
-                                        // Speak the message
-                                        use crate::commands::tts_command;
-                                        tts_command::speak_text(&msg.message, &voice);
+                                    if !is_bot_message {
+                                        // Check if user has TTS privileges
+                                        let is_broadcaster = msg.badges.iter().any(|b| b.starts_with("broadcaster"));
+                                        if let Ok(true) = database.has_tts_privilege(&msg.channel, &msg.username, is_broadcaster) {
+                                            // Get user's voice preference
+                                            let voice = database.get_tts_voice(&msg.channel, &msg.username)
+                                                .unwrap_or_else(|_| "Brian".to_string());
+
+                                            // Speak the message
+                                            use crate::commands::tts_command;
+                                            tts_command::speak_text(&msg.message, &voice);
+                                        }
                                     }
                                 }
                             }
@@ -471,6 +481,26 @@ impl TwitchManager {
         self.config_manager.save(&config)?;
 
         Ok(())
+    }
+
+    /// Get follower count for a channel
+    pub async fn get_follower_count(&self, channel: &str) -> Result<u64> {
+        // Get the broadcaster ID for the channel
+        let user = self.api.get_user_by_login(channel).await?
+            .context("Channel not found")?;
+
+        // Get total follower count from Twitch API (uses the 'total' field in response)
+        self.api.get_follower_count(&user.id).await
+    }
+
+    /// Get subscriber count for a channel
+    pub async fn get_subscriber_count(&self, channel: &str) -> Result<u64> {
+        // Get the broadcaster ID for the channel
+        let user = self.api.get_user_by_login(channel).await?
+            .context("Channel not found")?;
+
+        // Get total subscriber count from Twitch API (uses the 'total' field in response)
+        self.api.get_subscriber_count(&user.id).await
     }
 }
 

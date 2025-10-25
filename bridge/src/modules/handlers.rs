@@ -419,6 +419,45 @@ pub async fn handle_http_request(req: Request<hyper::body::Incoming>) -> Result<
             }
         }
 
+        // Goals endpoints
+        (&Method::GET, "/database/goals") => return Ok(handle_get_goals(&query).await),
+        (&Method::POST, "/database/goals") => {
+            match &body {
+                Some(body_content) => return Ok(handle_create_goal(body_content).await),
+                None => error_response(StatusCode::BAD_REQUEST, "Missing request body"),
+            }
+        }
+        (&Method::PUT, path) if path.starts_with("/database/goals/") && !path.contains("/progress") && !path.contains("/sync-twitch") => {
+            let id = path.trim_start_matches("/database/goals/").parse::<i64>().ok();
+            match (id, &body) {
+                (Some(id), Some(body_content)) => return Ok(handle_update_goal(id, body_content).await),
+                _ => error_response(StatusCode::BAD_REQUEST, "Invalid request"),
+            }
+        }
+        (&Method::DELETE, path) if path.starts_with("/database/goals/") => {
+            let id = path.trim_start_matches("/database/goals/").parse::<i64>().ok();
+            match id {
+                Some(id) => return Ok(handle_delete_goal(id).await),
+                None => error_response(StatusCode::BAD_REQUEST, "Invalid goal ID"),
+            }
+        }
+        (&Method::POST, path) if path.starts_with("/database/goals/") && path.ends_with("/progress") => {
+            let id_str = path.trim_start_matches("/database/goals/").trim_end_matches("/progress");
+            let id = id_str.parse::<i64>().ok();
+            match (id, &body) {
+                (Some(id), Some(body_content)) => return Ok(handle_update_goal_progress(id, body_content).await),
+                _ => error_response(StatusCode::BAD_REQUEST, "Invalid request"),
+            }
+        }
+        (&Method::POST, path) if path.starts_with("/database/goals/") && path.ends_with("/sync-twitch") => {
+            let id_str = path.trim_start_matches("/database/goals/").trim_end_matches("/sync-twitch");
+            let id = id_str.parse::<i64>().ok();
+            match id {
+                Some(id) => return Ok(handle_sync_goal_with_twitch(id).await),
+                None => error_response(StatusCode::BAD_REQUEST, "Invalid goal ID"),
+            }
+        }
+
         // Wheel endpoints
         (&Method::GET, "/database/wheel/options") => return Ok(handle_get_wheel_options(&query).await),
         (&Method::POST, "/database/wheel/options") => {
@@ -1834,6 +1873,324 @@ async fn handle_reset_counter(body: &str) -> Response<BoxBody<Bytes, Infallible>
             }
         }
         None => error_response(StatusCode::SERVICE_UNAVAILABLE, "Database not initialized"),
+    }
+}
+
+// Goals handlers
+
+// Helper function to broadcast goals for a channel
+fn broadcast_goals_for_channel(channel: &str) {
+    if let Some(db) = get_database() {
+        if let Ok(goals) = db.get_goals(channel) {
+            let goals_json: Vec<serde_json::Value> = goals
+                .iter()
+                .map(|goal| {
+                    serde_json::json!({
+                        "id": goal.id,
+                        "channel": goal.channel,
+                        "title": goal.title,
+                        "description": goal.description,
+                        "type": goal.goal_type,
+                        "target": goal.target,
+                        "current": goal.current,
+                        "is_sub_goal": goal.is_sub_goal,
+                        "created_at": goal.created_at,
+                        "updated_at": goal.updated_at,
+                    })
+                })
+                .collect();
+
+            crate::modules::websocket_server::broadcast_goals_update(serde_json::json!(goals_json));
+        }
+    }
+}
+
+async fn handle_get_goals(query: &str) -> Response<BoxBody<Bytes, Infallible>> {
+    match get_database() {
+        Some(db) => {
+            let channel = query.split('=')
+                .nth(1)
+                .unwrap_or("")
+                .to_string();
+
+            if channel.is_empty() {
+                return error_response(StatusCode::BAD_REQUEST, "Missing channel parameter");
+            }
+
+            match db.get_goals(&channel) {
+                Ok(goals) => {
+                    let goals_json: Vec<serde_json::Value> = goals
+                        .iter()
+                        .map(|goal| {
+                            serde_json::json!({
+                                "id": goal.id,
+                                "channel": goal.channel,
+                                "title": goal.title,
+                                "description": goal.description,
+                                "type": goal.goal_type,
+                                "target": goal.target,
+                                "current": goal.current,
+                                "is_sub_goal": goal.is_sub_goal,
+                                "created_at": goal.created_at,
+                                "updated_at": goal.updated_at,
+                            })
+                        })
+                        .collect();
+
+                    // Broadcast goals update to WebSocket clients
+                    crate::modules::websocket_server::broadcast_goals_update(serde_json::json!(goals_json.clone()));
+
+                    json_response(&goals_json)
+                }
+                Err(e) => {
+                    error!("Failed to get goals: {}", e);
+                    error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to get goals: {}", e))
+                }
+            }
+        }
+        None => error_response(StatusCode::SERVICE_UNAVAILABLE, "Database not initialized"),
+    }
+}
+
+async fn handle_create_goal(body: &str) -> Response<BoxBody<Bytes, Infallible>> {
+    #[derive(serde::Deserialize)]
+    struct CreateGoalRequest {
+        channel: String,
+        title: String,
+        description: Option<String>,
+        #[serde(rename = "type")]
+        goal_type: String,
+        target: i64,
+        current: i64,
+        is_sub_goal: bool,
+    }
+
+    match get_database() {
+        Some(db) => {
+            match serde_json::from_str::<CreateGoalRequest>(body) {
+                Ok(req) => {
+                    match db.create_goal(
+                        &req.channel,
+                        &req.title,
+                        req.description.as_deref(),
+                        &req.goal_type,
+                        req.target,
+                        req.current,
+                        req.is_sub_goal,
+                    ) {
+                        Ok(id) => {
+                            // Broadcast updated goals
+                            broadcast_goals_for_channel(&req.channel);
+
+                            let response = serde_json::json!({
+                                "success": true,
+                                "id": id
+                            });
+                            json_response(&response)
+                        }
+                        Err(e) => {
+                            error!("Failed to create goal: {}", e);
+                            error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to create goal: {}", e))
+                        }
+                    }
+                }
+                Err(e) => error_response(StatusCode::BAD_REQUEST, &format!("Invalid request: {}", e)),
+            }
+        }
+        None => error_response(StatusCode::SERVICE_UNAVAILABLE, "Database not initialized"),
+    }
+}
+
+async fn handle_update_goal(id: i64, body: &str) -> Response<BoxBody<Bytes, Infallible>> {
+    #[derive(serde::Deserialize)]
+    struct UpdateGoalRequest {
+        channel: String,
+        title: String,
+        description: Option<String>,
+        #[serde(rename = "type")]
+        goal_type: String,
+        target: i64,
+        current: i64,
+        is_sub_goal: bool,
+    }
+
+    match get_database() {
+        Some(db) => {
+            match serde_json::from_str::<UpdateGoalRequest>(body) {
+                Ok(req) => {
+                    match db.update_goal(
+                        id,
+                        &req.title,
+                        req.description.as_deref(),
+                        &req.goal_type,
+                        req.target,
+                        req.current,
+                        req.is_sub_goal,
+                    ) {
+                        Ok(_) => {
+                            // Broadcast updated goals
+                            broadcast_goals_for_channel(&req.channel);
+
+                            let response = ApiResponse {
+                                success: true,
+                                content: Some("Goal updated successfully".to_string()),
+                                error: None,
+                            };
+                            json_response(&response)
+                        }
+                        Err(e) => {
+                            error!("Failed to update goal: {}", e);
+                            error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to update goal: {}", e))
+                        }
+                    }
+                }
+                Err(e) => error_response(StatusCode::BAD_REQUEST, &format!("Invalid request: {}", e)),
+            }
+        }
+        None => error_response(StatusCode::SERVICE_UNAVAILABLE, "Database not initialized"),
+    }
+}
+
+async fn handle_delete_goal(id: i64) -> Response<BoxBody<Bytes, Infallible>> {
+    match get_database() {
+        Some(db) => {
+            // Get the goal first to know which channel to broadcast to
+            let channel = match db.get_goal_by_id(id) {
+                Ok(Some(goal)) => goal.channel,
+                Ok(None) => return error_response(StatusCode::NOT_FOUND, "Goal not found"),
+                Err(e) => {
+                    error!("Failed to get goal: {}", e);
+                    return error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to get goal: {}", e));
+                }
+            };
+
+            match db.delete_goal(id) {
+                Ok(_) => {
+                    // Broadcast updated goals
+                    broadcast_goals_for_channel(&channel);
+
+                    let response = ApiResponse {
+                        success: true,
+                        content: Some("Goal deleted successfully".to_string()),
+                        error: None,
+                    };
+                    json_response(&response)
+                }
+                Err(e) => {
+                    error!("Failed to delete goal: {}", e);
+                    error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to delete goal: {}", e))
+                }
+            }
+        }
+        None => error_response(StatusCode::SERVICE_UNAVAILABLE, "Database not initialized"),
+    }
+}
+
+async fn handle_update_goal_progress(id: i64, body: &str) -> Response<BoxBody<Bytes, Infallible>> {
+    #[derive(serde::Deserialize)]
+    struct UpdateProgressRequest {
+        current: i64,
+    }
+
+    match get_database() {
+        Some(db) => {
+            // Get the goal first to know which channel to broadcast to
+            let channel = match db.get_goal_by_id(id) {
+                Ok(Some(goal)) => goal.channel,
+                Ok(None) => return error_response(StatusCode::NOT_FOUND, "Goal not found"),
+                Err(e) => {
+                    error!("Failed to get goal: {}", e);
+                    return error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to get goal: {}", e));
+                }
+            };
+
+            match serde_json::from_str::<UpdateProgressRequest>(body) {
+                Ok(req) => {
+                    match db.update_goal_progress(id, req.current) {
+                        Ok(_) => {
+                            // Broadcast updated goals
+                            broadcast_goals_for_channel(&channel);
+
+                            let response = ApiResponse {
+                                success: true,
+                                content: Some("Goal progress updated successfully".to_string()),
+                                error: None,
+                            };
+                            json_response(&response)
+                        }
+                        Err(e) => {
+                            error!("Failed to update goal progress: {}", e);
+                            error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to update goal progress: {}", e))
+                        }
+                    }
+                }
+                Err(e) => error_response(StatusCode::BAD_REQUEST, &format!("Invalid request: {}", e)),
+            }
+        }
+        None => error_response(StatusCode::SERVICE_UNAVAILABLE, "Database not initialized"),
+    }
+}
+
+async fn handle_sync_goal_with_twitch(id: i64) -> Response<BoxBody<Bytes, Infallible>> {
+    match (get_database(), get_twitch_manager()) {
+        (Some(db), Some(twitch_manager)) => {
+            // Get the goal from the database
+            match db.get_goal_by_id(id) {
+                Ok(Some(goal)) => {
+                    // Fetch current data from Twitch based on goal type
+                    let current_value = match goal.goal_type.as_str() {
+                        "subscriber" => {
+                            // Get subscriber count from Twitch API
+                            match twitch_manager.get_subscriber_count(&goal.channel).await {
+                                Ok(count) => count as i64,
+                                Err(e) => {
+                                    error!("Failed to fetch subscriber count: {}", e);
+                                    return error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to fetch subscriber count: {}", e));
+                                }
+                            }
+                        }
+                        "follower" => {
+                            // Get follower count from Twitch API
+                            match twitch_manager.get_follower_count(&goal.channel).await {
+                                Ok(count) => count as i64,
+                                Err(e) => {
+                                    error!("Failed to fetch follower count: {}", e);
+                                    return error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to fetch follower count: {}", e));
+                                }
+                            }
+                        }
+                        _ => {
+                            return error_response(StatusCode::BAD_REQUEST, "Goal type does not support Twitch sync");
+                        }
+                    };
+
+                    // Update the goal progress
+                    match db.update_goal_progress(id, current_value) {
+                        Ok(_) => {
+                            // Broadcast updated goals
+                            broadcast_goals_for_channel(&goal.channel);
+
+                            let response = serde_json::json!({
+                                "success": true,
+                                "current": current_value
+                            });
+                            json_response(&response)
+                        }
+                        Err(e) => {
+                            error!("Failed to update goal after sync: {}", e);
+                            error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to update goal: {}", e))
+                        }
+                    }
+                }
+                Ok(None) => error_response(StatusCode::NOT_FOUND, "Goal not found"),
+                Err(e) => {
+                    error!("Failed to get goal: {}", e);
+                    error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to get goal: {}", e))
+                }
+            }
+        }
+        (None, _) => error_response(StatusCode::SERVICE_UNAVAILABLE, "Database not initialized"),
+        (_, None) => error_response(StatusCode::SERVICE_UNAVAILABLE, "Twitch manager not initialized"),
     }
 }
 

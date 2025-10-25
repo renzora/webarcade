@@ -86,7 +86,7 @@ pub async fn register(command_system: &CommandSystem, db: Database) {
     let voice_command = Command {
         name: "voice".to_string(),
         aliases: vec!["ttsvoice".to_string()],
-        description: "Set your TTS voice preference".to_string(),
+        description: "Set your TTS voice preference (required for TTS to read your messages)".to_string(),
         usage: "!voice <voice_name> or !voice to see current".to_string(),
         permission: PermissionLevel::Everyone,
         cooldown_seconds: 3,
@@ -99,34 +99,21 @@ pub async fn register(command_system: &CommandSystem, db: Database) {
             let args = ctx.args.clone();
 
             tokio::spawn(async move {
-                // Check if user has TTS privileges
-                let is_broadcaster = ctx.message.badges.iter().any(|b| b.starts_with("broadcaster"));
-                let has_privilege = match db.has_tts_privilege(&channel, &username, is_broadcaster) {
-                    Ok(privilege) => privilege,
-                    Err(e) => {
-                        log::error!("Database error: {}", e);
-                        let _ = irc.send_message(&channel, "Database error!").await;
-                        return;
-                    }
-                };
-
-                if !has_privilege {
-                    let _ = irc.send_message(&channel,
-                        &format!("@{} You need TTS privileges to set a voice. Ask a mod to add you!", username)
-                    ).await;
-                    return;
-                }
-
                 if args.is_empty() {
                     // Show current voice
-                    match db.get_tts_voice(&channel, &username) {
-                        Ok(voice) => {
+                    match (db.get_tts_voice(&channel, &username), db.has_custom_voice(&channel, &username)) {
+                        (Ok(voice), Ok(has_custom)) => {
+                            let status = if has_custom {
+                                format!("Your TTS voice is set to: {}", voice)
+                            } else {
+                                format!("You haven't set a TTS voice yet (using default: {}). Set one to enable TTS!", voice)
+                            };
                             let _ = irc.send_message(&channel,
-                                &format!("@{} Your current TTS voice is: {}. Use !voice <name> to change it or !voices to see all options.", username, voice)
+                                &format!("@{} {}. Use !voice <name> to change it or !voices to see all options.", username, status)
                             ).await;
                         }
-                        Err(e) => {
-                            log::error!("Database error: {}", e);
+                        _ => {
+                            log::error!("Database error");
                             let _ = irc.send_message(&channel, "Database error!").await;
                         }
                     }
