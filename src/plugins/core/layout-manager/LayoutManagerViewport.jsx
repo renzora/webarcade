@@ -2,6 +2,9 @@ import { createSignal, createEffect, For, Show, onMount, onCleanup } from 'solid
 import { IconPlus, IconTrash, IconCopy, IconDeviceFloppy, IconZoomIn, IconZoomOut, IconGridDots, IconChevronDown, IconEye, IconEyeOff } from '@tabler/icons-solidjs';
 import { layoutManagerStore } from './LayoutManagerStore';
 import { WEBARCADE_WS } from '@/api/bridge';
+import { editorActions, editorStore } from '@/layout/stores/EditorStore';
+import { propertyTabs } from '@/api/plugin';
+import { viewportStore } from '@/panels/viewport/store';
 
 const BRIDGE_URL = 'http://localhost:3001';
 const CANVAS_WIDTH = 1920;
@@ -49,6 +52,10 @@ export default function LayoutManagerViewport() {
   onMount(() => {
     layoutManagerStore.init();
 
+    // Auto-select the layout-manager-panel tab when this viewport loads
+    editorActions.setScenePanelOpen(true);
+    editorActions.setSelectedTool('layout-manager-panel');
+
     // Connect to WebSocket for real-time updates
     const connectWebSocket = () => {
       ws = new WebSocket(WEBARCADE_WS);
@@ -73,6 +80,31 @@ export default function LayoutManagerViewport() {
   onCleanup(() => {
     if (ws) {
       ws.close();
+    }
+
+    // When viewport is closed, switch away from the layout-manager-panel tab
+    const currentTool = editorStore.ui.selectedTool;
+    if (currentTool === 'layout-manager-panel') {
+      // Find the first available tab that isn't the layout-manager-panel
+      const availableTabs = Array.from(propertyTabs().values())
+        .filter(tab => tab.id !== 'layout-manager-panel' && (!tab.condition || tab.condition()))
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+      if (availableTabs.length > 0) {
+        editorActions.setSelectedTool(availableTabs[0].id);
+      } else {
+        // If no other tabs available, just set to null
+        editorActions.setSelectedTool(null);
+      }
+    }
+  });
+
+  // Watch for viewport changes and auto-switch to the panel tab
+  createEffect(() => {
+    const activeTab = viewportStore.tabs.find(tab => tab.id === viewportStore.activeTabId);
+    if (activeTab?.type === 'layout-manager') {
+      editorActions.setScenePanelOpen(true);
+      editorActions.setSelectedTool('layout-manager-panel');
     }
   });
 

@@ -34,6 +34,139 @@
       "main": "index.jsx",
       "path": "/src/plugins/core/ticker",
       "priority": 1
+    },
+    {
+      "enabled": true,
+      "id": "hue-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/hue",
+      "priority": 2
+    },
+    {
+      "enabled": true,
+      "id": "overlay-manager-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/overlay-manager",
+      "priority": 2
+    },
+    {
+      "enabled": true,
+      "id": "layout-manager-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/layout-manager",
+      "priority": 2
+    },
+    {
+      "enabled": true,
+      "id": "song-requests-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/song-requests",
+      "priority": 2
+    },
+    {
+      "enabled": true,
+      "id": "database-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/database",
+      "priority": 2
+    },
+    {
+      "enabled": true,
+      "id": "alerts-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/alerts",
+      "priority": 2
+    },
+    {
+      "enabled": true,
+      "id": "counters-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/counters",
+      "priority": 2
+    },
+    {
+      "enabled": true,
+      "id": "goals-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/goals",
+      "priority": 2
+    },
+    {
+      "enabled": true,
+      "id": "wheel-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/wheel",
+      "priority": 2
+    },
+    {
+      "enabled": true,
+      "id": "tasks-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/tasks",
+      "priority": 2
+    },
+    {
+      "enabled": true,
+      "id": "tts-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/tts",
+      "priority": 2
+    },
+    {
+      "enabled": true,
+      "id": "text-commands-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/text-commands",
+      "priority": 2
+    },
+    {
+      "enabled": true,
+      "id": "timer-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/timer",
+      "priority": 2
+    },
+    {
+      "enabled": true,
+      "id": "watchtime-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/watchtime",
+      "priority": 2
+    },
+    {
+      "enabled": true,
+      "id": "viewer-stats-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/viewer-stats",
+      "priority": 2
+    },
+    {
+      "enabled": true,
+      "id": "withings-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/withings",
+      "priority": 2
+    },
+    {
+      "enabled": true,
+      "id": "discord-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/discord",
+      "priority": 2
+    },
+    {
+      "enabled": true,
+      "id": "confessions-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/confessions",
+      "priority": 2
+    },
+    {
+      "enabled": true,
+      "id": "alexa-plugin",
+      "main": "index.jsx",
+      "path": "/src/plugins/core/alexa",
+      "priority": 2
     }
   ]
 }

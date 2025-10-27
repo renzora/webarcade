@@ -1,5 +1,5 @@
 import { createSignal, onMount, For, Show } from 'solid-js';
-import twitchStore from './TwitchStore.jsx';
+import twitchStore from '../twitch/TwitchStore.jsx';
 import { bridgeFetch } from '@/api/bridge.js';
 import { IconVolume, IconUserPlus, IconTrash, IconAlertCircle, IconSettings } from '@tabler/icons-solidjs';
 
