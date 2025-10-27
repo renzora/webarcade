@@ -11,7 +11,7 @@ export default function BridgeModal({ isOpen, onClose }) {
     setBridgeStatus(prev => ({ ...prev, checking: true }));
     
     try {
-      const { isServerConnected } = await import('./server.js');
+      const { isServerConnected } = await import('./server.jsx');
       const connected = await isServerConnected();
       setBridgeStatus({
         connected,

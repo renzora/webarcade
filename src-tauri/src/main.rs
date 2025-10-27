@@ -2,45 +2,57 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::process::{Command, Stdio};
-use std::thread;
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Listener, Manager};
 
-fn start_bridge_server() {
-    thread::spawn(|| {
-        if cfg!(debug_assertions) {
-            // Development mode - bridge is already started by beforeDevCommand
-            return;
-        } else {
-            // Production mode - use bundled executable  
-            #[cfg(windows)]
-            let bridge_exe = "bridge-server.exe";
-            #[cfg(not(windows))]
-            let bridge_exe = "bridge-server";
-            
-#[cfg(windows)]
+fn start_bridge_server(app: &tauri::AppHandle) {
+    if cfg!(debug_assertions) {
+        // Development mode - bridge is already started by beforeDevCommand
+        println!("Dev mode: bridge server should already be running");
+        return;
+    }
+
+    // Production mode - locate and start the sidecar binary
+    let resource_path = app
+        .path()
+        .resource_dir()
+        .expect("failed to resolve resource directory");
+
+    #[cfg(windows)]
+    let bridge_path = resource_path.join("webarcade-bridge-x86_64-pc-windows-msvc.exe");
+    #[cfg(not(windows))]
+    let bridge_path = resource_path.join("webarcade-bridge");
+
+    println!("Starting bridge server from: {:?}", bridge_path);
+
+    std::thread::spawn(move || {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+            match Command::new(&bridge_path)
+                .creation_flags(CREATE_NO_WINDOW)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .stdin(Stdio::null())
+                .spawn()
             {
-                use std::os::windows::process::CommandExt;
-                const CREATE_NO_WINDOW: u32 = 0x08000000;
-                
-                if let Err(e) = Command::new(bridge_exe)
-                    .creation_flags(CREATE_NO_WINDOW)
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .stdin(Stdio::null())
-                    .spawn() {
-                    eprintln!("Failed to start bridge server: {}", e);
-                }
+                Ok(_) => println!("Bridge server started successfully"),
+                Err(e) => eprintln!("Failed to start bridge server: {}", e),
             }
-            #[cfg(not(windows))]
+        }
+
+        #[cfg(not(windows))]
+        {
+            match Command::new(&bridge_path)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .stdin(Stdio::null())
+                .spawn()
             {
-                if let Err(e) = Command::new(bridge_exe)
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .stdin(Stdio::null())
-                    .spawn() {
-                    eprintln!("Failed to start bridge server: {}", e);
-                }
+                Ok(_) => println!("Bridge server started successfully"),
+                Err(e) => eprintln!("Failed to start bridge server: {}", e),
             }
         }
     });
@@ -48,9 +60,6 @@ fn start_bridge_server() {
 
 
 fn main() {
-    // Start bridge server
-    start_bridge_server();
-
     // Shared state to track if close is approved
     let close_approved = Arc::new(Mutex::new(false));
     let close_approved_clone = close_approved.clone();
@@ -59,6 +68,9 @@ fn main() {
         .setup(move |app| {
             let handle = app.handle().clone();
             let close_approved = close_approved.clone();
+
+            // Start bridge server as sidecar
+            start_bridge_server(&handle);
             
             // Listen for graceful close approval from frontend
             app.listen("proceed-with-close", move |_event| {

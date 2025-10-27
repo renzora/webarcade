@@ -66,6 +66,14 @@ fn get_twitch_manager() -> Option<&'static Arc<TwitchManager>> {
     TWITCH_MANAGER.get()
 }
 
+fn get_twitch_auth() -> Option<Arc<crate::modules::twitch::twitch_auth::TwitchAuth>> {
+    get_twitch_manager().map(|manager| manager.get_auth())
+}
+
+fn get_twitch_api() -> Option<Arc<crate::modules::twitch::twitch_api::TwitchAPI>> {
+    get_twitch_manager().map(|manager| manager.get_api())
+}
+
 pub fn set_database(database: Arc<Database>) {
     DATABASE.set(database).ok();
 }
@@ -116,6 +124,41 @@ pub fn get_songbird() -> Option<&'static Arc<songbird::Songbird>> {
     SONGBIRD.get()
 }
 */
+
+/// Handle saving a Twitch event to the database for ticker display
+pub async fn handle_twitch_event_for_ticker(event_type: &str, event_json: &serde_json::Value, display_text: &str) {
+    match Database::new() {
+        Ok(db) => {
+            // Check if this event type should be shown
+            match db.get_ticker_events_config() {
+                Ok(config) => {
+                    let should_save = match event_type {
+                        "follow" => config.show_followers,
+                        "subscription" | "resubscription" => config.show_subscribers,
+                        "gift_subscription" => config.show_gifted_subs,
+                        "raid" => config.show_raids,
+                        "cheer" => config.show_cheers,
+                        _ => false,
+                    };
+
+                    if should_save {
+                        let event_data = serde_json::to_string(event_json).unwrap_or_default();
+                        match db.add_ticker_event(event_type, &event_data, display_text) {
+                            Ok(_) => {
+                                info!("💾 Saved ticker event: {}", display_text);
+                                // Broadcast ticker messages update via WebSocket
+                                crate::modules::websocket_server::broadcast_ticker_messages_update();
+                            }
+                            Err(e) => error!("Failed to save ticker event: {}", e),
+                        }
+                    }
+                }
+                Err(e) => error!("Failed to get ticker events config: {}", e),
+            }
+        }
+        Err(e) => error!("Failed to create database connection: {}", e),
+    }
+}
 
 pub async fn handle_http_request(req: Request<hyper::body::Incoming>) -> Result<Response<BoxBody<Bytes, Infallible>>, Infallible> {
     let start_time = Instant::now();
@@ -317,11 +360,51 @@ pub async fn handle_http_request(req: Request<hyper::body::Incoming>) -> Result<
             }
         }
         (&Method::POST, "/twitch/revoke") => return Ok(handle_twitch_revoke().await),
-
-        // Alert endpoints
+        (&Method::GET, "/twitch/stream-info") => return Ok(handle_twitch_get_stream_info().await),
+        (&Method::POST, "/twitch/update-stream-info") => {
+            match &body {
+                Some(body_content) => return Ok(handle_twitch_update_stream_info(body_content).await),
+                None => error_response(StatusCode::BAD_REQUEST, "Missing request body"),
+            }
+        }
+        (&Method::POST, "/twitch/search-games") => {
+            match &body {
+                Some(body_content) => return Ok(handle_twitch_search_games(body_content).await),
+                None => error_response(StatusCode::BAD_REQUEST, "Missing request body"),
+            }
+        }
         (&Method::POST, "/twitch/alert/test") => {
             match &body {
                 Some(body_content) => return Ok(handle_twitch_test_alert(body_content).await),
+                None => error_response(StatusCode::BAD_REQUEST, "Missing request body"),
+            }
+        }
+
+        // Twitch Account Management endpoints
+        (&Method::GET, "/twitch/accounts") => return Ok(handle_twitch_get_accounts().await),
+        (&Method::POST, "/twitch/accounts/auth") => {
+            match &body {
+                Some(body_content) => return Ok(handle_twitch_accounts_auth(body_content).await),
+                None => error_response(StatusCode::BAD_REQUEST, "Missing request body"),
+            }
+        }
+        (&Method::POST, "/twitch/accounts/activate") => {
+            match &body {
+                Some(body_content) => return Ok(handle_twitch_accounts_activate(body_content).await),
+                None => error_response(StatusCode::BAD_REQUEST, "Missing request body"),
+            }
+        }
+        (&Method::DELETE, "/twitch/accounts/delete") => {
+            match &body {
+                Some(body_content) => return Ok(handle_twitch_accounts_delete(body_content).await),
+                None => error_response(StatusCode::BAD_REQUEST, "Missing request body"),
+            }
+        }
+
+        // Twitch EventSub webhook endpoint
+        (&Method::POST, "/twitch/eventsub") => {
+            match &body {
+                Some(body_content) => return Ok(handle_twitch_eventsub(body_content).await),
                 None => error_response(StatusCode::BAD_REQUEST, "Missing request body"),
             }
         }
@@ -397,6 +480,27 @@ pub async fn handle_http_request(req: Request<hyper::body::Incoming>) -> Result<
             return Ok(handle_delete_overlay_file(filename).await);
         }
         (&Method::POST, "/api/rebuild-overlays") => return Ok(handle_rebuild_overlays().await),
+
+        // Layout system endpoints
+        (&Method::GET, "/api/layouts") => return Ok(handle_get_layouts().await),
+        (&Method::GET, path) if path.starts_with("/api/layouts/") => {
+            let layout_name = &path[13..]; // Skip "/api/layouts/"
+            return Ok(handle_get_layout(layout_name).await);
+        }
+        (&Method::POST, path) if path.starts_with("/api/layouts/") => {
+            let layout_name = &path[13..];
+            match &body {
+                Some(body_content) => {
+                    let bytes = Bytes::from(body_content.clone());
+                    return Ok(handle_save_layout(layout_name, &bytes).await);
+                }
+                None => error_response(StatusCode::BAD_REQUEST, "Missing request body"),
+            }
+        }
+        (&Method::DELETE, path) if path.starts_with("/api/layouts/") => {
+            let layout_name = &path[13..];
+            return Ok(handle_delete_layout(layout_name).await);
+        }
 
         // Timer broadcast endpoint
         (&Method::POST, "/api/timer/broadcast") => {
@@ -618,12 +722,44 @@ pub async fn handle_http_request(req: Request<hyper::body::Incoming>) -> Result<
                 None => error_response(StatusCode::BAD_REQUEST, "Missing request body"),
             }
         }
+        (&Method::POST, "/api/ticker/messages/toggle-sticky") => {
+            match &body {
+                Some(body_content) => return Ok(handle_toggle_ticker_message_sticky(body_content.clone()).await),
+                None => error_response(StatusCode::BAD_REQUEST, "Missing request body"),
+            }
+        }
+        (&Method::GET, "/api/ticker/events") => return Ok(handle_get_ticker_events().await),
+        (&Method::DELETE, "/api/ticker/events") => return Ok(handle_clear_ticker_events().await),
+        (&Method::POST, "/api/ticker/events/toggle-sticky") => {
+            match &body {
+                Some(body_content) => return Ok(handle_toggle_ticker_event_sticky(body_content.clone()).await),
+                None => error_response(StatusCode::BAD_REQUEST, "Missing request body"),
+            }
+        }
 
         // Status config endpoints
         (&Method::GET, "/api/status/config") => return Ok(handle_get_status_config().await),
         (&Method::POST, "/api/status/days") => {
             match &body {
                 Some(body_content) => return Ok(handle_update_stream_start_days(body_content.clone()).await),
+                None => error_response(StatusCode::BAD_REQUEST, "Missing request body"),
+            }
+        }
+        (&Method::POST, "/api/status/start-date") => {
+            match &body {
+                Some(body_content) => return Ok(handle_update_stream_start_date(body_content.clone()).await),
+                None => error_response(StatusCode::BAD_REQUEST, "Missing request body"),
+            }
+        }
+        (&Method::POST, "/api/status/ticker-speed") => {
+            match &body {
+                Some(body_content) => return Ok(handle_update_ticker_speed(body_content.clone()).await),
+                None => error_response(StatusCode::BAD_REQUEST, "Missing request body"),
+            }
+        }
+        (&Method::POST, "/api/status/max-ticker-items") => {
+            match &body {
+                Some(body_content) => return Ok(handle_update_max_ticker_items(body_content.clone()).await),
                 None => error_response(StatusCode::BAD_REQUEST, "Missing request body"),
             }
         }
@@ -1378,6 +1514,9 @@ async fn handle_twitch_callback_get(uri: &hyper::Uri) -> Response<BoxBody<Bytes,
 }
 
 async fn handle_twitch_callback(body: &str) -> Response<BoxBody<Bytes, Infallible>> {
+    info!("⚠️  OLD CALLBACK ENDPOINT CALLED - POST /twitch/callback");
+    info!("⚠️  This should NOT be used for multi-account auth!");
+
     #[derive(serde::Deserialize)]
     struct CallbackRequest {
         code: String,
@@ -1388,6 +1527,7 @@ async fn handle_twitch_callback(body: &str) -> Response<BoxBody<Bytes, Infallibl
         Some(manager) => {
             match serde_json::from_str::<CallbackRequest>(body) {
                 Ok(req) => {
+                    info!("Old callback - exchanging code (saves to config file)");
                     let auth = manager.get_auth();
 
                     // Verify state
@@ -1749,148 +1889,627 @@ async fn handle_twitch_revoke() -> Response<BoxBody<Bytes, Infallible>> {
     }
 }
 
+async fn handle_twitch_get_stream_info() -> Response<BoxBody<Bytes, Infallible>> {
+    match get_twitch_manager() {
+        Some(manager) => {
+            let api = manager.get_api();
+            let config_manager = manager.get_config_manager();
+
+            // Load config to get broadcaster channel
+            match config_manager.load() {
+                Ok(config) => {
+                    // Get the first channel from the config (broadcaster channel)
+                    let broadcaster_login = if !config.channels.is_empty() {
+                        config.channels[0].clone()
+                    } else {
+                        error!("No channels configured in bot settings");
+                        return error_response(StatusCode::BAD_REQUEST, "No broadcaster channel configured. Please set a channel in Twitch Settings.");
+                    };
+
+                    info!("Getting stream info for broadcaster channel: {}", broadcaster_login);
+
+                    // Get user info for the broadcaster to get their ID
+                    match api.get_user_by_login(&broadcaster_login).await {
+                        Ok(Some(broadcaster_user)) => {
+                            info!("Found broadcaster: {} (ID: {})", broadcaster_user.login, broadcaster_user.id);
+
+                            // Get both stream and channel info for the broadcaster
+                            let stream_future = api.get_stream(&broadcaster_user.login);
+                            let channel_future = api.get_channel(&broadcaster_user.id);
+
+                            match tokio::try_join!(stream_future, channel_future) {
+                                Ok((stream_opt, channel_opt)) => {
+                                    info!("Stream live: {:?}, Channel data: {:?}", stream_opt.is_some(), channel_opt.is_some());
+
+                                    #[derive(serde::Serialize)]
+                                    struct StreamInfoResponse {
+                                        stream: Option<crate::modules::twitch::twitch_api::StreamInfo>,
+                                        channel: Option<crate::modules::twitch::twitch_api::ChannelInfo>,
+                                        user: crate::modules::twitch::twitch_api::TwitchUser,
+                                    }
+
+                                    let response = StreamInfoResponse {
+                                        stream: stream_opt,
+                                        channel: channel_opt,
+                                        user: broadcaster_user,
+                                    };
+
+                                    json_response(&response)
+                                }
+                                Err(e) => {
+                                    error!("Failed to fetch stream info: {}", e);
+                                    error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to fetch stream info: {}", e))
+                                }
+                            }
+                        }
+                        Ok(None) => {
+                            error!("Broadcaster user not found: {}", broadcaster_login);
+                            error_response(StatusCode::NOT_FOUND, &format!("Broadcaster user '{}' not found", broadcaster_login))
+                        }
+                        Err(e) => {
+                            error!("Failed to get broadcaster user info: {}", e);
+                            error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to get broadcaster info: {}", e))
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to load config: {}", e);
+                    error_response(StatusCode::INTERNAL_SERVER_ERROR, "Failed to load bot configuration")
+                }
+            }
+        }
+        None => error_response(StatusCode::SERVICE_UNAVAILABLE, "Twitch manager not initialized"),
+    }
+}
+
+async fn handle_twitch_update_stream_info(body: &str) -> Response<BoxBody<Bytes, Infallible>> {
+    #[derive(Deserialize)]
+    struct UpdateStreamRequest {
+        title: Option<String>,
+        game_id: Option<String>,
+        broadcaster_language: Option<String>,
+        tags: Option<Vec<String>>,
+        content_classification_labels: Option<Vec<String>>,
+        is_branded_content: Option<bool>,
+    }
+
+    match serde_json::from_str::<UpdateStreamRequest>(body) {
+        Ok(req) => {
+            match get_twitch_manager() {
+                Some(manager) => {
+                    let api = manager.get_api();
+                    let config_manager = manager.get_config_manager();
+
+                    // Get the authenticated user (whoever owns the OAuth token)
+                    match api.get_authenticated_user().await {
+                        Ok(authenticated_user) => {
+                            info!("Updating stream info for authenticated user: {} (ID: {})", authenticated_user.login, authenticated_user.id);
+
+                            // Call update_channel with the authenticated user's ID
+                            // This ensures the broadcaster_id matches the OAuth token's user_id
+                            match api.update_channel(
+                                &authenticated_user.id,
+                                req.title.as_deref(),
+                                req.game_id.as_deref(),
+                                req.broadcaster_language.as_deref(),
+                                req.tags,
+                                req.content_classification_labels,
+                                req.is_branded_content,
+                            ).await {
+                                Ok(_) => {
+                                    let response = ApiResponse {
+                                        success: true,
+                                        content: Some("Stream info updated successfully".to_string()),
+                                        error: None,
+                                    };
+                                    json_response(&response)
+                                }
+                                Err(e) => {
+                                    error!("Failed to update stream info: {}", e);
+                                    error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to update stream: {}", e))
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to get authenticated user: {}", e);
+                            error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to get authenticated user: {}", e))
+                        }
+                    }
+                }
+                None => error_response(StatusCode::SERVICE_UNAVAILABLE, "Twitch manager not initialized"),
+            }
+        }
+        Err(e) => error_response(StatusCode::BAD_REQUEST, &format!("Invalid request: {}", e)),
+    }
+}
+
+async fn handle_twitch_search_games(body: &str) -> Response<BoxBody<Bytes, Infallible>> {
+    #[derive(Deserialize)]
+    struct SearchGamesRequest {
+        query: String,
+    }
+
+    match serde_json::from_str::<SearchGamesRequest>(body) {
+        Ok(req) => {
+            match get_twitch_manager() {
+                Some(manager) => {
+                    let api = manager.get_api();
+
+                    match api.search_games(&req.query).await {
+                        Ok(games) => json_response(&games),
+                        Err(e) => {
+                            error!("Failed to search games: {}", e);
+                            error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to search games: {}", e))
+                        }
+                    }
+                }
+                None => error_response(StatusCode::SERVICE_UNAVAILABLE, "Twitch manager not initialized"),
+            }
+        }
+        Err(e) => error_response(StatusCode::BAD_REQUEST, &format!("Invalid request: {}", e)),
+    }
+}
+
 async fn handle_twitch_test_alert(body: &str) -> Response<BoxBody<Bytes, Infallible>> {
+    use crate::modules::twitch::twitch_irc_client::*;
+
     #[derive(Deserialize)]
     struct TestAlertRequest {
         alert_type: String,
     }
 
     match serde_json::from_str::<TestAlertRequest>(body) {
-        Ok(request) => {
+        Ok(req) => {
             match get_twitch_manager() {
                 Some(manager) => {
-                    use crate::modules::twitch::twitch_irc_client::*;
+                    let event_sender = manager.get_event_sender();
 
                     // Create test event based on alert type
-                    let event = match request.alert_type.as_str() {
-                        "follow" => {
-                            let follow = FollowEvent {
-                                user_id: "123456".to_string(),
-                                user_login: "testfollower".to_string(),
-                                user_name: "TestFollower".to_string(),
-                                broadcaster_user_id: "999999".to_string(),
-                                broadcaster_user_login: "streamer".to_string(),
-                                broadcaster_user_name: "Streamer".to_string(),
-                                followed_at: chrono::Utc::now().to_rfc3339(),
-                            };
-                            TwitchEvent::Follow(follow)
-                        }
-                        "sub" | "subscription" => {
-                            let sub = SubscriptionEvent {
-                                user_id: "123456".to_string(),
-                                user_login: "testsubber".to_string(),
-                                user_name: "TestSubber".to_string(),
-                                broadcaster_user_id: "999999".to_string(),
-                                broadcaster_user_login: "streamer".to_string(),
-                                broadcaster_user_name: "Streamer".to_string(),
-                                tier: "1000".to_string(),
-                                is_gift: false,
-                            };
-                            TwitchEvent::Subscription(sub)
-                        }
-                        "resub" | "resubscription" => {
-                            let resub = ResubscriptionEvent {
-                                user_id: "123456".to_string(),
-                                user_login: "testsubber".to_string(),
-                                user_name: "TestSubber".to_string(),
-                                broadcaster_user_id: "999999".to_string(),
-                                broadcaster_user_login: "streamer".to_string(),
-                                broadcaster_user_name: "Streamer".to_string(),
-                                tier: "2000".to_string(),
-                                message: Some("Love this stream!".to_string()),
-                                cumulative_months: 12,
-                                streak_months: Some(6),
-                                duration_months: 1,
-                            };
-                            TwitchEvent::Resubscription(resub)
-                        }
-                        "gift_sub" | "gift" => {
-                            let gift = GiftSubscriptionEvent {
-                                user_id: Some("123456".to_string()),
-                                user_login: Some("testgifter".to_string()),
-                                user_name: Some("TestGifter".to_string()),
-                                broadcaster_user_id: "999999".to_string(),
-                                broadcaster_user_login: "streamer".to_string(),
-                                broadcaster_user_name: "Streamer".to_string(),
-                                total: 5,
-                                tier: "1000".to_string(),
-                                cumulative_total: Some(25),
-                                is_anonymous: false,
-                            };
-                            TwitchEvent::GiftSubscription(gift)
-                        }
-                        "raid" => {
-                            let raid = RaidEvent {
-                                from_broadcaster_user_id: "123456".to_string(),
-                                from_broadcaster_user_login: "coolraider".to_string(),
-                                from_broadcaster_user_name: "CoolRaider".to_string(),
-                                to_broadcaster_user_id: "999999".to_string(),
-                                to_broadcaster_user_login: "streamer".to_string(),
-                                to_broadcaster_user_name: "Streamer".to_string(),
-                                viewers: 42,
-                            };
-                            TwitchEvent::Raid(raid)
-                        }
-                        "bits" | "cheer" => {
-                            let cheer = CheerEvent {
-                                user_id: Some("123456".to_string()),
-                                user_login: Some("testcheerer".to_string()),
-                                user_name: Some("TestCheerer".to_string()),
-                                broadcaster_user_id: "999999".to_string(),
-                                broadcaster_user_login: "streamer".to_string(),
-                                broadcaster_user_name: "Streamer".to_string(),
-                                is_anonymous: false,
-                                message: "Cheer100 Great stream!".to_string(),
-                                bits: 100,
-                            };
-                            TwitchEvent::Cheer(cheer)
-                        }
-                        "channel_points" => {
-                            let cp = ChannelPointsRedemptionEvent {
-                                id: "abc123".to_string(),
-                                user_id: "123456".to_string(),
-                                user_login: "testredeemer".to_string(),
-                                user_name: "TestRedeemer".to_string(),
-                                broadcaster_user_id: "999999".to_string(),
-                                broadcaster_user_login: "streamer".to_string(),
-                                broadcaster_user_name: "Streamer".to_string(),
-                                user_input: Some("Hello!".to_string()),
-                                status: "fulfilled".to_string(),
-                                reward: RewardInfo {
-                                    id: "reward123".to_string(),
-                                    title: "Hydrate!".to_string(),
-                                    cost: 100,
-                                    prompt: Some("Remind the streamer to drink water".to_string()),
-                                },
-                                redeemed_at: chrono::Utc::now().to_rfc3339(),
-                            };
-                            TwitchEvent::ChannelPointsRedemption(cp)
-                        }
+                    let test_event = match req.alert_type.as_str() {
+                        "follow" => TwitchEvent::Follow(FollowEvent {
+                            user_id: "12345".to_string(),
+                            user_login: "testfollower".to_string(),
+                            user_name: "TestFollower".to_string(),
+                            broadcaster_user_id: "67890".to_string(),
+                            broadcaster_user_login: "broadcaster".to_string(),
+                            broadcaster_user_name: "Broadcaster".to_string(),
+                            followed_at: chrono::Utc::now().to_rfc3339(),
+                        }),
+                        "sub" => TwitchEvent::Subscription(SubscriptionEvent {
+                            user_id: "12345".to_string(),
+                            user_login: "testsub".to_string(),
+                            user_name: "TestSub".to_string(),
+                            broadcaster_user_id: "67890".to_string(),
+                            broadcaster_user_login: "broadcaster".to_string(),
+                            broadcaster_user_name: "Broadcaster".to_string(),
+                            tier: "1000".to_string(),
+                            is_gift: false,
+                        }),
+                        "resub" => TwitchEvent::Resubscription(ResubscriptionEvent {
+                            user_id: "12345".to_string(),
+                            user_login: "testresub".to_string(),
+                            user_name: "TestResub".to_string(),
+                            broadcaster_user_id: "67890".to_string(),
+                            broadcaster_user_login: "broadcaster".to_string(),
+                            broadcaster_user_name: "Broadcaster".to_string(),
+                            tier: "1000".to_string(),
+                            message: Some("Love this stream!".to_string()),
+                            cumulative_months: 12,
+                            streak_months: Some(12),
+                            duration_months: 1,
+                        }),
+                        "gift_sub" => TwitchEvent::GiftSubscription(GiftSubscriptionEvent {
+                            user_id: Some("99999".to_string()),
+                            user_login: Some("testrecipient".to_string()),
+                            user_name: Some("TestRecipient".to_string()),
+                            broadcaster_user_id: "67890".to_string(),
+                            broadcaster_user_login: "broadcaster".to_string(),
+                            broadcaster_user_name: "Broadcaster".to_string(),
+                            total: 1,
+                            tier: "1000".to_string(),
+                            cumulative_total: Some(5),
+                            is_anonymous: false,
+                        }),
+                        "raid" => TwitchEvent::Raid(RaidEvent {
+                            from_broadcaster_user_id: "12345".to_string(),
+                            from_broadcaster_user_login: "testraider".to_string(),
+                            from_broadcaster_user_name: "TestRaider".to_string(),
+                            to_broadcaster_user_id: "67890".to_string(),
+                            to_broadcaster_user_login: "broadcaster".to_string(),
+                            to_broadcaster_user_name: "Broadcaster".to_string(),
+                            viewers: 50,
+                        }),
+                        "bits" => TwitchEvent::Cheer(CheerEvent {
+                            user_id: Some("12345".to_string()),
+                            user_login: Some("testcheerer".to_string()),
+                            user_name: Some("TestCheerer".to_string()),
+                            broadcaster_user_id: "67890".to_string(),
+                            broadcaster_user_login: "broadcaster".to_string(),
+                            broadcaster_user_name: "Broadcaster".to_string(),
+                            bits: 100,
+                            message: "Great stream! cheer100".to_string(),
+                            is_anonymous: false,
+                        }),
+                        "channel_points" => TwitchEvent::ChannelPointsRedemption(ChannelPointsRedemptionEvent {
+                            id: "test-redemption-id".to_string(),
+                            user_id: "12345".to_string(),
+                            user_login: "testredeemer".to_string(),
+                            user_name: "TestRedeemer".to_string(),
+                            broadcaster_user_id: "67890".to_string(),
+                            broadcaster_user_login: "broadcaster".to_string(),
+                            broadcaster_user_name: "Broadcaster".to_string(),
+                            user_input: Some("Test input".to_string()),
+                            status: "fulfilled".to_string(),
+                            reward: RewardInfo {
+                                id: "reward-id".to_string(),
+                                title: "Test Reward".to_string(),
+                                cost: 500,
+                                prompt: Some("Test reward description".to_string()),
+                            },
+                            redeemed_at: chrono::Utc::now().to_rfc3339(),
+                        }),
                         _ => {
-                            return error_response(
-                                StatusCode::BAD_REQUEST,
-                                &format!("Unknown alert type: {}. Valid types: follow, sub, resub, gift_sub, raid, bits, channel_points", request.alert_type)
-                            );
+                            return error_response(StatusCode::BAD_REQUEST, &format!("Unknown alert type: {}", req.alert_type));
                         }
                     };
 
                     // Broadcast the test event
-                    manager.broadcast_event(event);
-
-                    let response = ApiResponse {
-                        success: true,
-                        content: Some(format!("Test {} alert triggered successfully", request.alert_type)),
-                        error: None,
-                    };
-                    json_response(&response)
+                    match event_sender.send(test_event) {
+                        Ok(_) => {
+                            info!("✅ Test {} alert sent successfully", req.alert_type);
+                            json_response(&serde_json::json!({
+                                "success": true,
+                                "message": format!("Test {} alert triggered", req.alert_type)
+                            }))
+                        }
+                        Err(e) => {
+                            error!("❌ Failed to send test alert: {}", e);
+                            error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to send test alert: {}", e))
+                        }
+                    }
                 }
                 None => error_response(StatusCode::SERVICE_UNAVAILABLE, "Twitch manager not initialized"),
             }
         }
-        Err(e) => {
-            error!("Failed to parse test alert request: {}", e);
-            error_response(StatusCode::BAD_REQUEST, &format!("Invalid request body: {}", e))
+        Err(e) => error_response(StatusCode::BAD_REQUEST, &format!("Invalid request: {}", e)),
+    }
+}
+
+async fn handle_twitch_eventsub(body: &str) -> Response<BoxBody<Bytes, Infallible>> {
+    use crate::modules::twitch::eventsub::EventSubPayload;
+    use crate::modules::twitch::twitch_irc_client::*;
+
+    info!("📡 Received Twitch EventSub webhook");
+
+    // Parse the EventSub payload
+    match serde_json::from_str::<EventSubPayload>(body) {
+        Ok(payload) => {
+            // Handle webhook verification challenge
+            if let Some(challenge) = payload.challenge {
+                info!("✅ Responding to EventSub verification challenge");
+                let response = Response::builder()
+                    .status(StatusCode::OK)
+                    .header(CONTENT_TYPE, "text/plain")
+                    .body(Full::new(Bytes::from(challenge)).boxed())
+                    .unwrap();
+                return response;
+            }
+
+            // Process actual event
+            match get_twitch_manager() {
+                Some(manager) => {
+                    let subscription_type = payload.subscription.subscription_type.as_str();
+                    let event_data = &payload.event;
+
+                    info!("📡 Processing EventSub event: {}", subscription_type);
+
+                    let twitch_event = match subscription_type {
+                        "channel.follow" => {
+                            match serde_json::from_value::<FollowEvent>(event_data.clone()) {
+                                Ok(follow) => Some(TwitchEvent::Follow(follow)),
+                                Err(e) => {
+                                    error!("Failed to parse follow event: {}", e);
+                                    None
+                                }
+                            }
+                        }
+                        "channel.subscribe" => {
+                            match serde_json::from_value::<SubscriptionEvent>(event_data.clone()) {
+                                Ok(sub) => Some(TwitchEvent::Subscription(sub)),
+                                Err(e) => {
+                                    error!("Failed to parse subscription event: {}", e);
+                                    None
+                                }
+                            }
+                        }
+                        "channel.subscription.message" => {
+                            match serde_json::from_value::<ResubscriptionEvent>(event_data.clone()) {
+                                Ok(resub) => Some(TwitchEvent::Resubscription(resub)),
+                                Err(e) => {
+                                    error!("Failed to parse resubscription event: {}", e);
+                                    None
+                                }
+                            }
+                        }
+                        "channel.subscription.gift" => {
+                            match serde_json::from_value::<GiftSubscriptionEvent>(event_data.clone()) {
+                                Ok(gift) => Some(TwitchEvent::GiftSubscription(gift)),
+                                Err(e) => {
+                                    error!("Failed to parse gift subscription event: {}", e);
+                                    None
+                                }
+                            }
+                        }
+                        "channel.raid" => {
+                            match serde_json::from_value::<RaidEvent>(event_data.clone()) {
+                                Ok(raid) => Some(TwitchEvent::Raid(raid)),
+                                Err(e) => {
+                                    error!("Failed to parse raid event: {}", e);
+                                    None
+                                }
+                            }
+                        }
+                        "channel.cheer" => {
+                            match serde_json::from_value::<CheerEvent>(event_data.clone()) {
+                                Ok(cheer) => Some(TwitchEvent::Cheer(cheer)),
+                                Err(e) => {
+                                    error!("Failed to parse cheer event: {}", e);
+                                    None
+                                }
+                            }
+                        }
+                        "channel.channel_points_custom_reward_redemption.add" => {
+                            match serde_json::from_value::<ChannelPointsRedemptionEvent>(event_data.clone()) {
+                                Ok(cp) => Some(TwitchEvent::ChannelPointsRedemption(cp)),
+                                Err(e) => {
+                                    error!("Failed to parse channel points event: {}", e);
+                                    None
+                                }
+                            }
+                        }
+                        _ => {
+                            info!("Unhandled EventSub type: {}", subscription_type);
+                            None
+                        }
+                    };
+
+                    if let Some(event) = twitch_event {
+                        // Broadcast the event
+                        manager.broadcast_event(event);
+                        info!("✅ EventSub event processed and broadcast successfully");
+                    }
+
+                    // Always respond with 200 OK to Twitch
+                    let response = Response::builder()
+                        .status(StatusCode::OK)
+                        .body(Full::new(Bytes::from("")).boxed())
+                        .unwrap();
+                    response
+                }
+                None => {
+                    error!("Twitch manager not initialized");
+                    error_response(StatusCode::SERVICE_UNAVAILABLE, "Twitch manager not initialized")
+                }
+            }
         }
+        Err(e) => {
+            error!("Failed to parse EventSub payload: {}", e);
+            error_response(StatusCode::BAD_REQUEST, &format!("Invalid EventSub payload: {}", e))
+        }
+    }
+}
+
+// ========== Twitch Account Management Handlers ==========
+
+async fn handle_twitch_get_accounts() -> Response<BoxBody<Bytes, Infallible>> {
+    info!("📋 GET /twitch/accounts - Fetching all accounts");
+    match get_database() {
+        Some(db) => {
+            info!("✓ Database connection obtained");
+            match db.get_twitch_accounts() {
+                Ok(accounts) => {
+                    info!("✅ Found {} account(s) in database", accounts.len());
+                    // Return accounts without tokens for security
+                    let safe_accounts: Vec<serde_json::Value> = accounts
+                        .iter()
+                        .map(|account| {
+                            info!("  - {} (@{}) - {}", account.display_name.as_ref().unwrap_or(&account.username), account.username, account.account_type);
+                            serde_json::json!({
+                                "id": account.id,
+                                "account_type": account.account_type,
+                                "user_id": account.user_id,
+                                "username": account.username,
+                                "display_name": account.display_name,
+                                "scopes": account.scopes,
+                                "is_active": account.is_active,
+                                "created_at": account.created_at,
+                                "updated_at": account.updated_at,
+                            })
+                        })
+                        .collect();
+
+                    json_response(&safe_accounts)
+                }
+                Err(e) => {
+                    error!("❌ Failed to get accounts from database: {:?}", e);
+                    error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to get accounts: {}", e))
+                }
+            }
+        }
+        None => {
+            error!("❌ Database not available!");
+            error_response(StatusCode::SERVICE_UNAVAILABLE, "Database not available")
+        }
+    }
+}
+
+async fn handle_twitch_accounts_auth(body: &str) -> Response<BoxBody<Bytes, Infallible>> {
+    #[derive(Deserialize)]
+    struct AuthRequest {
+        code: String,
+        state: String,
+        account_type: String, // "bot" or "broadcaster"
+    }
+
+    match serde_json::from_str::<AuthRequest>(body) {
+        Ok(req) => {
+            // Validate account_type
+            if req.account_type != "bot" && req.account_type != "broadcaster" {
+                return error_response(StatusCode::BAD_REQUEST, "account_type must be 'bot' or 'broadcaster'");
+            }
+
+            match get_twitch_auth() {
+                Some(auth) => {
+                    match auth.exchange_code_no_save(&req.code).await {
+                        Ok(token_response) => {
+                            // Get user info with the new token
+                            let twitch_api = get_twitch_api();
+                            match twitch_api {
+                                Some(api) => {
+                                    // Create a temporary API client with the new token
+                                    let client = reqwest::Client::new();
+
+                                    match client
+                                        .get("https://api.twitch.tv/helix/users")
+                                        .header("Authorization", format!("Bearer {}", token_response.access_token))
+                                        .header("Client-Id", &auth.get_client_id())
+                                        .send()
+                                        .await
+                                    {
+                                        Ok(response) => {
+                                            if let Ok(user_response) = response.json::<serde_json::Value>().await {
+                                                if let Some(data) = user_response.get("data").and_then(|d| d.as_array()) {
+                                                    if let Some(user_data) = data.first() {
+                                                        let user_id = user_data.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                                                        let login = user_data.get("login").and_then(|v| v.as_str()).unwrap_or("");
+                                                        let display_name = user_data.get("display_name").and_then(|v| v.as_str());
+
+                                                        info!("💾 Attempting to save {} account: {} (ID: {})", req.account_type, login, user_id);
+
+                                                        // Save account to database
+                                                        match get_database() {
+                                                            Some(db) => {
+                                                                info!("✓ Database connection obtained");
+                                                                match db.add_twitch_account(
+                                                                    &req.account_type,
+                                                                    user_id,
+                                                                    login,
+                                                                    display_name,
+                                                                    &token_response.access_token,
+                                                                    &token_response.refresh_token,
+                                                                    &token_response.scope,
+                                                                    token_response.expires_in,
+                                                                ) {
+                                                                    Ok(account_id) => {
+                                                                        info!("✅ Successfully added Twitch {} account: {} (DB ID: {})", req.account_type, login, account_id);
+                                                                        json_response(&serde_json::json!({
+                                                                            "success": true,
+                                                                            "account_id": account_id,
+                                                                            "username": login,
+                                                                            "account_type": req.account_type,
+                                                                        }))
+                                                                    }
+                                                                    Err(e) => {
+                                                                        error!("❌ Failed to add account to database: {:?}", e);
+                                                                        error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to save account: {}", e))
+                                                                    }
+                                                                }
+                                                            }
+                                                            None => {
+                                                                error!("❌ Database not available!");
+                                                                error_response(StatusCode::SERVICE_UNAVAILABLE, "Database not available")
+                                                            }
+                                                        }
+                                                    } else {
+                                                        error_response(StatusCode::INTERNAL_SERVER_ERROR, "No user data returned from Twitch")
+                                                    }
+                                                } else {
+                                                    error_response(StatusCode::INTERNAL_SERVER_ERROR, "Invalid user data from Twitch")
+                                                }
+                                            } else {
+                                                error_response(StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse user response")
+                                            }
+                                        }
+                                        Err(e) => {
+                                            error!("Failed to get user info: {}", e);
+                                            error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to get user info: {}", e))
+                                        }
+                                    }
+                                }
+                                None => error_response(StatusCode::SERVICE_UNAVAILABLE, "Twitch API not initialized"),
+                            }
+                        }
+                        Err(e) => {
+                            error!("OAuth exchange failed: {}", e);
+                            error_response(StatusCode::BAD_REQUEST, &format!("OAuth exchange failed: {}", e))
+                        }
+                    }
+                }
+                None => error_response(StatusCode::SERVICE_UNAVAILABLE, "Twitch auth not initialized"),
+            }
+        }
+        Err(e) => error_response(StatusCode::BAD_REQUEST, &format!("Invalid request: {}", e)),
+    }
+}
+
+async fn handle_twitch_accounts_activate(body: &str) -> Response<BoxBody<Bytes, Infallible>> {
+    #[derive(Deserialize)]
+    struct ActivateRequest {
+        account_id: i64,
+    }
+
+    match serde_json::from_str::<ActivateRequest>(body) {
+        Ok(req) => {
+            match get_database() {
+                Some(db) => {
+                    match db.set_active_twitch_account(req.account_id) {
+                        Ok(_) => {
+                            info!("✅ Switched active account to ID: {}", req.account_id);
+                            json_response(&serde_json::json!({
+                                "success": true,
+                                "account_id": req.account_id,
+                            }))
+                        }
+                        Err(e) => {
+                            error!("Failed to activate account: {}", e);
+                            error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to activate account: {}", e))
+                        }
+                    }
+                }
+                None => error_response(StatusCode::SERVICE_UNAVAILABLE, "Database not available"),
+            }
+        }
+        Err(e) => error_response(StatusCode::BAD_REQUEST, &format!("Invalid request: {}", e)),
+    }
+}
+
+async fn handle_twitch_accounts_delete(body: &str) -> Response<BoxBody<Bytes, Infallible>> {
+    #[derive(Deserialize)]
+    struct DeleteRequest {
+        account_id: i64,
+    }
+
+    match serde_json::from_str::<DeleteRequest>(body) {
+        Ok(req) => {
+            match get_database() {
+                Some(db) => {
+                    match db.delete_twitch_account(req.account_id) {
+                        Ok(_) => {
+                            info!("✅ Deleted Twitch account ID: {}", req.account_id);
+                            json_response(&serde_json::json!({
+                                "success": true,
+                            }))
+                        }
+                        Err(e) => {
+                            error!("Failed to delete account: {}", e);
+                            error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to delete account: {}", e))
+                        }
+                    }
+                }
+                None => error_response(StatusCode::SERVICE_UNAVAILABLE, "Database not available"),
+            }
+        }
+        Err(e) => error_response(StatusCode::BAD_REQUEST, &format!("Invalid request: {}", e)),
     }
 }
 
@@ -4437,8 +5056,13 @@ struct OverlayTriggerRequest {
 }
 
 async fn handle_serve_overlay(overlay_id: &str) -> Response<BoxBody<Bytes, Infallible>> {
-    // Serve built overlays from dist/overlays/
-    let file_path = format!("dist/overlays/{}.html", overlay_id);
+    // Handle layout overlays specially - they all use the same layout.html file
+    // The layout name is extracted from the URL path in the overlay itself
+    let file_path = if overlay_id.starts_with("layout/") {
+        "dist/overlays/layout.html".to_string()
+    } else {
+        format!("dist/overlays/{}.html", overlay_id)
+    };
 
     match std::fs::read_to_string(&file_path) {
         Ok(html_content) => {
@@ -4765,6 +5389,157 @@ async fn handle_rebuild_overlays() -> Response<BoxBody<Bytes, Infallible>> {
         Err(e) => {
             error!("Failed to execute build command: {}", e);
             error_response(StatusCode::INTERNAL_SERVER_ERROR, "Failed to execute build")
+        }
+    }
+}
+
+// === LAYOUT MANAGEMENT HANDLERS ===
+
+async fn handle_get_layouts() -> Response<BoxBody<Bytes, Infallible>> {
+    use std::fs;
+    use std::path::Path;
+
+    let layouts_dir = Path::new("layouts");
+
+    // Create directory if it doesn't exist
+    if !layouts_dir.exists() {
+        if let Err(e) = fs::create_dir_all(layouts_dir) {
+            error!("Failed to create layouts directory: {}", e);
+            return json_response(&Vec::<String>::new());
+        }
+    }
+
+    match fs::read_dir(layouts_dir) {
+        Ok(entries) => {
+            let layouts: Vec<String> = entries
+                .filter_map(|entry| entry.ok())
+                .filter(|entry| {
+                    entry.path().extension()
+                        .and_then(|ext| ext.to_str())
+                        .map(|ext| ext == "json")
+                        .unwrap_or(false)
+                })
+                .filter_map(|entry| {
+                    entry.file_name()
+                        .to_str()
+                        .map(|s| s.trim_end_matches(".json").to_string())
+                })
+                .collect();
+
+            json_response(&layouts)
+        }
+        Err(e) => {
+            error!("Failed to read layouts directory: {}", e);
+            json_response(&Vec::<String>::new())
+        }
+    }
+}
+
+async fn handle_get_layout(layout_name: &str) -> Response<BoxBody<Bytes, Infallible>> {
+    use std::fs;
+    use std::path::Path;
+
+    // Sanitize layout name
+    let clean_name = layout_name.replace("..", "").replace("/", "").replace("\\", "");
+    let file_path = Path::new("layouts").join(format!("{}.json", clean_name));
+
+    match fs::read_to_string(&file_path) {
+        Ok(content) => {
+            // Parse and return as JSON
+            match serde_json::from_str::<serde_json::Value>(&content) {
+                Ok(layout) => json_response(&layout),
+                Err(e) => {
+                    error!("Failed to parse layout file {}: {}", file_path.display(), e);
+                    error_response(StatusCode::INTERNAL_SERVER_ERROR, "Invalid layout file")
+                }
+            }
+        }
+        Err(e) => {
+            error!("Failed to read layout file {}: {}", file_path.display(), e);
+            error_response(StatusCode::NOT_FOUND, "Layout not found")
+        }
+    }
+}
+
+async fn handle_save_layout(layout_name: &str, body: &Bytes) -> Response<BoxBody<Bytes, Infallible>> {
+    use std::fs;
+    use std::path::Path;
+
+    // Parse the layout data
+    match serde_json::from_slice::<serde_json::Value>(body) {
+        Ok(layout_data) => {
+            // Sanitize layout name
+            let clean_name = layout_name.replace("..", "").replace("/", "").replace("\\", "");
+
+            // Ensure layouts directory exists
+            let layouts_dir = Path::new("layouts");
+            if !layouts_dir.exists() {
+                if let Err(e) = fs::create_dir_all(layouts_dir) {
+                    error!("Failed to create layouts directory: {}", e);
+                    return error_response(StatusCode::INTERNAL_SERVER_ERROR, "Failed to create directory");
+                }
+            }
+
+            let file_path = layouts_dir.join(format!("{}.json", clean_name));
+
+            // Write layout to file
+            match serde_json::to_string_pretty(&layout_data) {
+                Ok(json_string) => {
+                    match fs::write(&file_path, json_string) {
+                        Ok(_) => {
+                            info!("Layout saved: {}", file_path.display());
+
+                            // Broadcast layout update to WebSocket clients
+                            crate::modules::websocket_server::broadcast_layout_update(
+                                clean_name.clone(),
+                                layout_data.clone()
+                            );
+
+                            let response = serde_json::json!({
+                                "success": true,
+                                "message": "Layout saved successfully"
+                            });
+                            json_response(&response)
+                        }
+                        Err(e) => {
+                            error!("Failed to write layout file {}: {}", file_path.display(), e);
+                            error_response(StatusCode::INTERNAL_SERVER_ERROR, "Failed to save layout")
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to serialize layout: {}", e);
+                    error_response(StatusCode::INTERNAL_SERVER_ERROR, "Failed to serialize layout")
+                }
+            }
+        }
+        Err(e) => {
+            error!("Failed to parse layout data: {}", e);
+            error_response(StatusCode::BAD_REQUEST, "Invalid layout data")
+        }
+    }
+}
+
+async fn handle_delete_layout(layout_name: &str) -> Response<BoxBody<Bytes, Infallible>> {
+    use std::fs;
+    use std::path::Path;
+
+    // Sanitize layout name
+    let clean_name = layout_name.replace("..", "").replace("/", "").replace("\\", "");
+    let file_path = Path::new("layouts").join(format!("{}.json", clean_name));
+
+    match fs::remove_file(&file_path) {
+        Ok(_) => {
+            info!("Layout deleted: {}", file_path.display());
+            let response = serde_json::json!({
+                "success": true,
+                "message": "Layout deleted successfully"
+            });
+            json_response(&response)
+        }
+        Err(e) => {
+            error!("Failed to delete layout file {}: {}", file_path.display(), e);
+            error_response(StatusCode::INTERNAL_SERVER_ERROR, "Failed to delete layout")
         }
     }
 }
@@ -5550,6 +6325,9 @@ async fn handle_add_ticker_message(body: String) -> Response<BoxBody<Bytes, Infa
                 Ok(db) => {
                     match db.add_ticker_message(&req.message) {
                         Ok(id) => {
+                            // Broadcast ticker messages update via WebSocket
+                            crate::modules::websocket_server::broadcast_ticker_messages_update();
+
                             let response = serde_json::json!({ "id": id });
                             json_response(&response)
                         }
@@ -5569,14 +6347,19 @@ async fn handle_update_ticker_message(body: String) -> Response<BoxBody<Bytes, I
         id: i64,
         message: String,
         enabled: bool,
+        #[serde(default)]
+        is_sticky: bool,
     }
 
     match serde_json::from_str::<UpdateMessageRequest>(&body) {
         Ok(req) => {
             match Database::new() {
                 Ok(db) => {
-                    match db.update_ticker_message(req.id, &req.message, req.enabled) {
+                    match db.update_ticker_message(req.id, &req.message, req.enabled, req.is_sticky) {
                         Ok(()) => {
+                            // Broadcast ticker messages update via WebSocket
+                            crate::modules::websocket_server::broadcast_ticker_messages_update();
+
                             let response = serde_json::json!({ "success": true });
                             json_response(&response)
                         }
@@ -5602,6 +6385,9 @@ async fn handle_delete_ticker_message(body: String) -> Response<BoxBody<Bytes, I
                 Ok(db) => {
                     match db.delete_ticker_message(req.id) {
                         Ok(()) => {
+                            // Broadcast ticker messages update via WebSocket
+                            crate::modules::websocket_server::broadcast_ticker_messages_update();
+
                             let response = serde_json::json!({ "success": true });
                             json_response(&response)
                         }
@@ -5627,10 +6413,69 @@ async fn handle_toggle_ticker_message(body: String) -> Response<BoxBody<Bytes, I
                 Ok(db) => {
                     match db.toggle_ticker_message(req.id) {
                         Ok(()) => {
+                            // Broadcast ticker messages update via WebSocket
+                            crate::modules::websocket_server::broadcast_ticker_messages_update();
+
                             let response = serde_json::json!({ "success": true });
                             json_response(&response)
                         }
                         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to toggle message: {}", e))
+                    }
+                }
+                Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Database error: {}", e))
+            }
+        }
+        Err(e) => error_response(StatusCode::BAD_REQUEST, &format!("Invalid request: {}", e))
+    }
+}
+
+async fn handle_toggle_ticker_message_sticky(body: String) -> Response<BoxBody<Bytes, Infallible>> {
+    #[derive(Deserialize)]
+    struct ToggleStickyRequest {
+        id: i64,
+    }
+
+    match serde_json::from_str::<ToggleStickyRequest>(&body) {
+        Ok(req) => {
+            match Database::new() {
+                Ok(db) => {
+                    match db.toggle_ticker_message_sticky(req.id) {
+                        Ok(()) => {
+                            // Broadcast ticker messages update via WebSocket
+                            crate::modules::websocket_server::broadcast_ticker_messages_update();
+
+                            let response = serde_json::json!({ "success": true });
+                            json_response(&response)
+                        }
+                        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to toggle sticky: {}", e))
+                    }
+                }
+                Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Database error: {}", e))
+            }
+        }
+        Err(e) => error_response(StatusCode::BAD_REQUEST, &format!("Invalid request: {}", e))
+    }
+}
+
+async fn handle_toggle_ticker_event_sticky(body: String) -> Response<BoxBody<Bytes, Infallible>> {
+    #[derive(Deserialize)]
+    struct ToggleStickyRequest {
+        id: i64,
+    }
+
+    match serde_json::from_str::<ToggleStickyRequest>(&body) {
+        Ok(req) => {
+            match Database::new() {
+                Ok(db) => {
+                    match db.toggle_ticker_event_sticky(req.id) {
+                        Ok(()) => {
+                            // Broadcast ticker messages update via WebSocket
+                            crate::modules::websocket_server::broadcast_ticker_messages_update();
+
+                            let response = serde_json::json!({ "success": true });
+                            json_response(&response)
+                        }
+                        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to toggle sticky: {}", e))
                     }
                 }
                 Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Database error: {}", e))
@@ -5676,6 +6521,141 @@ async fn handle_update_stream_start_days(body: String) -> Response<BoxBody<Bytes
             }
         }
         Err(e) => error_response(StatusCode::BAD_REQUEST, &format!("Invalid request: {}", e))
+    }
+}
+
+async fn handle_update_stream_start_date(body: String) -> Response<BoxBody<Bytes, Infallible>> {
+    #[derive(Deserialize)]
+    struct UpdateStartDateRequest {
+        start_date: Option<String>, // ISO 8601 format: YYYY-MM-DD
+    }
+
+    match serde_json::from_str::<UpdateStartDateRequest>(&body) {
+        Ok(req) => {
+            match Database::new() {
+                Ok(db) => {
+                    match db.update_stream_start_date(req.start_date.clone()) {
+                        Ok(()) => {
+                            // Broadcast status config update via WebSocket
+                            match db.get_status_config() {
+                                Ok(config) => {
+                                    if let Ok(config_json) = serde_json::to_value(&config) {
+                                        crate::modules::websocket_server::broadcast_status_config_update(config_json);
+                                    }
+                                }
+                                Err(e) => error!("Failed to get status config for broadcast: {}", e),
+                            }
+
+                            let response = serde_json::json!({ "success": true });
+                            json_response(&response)
+                        }
+                        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to update start date: {}", e))
+                    }
+                }
+                Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Database error: {}", e))
+            }
+        }
+        Err(e) => error_response(StatusCode::BAD_REQUEST, &format!("Invalid request: {}", e))
+    }
+}
+
+async fn handle_update_ticker_speed(body: String) -> Response<BoxBody<Bytes, Infallible>> {
+    #[derive(Deserialize)]
+    struct UpdateTickerSpeedRequest {
+        speed: i64, // Animation duration in seconds
+    }
+
+    match serde_json::from_str::<UpdateTickerSpeedRequest>(&body) {
+        Ok(req) => {
+            match Database::new() {
+                Ok(db) => {
+                    match db.update_ticker_speed(req.speed) {
+                        Ok(()) => {
+                            // Broadcast status config update via WebSocket
+                            match db.get_status_config() {
+                                Ok(config) => {
+                                    if let Ok(config_json) = serde_json::to_value(&config) {
+                                        crate::modules::websocket_server::broadcast_status_config_update(config_json);
+                                    }
+                                }
+                                Err(e) => error!("Failed to get status config for broadcast: {}", e),
+                            }
+
+                            let response = serde_json::json!({ "success": true });
+                            json_response(&response)
+                        }
+                        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to update ticker speed: {}", e))
+                    }
+                }
+                Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Database error: {}", e))
+            }
+        }
+        Err(e) => error_response(StatusCode::BAD_REQUEST, &format!("Invalid request: {}", e))
+    }
+}
+
+async fn handle_update_max_ticker_items(body: String) -> Response<BoxBody<Bytes, Infallible>> {
+    #[derive(Deserialize)]
+    struct UpdateMaxTickerItemsRequest {
+        max_items: i64,
+    }
+
+    match serde_json::from_str::<UpdateMaxTickerItemsRequest>(&body) {
+        Ok(req) => {
+            match Database::new() {
+                Ok(db) => {
+                    match db.update_max_ticker_items(req.max_items) {
+                        Ok(()) => {
+                            // Broadcast status config update via WebSocket
+                            match db.get_status_config() {
+                                Ok(config) => {
+                                    if let Ok(config_json) = serde_json::to_value(&config) {
+                                        crate::modules::websocket_server::broadcast_status_config_update(config_json);
+                                    }
+                                }
+                                Err(e) => error!("Failed to get status config for broadcast: {}", e),
+                            }
+
+                            let response = serde_json::json!({ "success": true });
+                            json_response(&response)
+                        }
+                        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to update max ticker items: {}", e))
+                    }
+                }
+                Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Database error: {}", e))
+            }
+        }
+        Err(e) => error_response(StatusCode::BAD_REQUEST, &format!("Invalid request: {}", e))
+    }
+}
+
+async fn handle_get_ticker_events() -> Response<BoxBody<Bytes, Infallible>> {
+    match Database::new() {
+        Ok(db) => {
+            match db.get_ticker_events() {
+                Ok(events) => json_response(&events),
+                Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to get ticker events: {}", e))
+            }
+        }
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Database error: {}", e))
+    }
+}
+
+async fn handle_clear_ticker_events() -> Response<BoxBody<Bytes, Infallible>> {
+    match Database::new() {
+        Ok(db) => {
+            match db.clear_ticker_events() {
+                Ok(()) => {
+                    // Broadcast ticker messages update via WebSocket
+                    crate::modules::websocket_server::broadcast_ticker_messages_update();
+
+                    let response = serde_json::json!({ "success": true });
+                    json_response(&response)
+                }
+                Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to clear ticker events: {}", e))
+            }
+        }
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Database error: {}", e))
     }
 }
 

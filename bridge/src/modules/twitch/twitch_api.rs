@@ -321,12 +321,16 @@ impl TwitchAPI {
         Ok(response.total.unwrap_or(0))
     }
 
-    /// Update channel information (title, game, etc.)
+    /// Update channel information (title, game, tags, etc.)
     pub async fn update_channel(
         &self,
         broadcaster_id: &str,
         title: Option<&str>,
         game_id: Option<&str>,
+        broadcaster_language: Option<&str>,
+        tags: Option<Vec<String>>,
+        content_classification_labels: Option<Vec<String>>,
+        is_branded_content: Option<bool>,
     ) -> Result<()> {
         let config = self.config_manager.load()?;
         let access_token = self.auth.get_valid_token().await?;
@@ -342,9 +346,24 @@ impl TwitchAPI {
             title: Option<&'a str>,
             #[serde(skip_serializing_if = "Option::is_none")]
             game_id: Option<&'a str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            broadcaster_language: Option<&'a str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            tags: Option<Vec<String>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            content_classification_labels: Option<Vec<String>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            is_branded_content: Option<bool>,
         }
 
-        let body = UpdateRequest { title, game_id };
+        let body = UpdateRequest {
+            title,
+            game_id,
+            broadcaster_language,
+            tags,
+            content_classification_labels,
+            is_branded_content,
+        };
 
         let response = self
             .http_client

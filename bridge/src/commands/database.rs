@@ -61,6 +61,7 @@ pub struct TickerMessage {
     pub id: i64,
     pub message: String,
     pub enabled: bool,
+    pub is_sticky: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -68,8 +69,21 @@ pub struct TickerMessage {
 /// Status configuration data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StatusConfig {
-    pub stream_start_days: i64,
+    pub stream_start_date: Option<String>, // ISO 8601 date string (YYYY-MM-DD)
+    pub ticker_speed: i64, // Animation duration in seconds (default 30)
+    pub max_ticker_items: i64, // Maximum items in ticker (messages + events, default 20)
     pub updated_at: i64,
+}
+
+/// Ticker event data (stored event notifications)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TickerEvent {
+    pub id: i64,
+    pub event_type: String,
+    pub event_data: String, // JSON string of the original event
+    pub display_text: String,
+    pub is_sticky: bool,
+    pub created_at: i64,
 }
 
 /// Ticker events configuration data
@@ -81,6 +95,23 @@ pub struct TickerEventsConfig {
     pub show_donations: bool,
     pub show_gifted_subs: bool,
     pub show_cheers: bool,
+    pub updated_at: i64,
+}
+
+/// Twitch account data (for multi-account support)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TwitchAccount {
+    pub id: i64,
+    pub account_type: String, // "bot" or "broadcaster"
+    pub user_id: String,
+    pub username: String,
+    pub display_name: Option<String>,
+    pub access_token: String, // Encrypted
+    pub refresh_token: String, // Encrypted
+    pub scopes: Vec<String>,
+    pub token_expires_at: i64,
+    pub is_active: bool,
+    pub created_at: i64,
     pub updated_at: i64,
 }
 
@@ -604,27 +635,81 @@ impl Database {
             [],
         )?;
 
-        // Create ticker_messages table
+        // Create twitch_accounts table (for multiple authenticated accounts)
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS ticker_messages (
+            "CREATE TABLE IF NOT EXISTS twitch_accounts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                message TEXT NOT NULL,
-                enabled INTEGER NOT NULL DEFAULT 1,
+                account_type TEXT NOT NULL CHECK (account_type IN ('bot', 'broadcaster')),
+                user_id TEXT NOT NULL UNIQUE,
+                username TEXT NOT NULL,
+                display_name TEXT,
+                access_token TEXT NOT NULL,
+                refresh_token TEXT NOT NULL,
+                scopes TEXT NOT NULL,
+                token_expires_at INTEGER NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 0,
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
             )",
             [],
         )?;
 
-        // Create status_config table (for stream status display)
+        // Create ticker_messages table
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS status_config (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                stream_start_days INTEGER NOT NULL DEFAULT 0,
+            "CREATE TABLE IF NOT EXISTS ticker_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                is_sticky INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
             )",
             [],
         )?;
+
+        // Add is_sticky column if it doesn't exist (migration)
+        let ticker_messages_columns: Vec<String> = conn
+            .prepare("PRAGMA table_info(ticker_messages)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if !ticker_messages_columns.contains(&"is_sticky".to_string()) {
+            conn.execute("ALTER TABLE ticker_messages ADD COLUMN is_sticky INTEGER NOT NULL DEFAULT 0", [])?;
+        }
+
+        // Create status_config table (for stream status display)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS status_config (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                stream_start_date TEXT,
+                ticker_speed INTEGER NOT NULL DEFAULT 30,
+                max_ticker_items INTEGER NOT NULL DEFAULT 20,
+                updated_at INTEGER NOT NULL
+            )",
+            [],
+        )?;
+
+        // Migrate old columns if they exist
+        let columns: Vec<String> = conn
+            .prepare("PRAGMA table_info(status_config)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // If old column exists, migrate data and update schema
+        if columns.contains(&"stream_start_days".to_string()) {
+            // Add new columns if they don't exist
+            if !columns.contains(&"stream_start_date".to_string()) {
+                conn.execute("ALTER TABLE status_config ADD COLUMN stream_start_date TEXT", [])?;
+            }
+            if !columns.contains(&"ticker_speed".to_string()) {
+                conn.execute("ALTER TABLE status_config ADD COLUMN ticker_speed INTEGER NOT NULL DEFAULT 30", [])?;
+            }
+        }
+
+        // Add max_ticker_items column if it doesn't exist
+        if !columns.contains(&"max_ticker_items".to_string()) {
+            conn.execute("ALTER TABLE status_config ADD COLUMN max_ticker_items INTEGER NOT NULL DEFAULT 20", [])?;
+        }
 
         // Create ticker_events_config table (for enabling/disabling event types in ticker)
         conn.execute(
@@ -640,6 +725,35 @@ impl Database {
             )",
             [],
         )?;
+
+        // Create ticker_events table (for storing event notifications)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS ticker_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL,
+                event_data TEXT NOT NULL,
+                display_text TEXT NOT NULL,
+                is_sticky INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL
+            )",
+            [],
+        )?;
+
+        // Create index for ticker_events (for sorting by creation time)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ticker_events_created_at ON ticker_events(created_at DESC)",
+            [],
+        )?;
+
+        // Add is_sticky column to ticker_events if it doesn't exist (migration)
+        let ticker_events_columns: Vec<String> = conn
+            .prepare("PRAGMA table_info(ticker_events)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if !ticker_events_columns.contains(&"is_sticky".to_string()) {
+            conn.execute("ALTER TABLE ticker_events ADD COLUMN is_sticky INTEGER NOT NULL DEFAULT 0", [])?;
+        }
 
         // Create goals table
         conn.execute(
@@ -3350,7 +3464,7 @@ impl Database {
     pub fn get_ticker_messages(&self) -> Result<Vec<TickerMessage>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, message, enabled, created_at, updated_at
+            "SELECT id, message, enabled, is_sticky, created_at, updated_at
              FROM ticker_messages
              ORDER BY id ASC"
         )?;
@@ -3360,8 +3474,9 @@ impl Database {
                 id: row.get(0)?,
                 message: row.get(1)?,
                 enabled: row.get::<_, i64>(2)? == 1,
-                created_at: row.get(3)?,
-                updated_at: row.get(4)?,
+                is_sticky: row.get::<_, i64>(3)? == 1,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
             })
         })?
         .collect::<Result<Vec<_>>>()?;
@@ -3373,7 +3488,7 @@ impl Database {
     pub fn get_enabled_ticker_messages(&self) -> Result<Vec<TickerMessage>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, message, enabled, created_at, updated_at
+            "SELECT id, message, enabled, is_sticky, created_at, updated_at
              FROM ticker_messages
              WHERE enabled = 1
              ORDER BY id ASC"
@@ -3384,8 +3499,9 @@ impl Database {
                 id: row.get(0)?,
                 message: row.get(1)?,
                 enabled: row.get::<_, i64>(2)? == 1,
-                created_at: row.get(3)?,
-                updated_at: row.get(4)?,
+                is_sticky: row.get::<_, i64>(3)? == 1,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
             })
         })?
         .collect::<Result<Vec<_>>>()?;
@@ -3408,15 +3524,30 @@ impl Database {
     }
 
     /// Update a ticker message
-    pub fn update_ticker_message(&self, id: i64, message: &str, enabled: bool) -> Result<()> {
+    pub fn update_ticker_message(&self, id: i64, message: &str, enabled: bool, is_sticky: bool) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         let now = chrono::Utc::now().timestamp();
 
         conn.execute(
             "UPDATE ticker_messages
-             SET message = ?1, enabled = ?2, updated_at = ?3
-             WHERE id = ?4",
-            params![message, if enabled { 1 } else { 0 }, now, id],
+             SET message = ?1, enabled = ?2, is_sticky = ?3, updated_at = ?4
+             WHERE id = ?5",
+            params![message, if enabled { 1 } else { 0 }, if is_sticky { 1 } else { 0 }, now, id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Toggle ticker message sticky state
+    pub fn toggle_ticker_message_sticky(&self, id: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().timestamp();
+
+        conn.execute(
+            "UPDATE ticker_messages
+             SET is_sticky = NOT is_sticky, updated_at = ?1
+             WHERE id = ?2",
+            params![now, id],
         )?;
 
         Ok(())
@@ -3451,12 +3582,14 @@ impl Database {
         let conn = self.conn.lock().unwrap();
 
         match conn.query_row(
-            "SELECT stream_start_days, updated_at FROM status_config WHERE id = 1",
+            "SELECT stream_start_date, ticker_speed, max_ticker_items, updated_at FROM status_config WHERE id = 1",
             [],
             |row| {
                 Ok(StatusConfig {
-                    stream_start_days: row.get(0)?,
-                    updated_at: row.get(1)?,
+                    stream_start_date: row.get(0)?,
+                    ticker_speed: row.get(1)?,
+                    max_ticker_items: row.get(2)?,
+                    updated_at: row.get(3)?,
                 })
             },
         ).optional()? {
@@ -3465,33 +3598,77 @@ impl Database {
                 // Create default config
                 let now = chrono::Utc::now().timestamp();
                 conn.execute(
-                    "INSERT INTO status_config (id, stream_start_days, updated_at)
-                     VALUES (1, 0, ?1)",
+                    "INSERT INTO status_config (id, stream_start_date, ticker_speed, max_ticker_items, updated_at)
+                     VALUES (1, NULL, 30, 20, ?1)",
                     params![now],
                 )?;
                 Ok(StatusConfig {
-                    stream_start_days: 0,
+                    stream_start_date: None,
+                    ticker_speed: 30,
+                    max_ticker_items: 20,
                     updated_at: now,
                 })
             }
         }
     }
 
-    /// Update stream start days
-    pub fn update_stream_start_days(&self, days: i64) -> Result<()> {
+    /// Update stream start date (ISO 8601 format: YYYY-MM-DD)
+    pub fn update_stream_start_date(&self, start_date: Option<String>) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         let now = chrono::Utc::now().timestamp();
 
         conn.execute(
-            "INSERT INTO status_config (id, stream_start_days, updated_at)
-             VALUES (1, ?1, ?2)
+            "INSERT INTO status_config (id, stream_start_date, ticker_speed, max_ticker_items, updated_at)
+             VALUES (1, ?1, 30, 20, ?2)
              ON CONFLICT(id) DO UPDATE SET
-                stream_start_days = ?1,
+                stream_start_date = ?1,
                 updated_at = ?2",
-            params![days, now],
+            params![start_date, now],
         )?;
 
         Ok(())
+    }
+
+    /// Update ticker speed (animation duration in seconds)
+    pub fn update_ticker_speed(&self, speed: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().timestamp();
+
+        conn.execute(
+            "INSERT INTO status_config (id, stream_start_date, ticker_speed, max_ticker_items, updated_at)
+             VALUES (1, NULL, ?1, 20, ?2)
+             ON CONFLICT(id) DO UPDATE SET
+                ticker_speed = ?1,
+                updated_at = ?2",
+            params![speed, now],
+        )?;
+
+        Ok(())
+    }
+
+    /// Update max ticker items
+    pub fn update_max_ticker_items(&self, max_items: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().timestamp();
+
+        conn.execute(
+            "INSERT INTO status_config (id, stream_start_date, ticker_speed, max_ticker_items, updated_at)
+             VALUES (1, NULL, 30, ?1, ?2)
+             ON CONFLICT(id) DO UPDATE SET
+                max_ticker_items = ?1,
+                updated_at = ?2",
+            params![max_items, now],
+        )?;
+
+        Ok(())
+    }
+
+    /// Update stream start days (deprecated, kept for backwards compatibility)
+    pub fn update_stream_start_days(&self, days: i64) -> Result<()> {
+        // Calculate date from days ago
+        let start_date = chrono::Utc::now() - chrono::Duration::days(days);
+        let date_string = start_date.format("%Y-%m-%d").to_string();
+        self.update_stream_start_date(Some(date_string))
     }
 
     /// Get ticker events configuration
@@ -3565,6 +3742,104 @@ impl Database {
             ],
         )?;
 
+        Ok(())
+    }
+
+    // ========== Ticker Events Methods ==========
+
+    /// Add a ticker event (with rotation if max items exceeded)
+    pub fn add_ticker_event(&self, event_type: &str, event_data: &str, display_text: &str) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let now = chrono::Utc::now().timestamp();
+
+        // Get max items setting
+        let config = self.get_status_config()?;
+        let max_items = config.max_ticker_items;
+
+        // Get current total count (messages + events)
+        let message_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM ticker_messages WHERE enabled = 1",
+            [],
+            |row| row.get(0)
+        )?;
+
+        let event_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM ticker_events",
+            [],
+            |row| row.get(0)
+        )?;
+
+        let total_count = message_count + event_count;
+
+        // If we're at or over the limit, remove oldest NON-STICKY events until we have room
+        if total_count >= max_items {
+            let to_remove = (total_count - max_items) + 1;
+            conn.execute(
+                "DELETE FROM ticker_events WHERE id IN (
+                    SELECT id FROM ticker_events WHERE is_sticky = 0 ORDER BY created_at ASC LIMIT ?1
+                )",
+                params![to_remove],
+            )?;
+        }
+
+        // Insert new event (not sticky by default)
+        conn.execute(
+            "INSERT INTO ticker_events (event_type, event_data, display_text, is_sticky, created_at)
+             VALUES (?1, ?2, ?3, 0, ?4)",
+            params![event_type, event_data, display_text, now],
+        )?;
+
+        Ok(conn.last_insert_rowid())
+    }
+
+    /// Get all ticker events
+    pub fn get_ticker_events(&self) -> Result<Vec<TickerEvent>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, event_type, event_data, display_text, is_sticky, created_at
+             FROM ticker_events
+             ORDER BY created_at DESC"
+        )?;
+
+        let events = stmt.query_map([], |row| {
+            Ok(TickerEvent {
+                id: row.get(0)?,
+                event_type: row.get(1)?,
+                event_data: row.get(2)?,
+                display_text: row.get(3)?,
+                is_sticky: row.get::<_, i64>(4)? == 1,
+                created_at: row.get(5)?,
+            })
+        })?;
+
+        events.collect()
+    }
+
+    /// Toggle ticker event sticky state
+    pub fn toggle_ticker_event_sticky(&self, id: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+
+        conn.execute(
+            "UPDATE ticker_events
+             SET is_sticky = NOT is_sticky
+             WHERE id = ?1",
+            params![id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Delete a ticker event
+    pub fn delete_ticker_event(&self, id: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM ticker_events WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    /// Clear all ticker events
+    pub fn clear_ticker_events(&self) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM ticker_events", [])?;
         Ok(())
     }
 
@@ -3693,6 +3968,354 @@ impl Database {
     pub fn delete_goal(&self, id: i64) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute("DELETE FROM goals WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    // ========== Twitch Accounts Methods ==========
+
+    /// Add a new Twitch account
+    pub fn add_twitch_account(
+        &self,
+        account_type: &str,
+        user_id: &str,
+        username: &str,
+        display_name: Option<&str>,
+        access_token: &str,
+        refresh_token: &str,
+        scopes: &[String],
+        expires_in: i64,
+    ) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+
+        // Get encryption key
+        let encryption_key = self.get_or_create_twitch_encryption_key(&conn)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))))?;
+
+        // Encrypt tokens
+        let encrypted_access = self.encrypt_value(access_token, &encryption_key)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))))?;
+        let encrypted_refresh = self.encrypt_value(refresh_token, &encryption_key)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))))?;
+
+        // Calculate expiration timestamp
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let expires_at = now + expires_in;
+
+        // Convert scopes to JSON
+        let scopes_json = serde_json::to_string(scopes).unwrap_or_else(|_| "[]".to_string());
+
+        // If this is the first account or account_type is "bot", set it as active
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM twitch_accounts",
+            [],
+            |row| row.get(0)
+        )?;
+        let is_active = if count == 0 || account_type == "bot" { 1 } else { 0 };
+
+        // Insert account
+        conn.execute(
+            "INSERT INTO twitch_accounts (
+                account_type, user_id, username, display_name,
+                access_token, refresh_token, scopes, token_expires_at,
+                is_active, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                account_type,
+                user_id,
+                username,
+                display_name,
+                encrypted_access,
+                encrypted_refresh,
+                scopes_json,
+                expires_at,
+                is_active,
+                now,
+                now,
+            ],
+        )?;
+
+        Ok(conn.last_insert_rowid())
+    }
+
+    /// Get all Twitch accounts
+    pub fn get_twitch_accounts(&self) -> Result<Vec<TwitchAccount>> {
+        let conn = self.conn.lock().unwrap();
+        let encryption_key = self.get_or_create_twitch_encryption_key(&conn)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))))?;
+
+        let mut stmt = conn.prepare(
+            "SELECT id, account_type, user_id, username, display_name,
+                    access_token, refresh_token, scopes, token_expires_at,
+                    is_active, created_at, updated_at
+             FROM twitch_accounts
+             ORDER BY account_type DESC, created_at ASC"
+        )?;
+
+        let rows: Vec<_> = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,      // id
+                row.get::<_, String>(1)?,   // account_type
+                row.get::<_, String>(2)?,   // user_id
+                row.get::<_, String>(3)?,   // username
+                row.get::<_, Option<String>>(4)?, // display_name
+                row.get::<_, String>(5)?,   // encrypted access_token
+                row.get::<_, String>(6)?,   // encrypted refresh_token
+                row.get::<_, String>(7)?,   // scopes json
+                row.get::<_, i64>(8)?,      // token_expires_at
+                row.get::<_, i64>(9)?,      // is_active
+                row.get::<_, i64>(10)?,     // created_at
+                row.get::<_, i64>(11)?,     // updated_at
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+        let mut accounts = Vec::new();
+        for (id, account_type, user_id, username, display_name, encrypted_access, encrypted_refresh, scopes_json, token_expires_at, is_active, created_at, updated_at) in rows {
+            let access_token = self.decrypt_value(&encrypted_access, &encryption_key).unwrap_or_default();
+            let refresh_token = self.decrypt_value(&encrypted_refresh, &encryption_key).unwrap_or_default();
+            let scopes: Vec<String> = serde_json::from_str(&scopes_json).unwrap_or_default();
+
+            accounts.push(TwitchAccount {
+                id,
+                account_type,
+                user_id,
+                username,
+                display_name,
+                access_token,
+                refresh_token,
+                scopes,
+                token_expires_at,
+                is_active: is_active == 1,
+                created_at,
+                updated_at,
+            });
+        }
+
+        Ok(accounts)
+    }
+
+    /// Get Twitch account by ID
+    pub fn get_twitch_account_by_id(&self, id: i64) -> Result<Option<TwitchAccount>> {
+        let conn = self.conn.lock().unwrap();
+        let encryption_key = self.get_or_create_twitch_encryption_key(&conn)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))))?;
+
+        let row_data = conn.query_row(
+            "SELECT id, account_type, user_id, username, display_name,
+                    access_token, refresh_token, scopes, token_expires_at,
+                    is_active, created_at, updated_at
+             FROM twitch_accounts
+             WHERE id = ?1",
+            params![id],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, String>(7)?,
+                    row.get::<_, i64>(8)?,
+                    row.get::<_, i64>(9)?,
+                    row.get::<_, i64>(10)?,
+                    row.get::<_, i64>(11)?,
+                ))
+            }
+        ).optional()?;
+
+        Ok(row_data.map(|(id, account_type, user_id, username, display_name, encrypted_access, encrypted_refresh, scopes_json, token_expires_at, is_active, created_at, updated_at)| {
+            let access_token = self.decrypt_value(&encrypted_access, &encryption_key).unwrap_or_default();
+            let refresh_token = self.decrypt_value(&encrypted_refresh, &encryption_key).unwrap_or_default();
+            let scopes: Vec<String> = serde_json::from_str(&scopes_json).unwrap_or_default();
+
+            TwitchAccount {
+                id,
+                account_type,
+                user_id,
+                username,
+                display_name,
+                access_token,
+                refresh_token,
+                scopes,
+                token_expires_at,
+                is_active: is_active == 1,
+                created_at,
+                updated_at,
+            }
+        }))
+    }
+
+    /// Get active Twitch account
+    pub fn get_active_twitch_account(&self) -> Result<Option<TwitchAccount>> {
+        let conn = self.conn.lock().unwrap();
+        let encryption_key = self.get_or_create_twitch_encryption_key(&conn)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))))?;
+
+        let row_data = conn.query_row(
+            "SELECT id, account_type, user_id, username, display_name,
+                    access_token, refresh_token, scopes, token_expires_at,
+                    is_active, created_at, updated_at
+             FROM twitch_accounts
+             WHERE is_active = 1
+             LIMIT 1",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, String>(7)?,
+                    row.get::<_, i64>(8)?,
+                    row.get::<_, i64>(9)?,
+                    row.get::<_, i64>(10)?,
+                    row.get::<_, i64>(11)?,
+                ))
+            }
+        ).optional()?;
+
+        Ok(row_data.map(|(id, account_type, user_id, username, display_name, encrypted_access, encrypted_refresh, scopes_json, token_expires_at, is_active, created_at, updated_at)| {
+            let access_token = self.decrypt_value(&encrypted_access, &encryption_key).unwrap_or_default();
+            let refresh_token = self.decrypt_value(&encrypted_refresh, &encryption_key).unwrap_or_default();
+            let scopes: Vec<String> = serde_json::from_str(&scopes_json).unwrap_or_default();
+
+            TwitchAccount {
+                id,
+                account_type,
+                user_id,
+                username,
+                display_name,
+                access_token,
+                refresh_token,
+                scopes,
+                token_expires_at,
+                is_active: is_active == 1,
+                created_at,
+                updated_at,
+            }
+        }))
+    }
+
+    /// Set active Twitch account (only one can be active at a time)
+    pub fn set_active_twitch_account(&self, account_id: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+
+        // Deactivate all accounts
+        conn.execute("UPDATE twitch_accounts SET is_active = 0", [])?;
+
+        // Activate the specified account
+        conn.execute(
+            "UPDATE twitch_accounts SET is_active = 1, updated_at = ?1 WHERE id = ?2",
+            params![
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as i64,
+                account_id
+            ],
+        )?;
+
+        Ok(())
+    }
+
+    /// Update Twitch account tokens
+    pub fn update_twitch_account_tokens(
+        &self,
+        account_id: i64,
+        access_token: &str,
+        refresh_token: &str,
+        expires_in: i64,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let encryption_key = self.get_or_create_twitch_encryption_key(&conn)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))))?;
+
+        let encrypted_access = self.encrypt_value(access_token, &encryption_key)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))))?;
+        let encrypted_refresh = self.encrypt_value(refresh_token, &encryption_key)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))))?;
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let expires_at = now + expires_in;
+
+        conn.execute(
+            "UPDATE twitch_accounts
+             SET access_token = ?1, refresh_token = ?2, token_expires_at = ?3, updated_at = ?4
+             WHERE id = ?5",
+            params![encrypted_access, encrypted_refresh, expires_at, now, account_id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Get Twitch account by user_id
+    pub fn get_twitch_account_by_user_id(&self, user_id: &str) -> Result<Option<TwitchAccount>> {
+        let conn = self.conn.lock().unwrap();
+        let encryption_key = self.get_or_create_twitch_encryption_key(&conn)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))))?;
+
+        let row_data = conn.query_row(
+            "SELECT id, account_type, user_id, username, display_name,
+                    access_token, refresh_token, scopes, token_expires_at,
+                    is_active, created_at, updated_at
+             FROM twitch_accounts
+             WHERE user_id = ?1",
+            params![user_id],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, String>(7)?,
+                    row.get::<_, i64>(8)?,
+                    row.get::<_, i64>(9)?,
+                    row.get::<_, i64>(10)?,
+                    row.get::<_, i64>(11)?,
+                ))
+            }
+        ).optional()?;
+
+        Ok(row_data.map(|(id, account_type, user_id, username, display_name, encrypted_access, encrypted_refresh, scopes_json, token_expires_at, is_active, created_at, updated_at)| {
+            let access_token = self.decrypt_value(&encrypted_access, &encryption_key).unwrap_or_default();
+            let refresh_token = self.decrypt_value(&encrypted_refresh, &encryption_key).unwrap_or_default();
+            let scopes: Vec<String> = serde_json::from_str(&scopes_json).unwrap_or_default();
+
+            TwitchAccount {
+                id,
+                account_type,
+                user_id,
+                username,
+                display_name,
+                access_token,
+                refresh_token,
+                scopes,
+                token_expires_at,
+                is_active: is_active == 1,
+                created_at,
+                updated_at,
+            }
+        }))
+    }
+
+    /// Delete Twitch account
+    pub fn delete_twitch_account(&self, account_id: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("DELETE FROM twitch_accounts WHERE id = ?1", params![account_id])?;
         Ok(())
     }
 }

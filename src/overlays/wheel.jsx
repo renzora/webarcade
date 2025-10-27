@@ -357,4 +357,7 @@ function WheelOverlay() {
   );
 }
 
-render(() => <WheelOverlay />, document.getElementById('root'));
+// Only render when used as standalone (for OBS browser sources)
+if (document.getElementById('root')) {
+  render(() => <WheelOverlay />, document.getElementById('root'));
+}

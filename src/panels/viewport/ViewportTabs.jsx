@@ -11,17 +11,8 @@ const ViewportTabs = () => {
   const activeTabId = () => viewportStore.activeTabId;
   const suspendedTabs = () => viewportStore.suspendedTabs;
   const availableViewportTypes = createMemo(() => {
-    const builtInTypes = [
-      {
-        id: '3d-viewport',
-        label: 'New Scene',
-        icon: IconChairDirector,
-        description: 'Create a new 3D scene viewport'
-      }
-    ];
-
     const pluginTypes = Array.from(viewportTypes().values());
-    return [...builtInTypes, ...pluginTypes];
+    return pluginTypes;
   });
 
   const getViewportIcon = (type) => {
@@ -29,10 +20,6 @@ const ViewportTabs = () => {
       const viewportType = availableViewportTypes().find(v => v.id === type);
       if (viewportType && viewportType.icon && typeof viewportType.icon === 'function') {
         return viewportType.icon;
-      }
-
-      if (type === '3d-viewport') {
-        return IconChairDirector;
       }
       return IconFileText;
     } catch (error) {
@@ -109,7 +96,7 @@ const ViewportTabs = () => {
         },
         { divider: true },
         {
-          label: `New ${tab.type === '3d-viewport' ? 'Scene' : tab.type.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
+          label: `New ${tab.type.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
           iconComponent: getViewportIcon(tab.type),
           action: () => {
             const newTabId = `viewport-${Date.now()}`;

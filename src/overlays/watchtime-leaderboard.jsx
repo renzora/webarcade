@@ -147,7 +147,7 @@ export default function WatchtimeLeaderboard() {
         animation: sparkle 2s ease-in-out infinite;
       }
     `}</style>
-    <div class="min-h-screen font-sans p-4">
+    <div class="min-h-screen font-sans w-full">
       <div class="w-full">
         {/* Leaderboard */}
         <div>
@@ -242,4 +242,7 @@ export default function WatchtimeLeaderboard() {
   return <App />;
 }
 
-render(() => <WatchtimeLeaderboard />, document.getElementById('root'));
+// Only render when used as standalone (for OBS browser sources)
+if (document.getElementById('root')) {
+  render(() => <WatchtimeLeaderboard />, document.getElementById('root'));
+}

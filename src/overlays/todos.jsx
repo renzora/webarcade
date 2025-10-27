@@ -137,4 +137,7 @@ function TodosOverlay() {
   );
 }
 
-render(() => <TodosOverlay />, document.getElementById('root'));
+// Only render when used as standalone (for OBS browser sources)
+if (document.getElementById('root')) {
+  render(() => <TodosOverlay />, document.getElementById('root'));
+}

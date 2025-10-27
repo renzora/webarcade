@@ -240,4 +240,7 @@ function EffectOverlay() {
   );
 }
 
-render(() => <EffectOverlay />, document.getElementById('root'));
+// Only render when used as standalone (for OBS browser sources)
+if (document.getElementById('root')) {
+  render(() => <EffectOverlay />, document.getElementById('root'));
+}

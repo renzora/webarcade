@@ -207,4 +207,7 @@ function LevelUpOverlay() {
   );
 }
 
-render(() => <LevelUpOverlay />, document.getElementById('root'));
+// Only render when used as standalone (for OBS browser sources)
+if (document.getElementById('root')) {
+  render(() => <LevelUpOverlay />, document.getElementById('root'));
+}

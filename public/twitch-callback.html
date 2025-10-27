@@ -85,13 +85,33 @@
 
                 statusEl.textContent = 'Exchanging authorization code...';
 
+                // Check if we're in multi-account mode
+                const isMultiAccountMode = localStorage.getItem('twitch_multi_account_mode') === 'true';
+                const accountType = localStorage.getItem('twitch_account_type') || 'bot';
+
+                console.log('[Callback] Multi-account mode:', isMultiAccountMode);
+                console.log('[Callback] Account type:', accountType);
+
+                // Determine which endpoint to use
+                const endpoint = isMultiAccountMode
+                    ? 'http://localhost:3001/twitch/accounts/auth'
+                    : 'http://localhost:3001/twitch/callback';
+
+                console.log('[Callback] Using endpoint:', endpoint);
+
+                const requestBody = isMultiAccountMode
+                    ? { code, state, account_type: accountType }
+                    : { code, state };
+
+                console.log('[Callback] Request body:', requestBody);
+
                 // Send code and state to backend
-                const response = await fetch('http://localhost:3001/twitch/callback', {
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ code, state })
+                    body: JSON.stringify(requestBody)
                 });
 
                 if (!response.ok) {

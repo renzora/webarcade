@@ -1,8 +1,10 @@
 import { createPlugin } from '@/api/plugin';
-import { IconBrandTwitch, IconMessage, IconSettings, IconDeviceTv, IconList, IconChecklist, IconVolume, IconBulb, IconSparkles, IconTerminal2, IconClock, IconUsers, IconDatabase, IconWheel, IconScale, IconBrandDiscord, IconMusic, IconMessageCircle, IconBrandAmazon, IconRobot, IconTarget, IconAlertCircle } from '@tabler/icons-solidjs';
+import { IconBrandTwitch, IconMessage, IconSettings, IconDeviceTv, IconList, IconChecklist, IconVolume, IconBulb, IconSparkles, IconTerminal2, IconClock, IconUsers, IconDatabase, IconWheel, IconScale, IconBrandDiscord, IconMusic, IconMessageCircle, IconBrandAmazon, IconRobot, IconTarget, IconAlertCircle, IconInfoCircle } from '@tabler/icons-solidjs';
 import TwitchSettingsViewport from './TwitchSettingsViewport.jsx';
 import TwitchChatViewport from './TwitchChatViewport.jsx';
 import OverlayManagerViewport from './OverlayManagerViewport.jsx';
+import LayoutManagerViewport from './LayoutManagerViewport.jsx';
+import LayoutManagerPanel from './LayoutManagerPanel.jsx';
 import AlertsViewport from './AlertsViewport.jsx';
 import CountersViewport from './CountersViewport.jsx';
 import TasksViewport from './TasksViewport.jsx';
@@ -10,6 +12,7 @@ import TTSWhitelistViewport from './TTSWhitelistViewport.jsx';
 import HueViewport from './HueViewport.jsx';
 import HueScenesViewport from './HueScenesViewport.jsx';
 import HuePanel from './HuePanel.jsx';
+import StreamInfoPanel from './StreamInfoPanel.jsx';
 import TextCommandsViewport from './TextCommandsViewport.jsx';
 import TimerViewport from './TimerViewport.jsx';
 import WatchtimeViewport from './WatchtimeViewport.jsx';
@@ -64,6 +67,26 @@ export default createPlugin({
       }
     });
 
+    // Register Stream Info panel
+    api.tab('stream-info', {
+      title: 'Stream Info',
+      component: StreamInfoPanel,
+      icon: IconInfoCircle,
+      order: 4
+    });
+
+    // Register Layout Manager panel (only visible when Layout Manager viewport is active)
+    api.tab('layout-manager-panel', {
+      title: 'Layouts',
+      component: LayoutManagerPanel,
+      icon: IconList,
+      order: 5,
+      condition: () => {
+        const activeTab = viewportStore.tabs.find(tab => tab.id === viewportStore.activeTabId);
+        return activeTab?.type === 'layout-manager';
+      }
+    });
+
     // Register Settings as a viewport
     api.viewport('twitch-settings', {
       label: 'Twitch Settings',
@@ -78,6 +101,14 @@ export default createPlugin({
       component: OverlayManagerViewport,
       icon: IconDeviceTv,
       description: 'Create and manage OBS browser source overlays'
+    });
+
+    // Layout Manager viewport
+    api.viewport('layout-manager', {
+      label: 'Layout Manager',
+      component: LayoutManagerViewport,
+      icon: IconList,
+      description: 'Arrange multiple overlays in a visual layout for OBS'
     });
 
     // Alerts Overlay viewport

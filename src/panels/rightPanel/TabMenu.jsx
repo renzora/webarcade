@@ -8,7 +8,6 @@ const defaultTools = [];
 const defaultBottomTools = [];
 
 const workflowTools = {
-  '3d-viewport': [],
   'daw-editor': [],
   'material-editor': [],
   'animation-editor': [],

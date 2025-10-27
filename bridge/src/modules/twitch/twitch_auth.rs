@@ -158,6 +158,52 @@ impl TwitchAuth {
         Ok(token_response)
     }
 
+    /// Exchange authorization code for access token WITHOUT saving to config
+    /// Used for multi-account authentication where tokens are saved separately
+    pub async fn exchange_code_no_save(&self, code: &str) -> Result<TokenResponse> {
+        let config = self.config_manager.load()?;
+
+        if config.client_id.is_empty() || config.client_secret.is_empty() {
+            anyhow::bail!("Client ID or Secret not configured");
+        }
+
+        let params = [
+            ("client_id", config.client_id.as_str()),
+            ("client_secret", config.client_secret.as_str()),
+            ("code", code),
+            ("grant_type", "authorization_code"),
+            ("redirect_uri", REDIRECT_URI),
+        ];
+
+        let response = self
+            .http_client
+            .post(TWITCH_TOKEN_URL)
+            .form(&params)
+            .send()
+            .await
+            .context("Failed to exchange code for token")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            anyhow::bail!("Token exchange failed: {}", error_text);
+        }
+
+        let token_response: TokenResponse = response
+            .json()
+            .await
+            .context("Failed to parse token response")?;
+
+        // Clear OAuth state but DON'T save to config
+        {
+            let mut oauth_state = self.oauth_state.write().await;
+            *oauth_state = None;
+        }
+
+        log::info!("Successfully obtained Twitch OAuth tokens (multi-account mode)");
+
+        Ok(token_response)
+    }
+
     /// Refresh access token using refresh token
     pub async fn refresh_token(&self) -> Result<TokenResponse> {
         let config = self.config_manager.load()?;
@@ -392,6 +438,13 @@ impl TwitchAuth {
             "whispers:edit".to_string(),
             "whispers:read".to_string(),
         ]
+    }
+
+    /// Get the client ID from config
+    pub fn get_client_id(&self) -> String {
+        self.config_manager.load()
+            .map(|config| config.client_id.clone())
+            .unwrap_or_default()
     }
 }
 

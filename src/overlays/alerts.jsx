@@ -778,20 +778,6 @@ function AlertsOverlay() {
         </div>
       </Show>
 
-      {/* Connection Status */}
-      <div class="absolute top-4 right-4 z-[60]">
-        <div class={`px-4 py-2 rounded-xl backdrop-blur-md text-sm font-bold shadow-lg border-2 ${
-          isConnected()
-            ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300'
-            : 'bg-red-500/20 border-red-400/50 text-red-300'
-        }`}>
-          <div class="flex items-center gap-2">
-            <div class={`w-2 h-2 rounded-full ${isConnected() ? 'bg-emerald-400' : 'bg-red-400'} animate-pulse`} />
-            {isConnected() ? 'CONNECTED' : 'DISCONNECTED'}
-          </div>
-        </div>
-      </div>
-
       {/* Debug Info */}
       <Show when={currentAlert()}>
         <div class="absolute bottom-4 left-4 text-white text-sm font-mono bg-black/60 backdrop-blur-md px-4 py-3 rounded-xl border border-white/20 shadow-lg z-[60]">

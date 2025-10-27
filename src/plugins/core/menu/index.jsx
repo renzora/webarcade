@@ -46,18 +46,6 @@ export default createPlugin({
       );
     });
 
-    // Register built-in 3D viewport
-    api.registerLeftPanelMenuItem('viewport-3d', {
-      label: 'New Scene',
-      icon: IconChairDirector,
-      description: 'Create a new 3D scene viewport',
-      category: 'Viewports',
-      order: 1,
-      onClick: () => {
-        api.createSceneViewport({ name: 'Scene' });
-      }
-    });
-
     // Dynamically register all plugin viewport types
     const registeredViewportItems = new Set();
 

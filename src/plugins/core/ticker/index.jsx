@@ -1,12 +1,17 @@
 import { createPlugin } from '@/api/plugin';
-import { createSignal, onMount, Show, For } from 'solid-js';
+import { createSignal, onMount, createEffect, onCleanup, Show, For } from 'solid-js';
 import { IconNews } from '@tabler/icons-solidjs';
 
 const WEBARCADE_API = 'http://localhost:3001';
 
 const TickerViewport = () => {
   const [messages, setMessages] = createSignal([]);
-  const [streamDays, setStreamDays] = createSignal(0);
+  const [streamStartDate, setStreamStartDate] = createSignal('');
+  const [tickerSpeed, setTickerSpeed] = createSignal(30);
+  const [tempTickerSpeed, setTempTickerSpeed] = createSignal(30);
+  const [maxTickerItems, setMaxTickerItems] = createSignal(20);
+  const [tempMaxTickerItems, setTempMaxTickerItems] = createSignal(20);
+  const [currentDate, setCurrentDate] = createSignal(new Date());
   const [newMessage, setNewMessage] = createSignal('');
   const [editingId, setEditingId] = createSignal(null);
   const [editMessage, setEditMessage] = createSignal('');
@@ -20,6 +25,9 @@ const TickerViewport = () => {
     show_cheers: true
   });
 
+  let speedUpdateTimeout;
+  let maxItemsUpdateTimeout;
+
   // Load ticker messages
   const loadMessages = async () => {
     try {
@@ -31,14 +39,18 @@ const TickerViewport = () => {
     }
   };
 
-  // Load stream start days
-  const loadStreamDays = async () => {
+  // Load status config (start date, ticker speed, and max items)
+  const loadStatusConfig = async () => {
     try {
       const response = await fetch(`${WEBARCADE_API}/api/status/config`);
       const data = await response.json();
-      setStreamDays(data.stream_start_days || 0);
+      setStreamStartDate(data.stream_start_date || '');
+      setTickerSpeed(data.ticker_speed || 30);
+      setTempTickerSpeed(data.ticker_speed || 30);
+      setMaxTickerItems(data.max_ticker_items || 20);
+      setTempMaxTickerItems(data.max_ticker_items || 20);
     } catch (error) {
-      console.error('Failed to load stream days:', error);
+      console.error('Failed to load status config:', error);
     }
   };
 
@@ -108,13 +120,29 @@ const TickerViewport = () => {
       await fetch(`${WEBARCADE_API}/api/ticker/messages`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, message: msg, enabled: message.enabled })
+        body: JSON.stringify({ id, message: msg, enabled: message.enabled, is_sticky: message.is_sticky })
       });
       setEditingId(null);
       setEditMessage('');
       await loadMessages();
     } catch (error) {
       console.error('Failed to update message:', error);
+    }
+    setLoading(false);
+  };
+
+  // Toggle message sticky state
+  const toggleMessageSticky = async (id) => {
+    setLoading(true);
+    try {
+      await fetch(`${WEBARCADE_API}/api/ticker/messages/toggle-sticky`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      await loadMessages();
+    } catch (error) {
+      console.error('Failed to toggle sticky:', error);
     }
     setLoading(false);
   };
@@ -153,46 +181,175 @@ const TickerViewport = () => {
     setLoading(false);
   };
 
-  // Update stream start days
-  const updateStreamDays = async (days) => {
+  // Update stream start date
+  const updateStreamStartDate = async (date) => {
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/status/days`, {
+      await fetch(`${WEBARCADE_API}/api/status/start-date`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ days })
+        body: JSON.stringify({ start_date: date || null })
       });
-      setStreamDays(days);
+      setStreamStartDate(date);
     } catch (error) {
-      console.error('Failed to update stream days:', error);
+      console.error('Failed to update stream start date:', error);
     }
     setLoading(false);
   };
 
+  // Update ticker speed (debounced)
+  const updateTickerSpeed = async (speed) => {
+    try {
+      await fetch(`${WEBARCADE_API}/api/status/ticker-speed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ speed: parseInt(speed) })
+      });
+      setTickerSpeed(speed);
+    } catch (error) {
+      console.error('Failed to update ticker speed:', error);
+    }
+  };
+
+  // Handle slider change with debounce
+  const handleSpeedSliderChange = (value) => {
+    setTempTickerSpeed(value);
+
+    // Clear existing timeout
+    if (speedUpdateTimeout) {
+      clearTimeout(speedUpdateTimeout);
+    }
+
+    // Set new timeout to update after 500ms of no changes
+    speedUpdateTimeout = setTimeout(() => {
+      updateTickerSpeed(value);
+    }, 500);
+  };
+
+  // Update max ticker items
+  const updateMaxTickerItems = async (maxItems) => {
+    try {
+      await fetch(`${WEBARCADE_API}/api/status/max-ticker-items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ max_items: parseInt(maxItems) })
+      });
+      setMaxTickerItems(maxItems);
+    } catch (error) {
+      console.error('Failed to update max ticker items:', error);
+    }
+  };
+
+  // Handle max items slider change with debounce
+  const handleMaxItemsSliderChange = (value) => {
+    setTempMaxTickerItems(value);
+
+    // Clear existing timeout
+    if (maxItemsUpdateTimeout) {
+      clearTimeout(maxItemsUpdateTimeout);
+    }
+
+    // Set new timeout to update after 500ms of no changes
+    maxItemsUpdateTimeout = setTimeout(() => {
+      updateMaxTickerItems(value);
+    }, 500);
+  };
+
+  // Calculate days since start date (reactive)
+  const daysSinceStart = () => {
+    if (!streamStartDate()) return 0;
+    const startDate = new Date(streamStartDate());
+    return Math.floor((currentDate() - startDate) / (1000 * 60 * 60 * 24));
+  };
+
   onMount(() => {
     loadMessages();
-    loadStreamDays();
+    loadStatusConfig();
     loadEventsConfig();
+
+    // Update current date every minute to keep days counter accurate
+    const dateInterval = setInterval(() => {
+      setCurrentDate(new Date());
+    }, 60000);
+
+    onCleanup(() => {
+      clearInterval(dateInterval);
+    });
   });
 
   return (
-    <div class="p-6 space-y-6">
-      {/* Stream Start Days Counter */}
+    <div class="p-6 pb-24 space-y-6 overflow-y-auto max-h-screen">
+      {/* Stream Start Date */}
       <div class="bg-base-200 rounded-lg p-4 shadow">
-        <h2 class="text-xl font-bold mb-4">🔴 Stream Start Days Counter</h2>
+        <h2 class="text-xl font-bold mb-4">🔴 Stream Start Date</h2>
         <p class="text-sm text-gray-400 mb-4">
-          Set how many days ago your 24/7 stream started. This will show on the status overlay.
+          Set the date when your 24/7 stream started. The day counter will update automatically.
         </p>
         <div class="flex items-center gap-4">
           <input
-            type="number"
-            min="0"
-            value={streamDays()}
-            onInput={(e) => updateStreamDays(parseInt(e.target.value) || 0)}
-            class="input input-bordered w-32"
+            type="date"
+            value={streamStartDate()}
+            onInput={(e) => updateStreamStartDate(e.target.value)}
+            class="input input-bordered w-48"
             disabled={loading()}
           />
-          <span class="text-lg">days since stream started</span>
+          <Show when={streamStartDate()}>
+            <span class="text-sm text-gray-400">
+              ({daysSinceStart()} days ago)
+            </span>
+          </Show>
+        </div>
+      </div>
+
+      {/* Ticker Speed */}
+      <div class="bg-base-200 rounded-lg p-4 shadow">
+        <h2 class="text-xl font-bold mb-4">⚡ Ticker Speed</h2>
+        <p class="text-sm text-gray-400 mb-4">
+          Control how fast the ticker scrolls across the screen. Changes apply live!
+        </p>
+        <div class="space-y-3">
+          <div class="flex items-center gap-4">
+            <input
+              type="range"
+              min="3"
+              max="60"
+              value={tempTickerSpeed()}
+              onInput={(e) => handleSpeedSliderChange(parseInt(e.target.value))}
+              class="range range-primary flex-1"
+              disabled={loading()}
+            />
+            <span class="text-lg font-mono w-20 text-right">{tempTickerSpeed()}s</span>
+          </div>
+          <div class="flex justify-between text-xs text-gray-400">
+            <span>Fastest (3s)</span>
+            <span>Slowest (60s)</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Maximum Ticker Items */}
+      <div class="bg-base-200 rounded-lg p-4 shadow">
+        <h2 class="text-xl font-bold mb-4">🔢 Maximum Ticker Items</h2>
+        <p class="text-sm text-gray-400 mb-4">
+          Set the maximum number of items (messages + events) shown in the ticker. When this limit is reached, the oldest event notifications will be removed as new ones arrive. Permanent messages are not removed.
+        </p>
+        <div class="space-y-3">
+          <div class="flex items-center gap-4">
+            <input
+              type="range"
+              min="5"
+              max="50"
+              value={tempMaxTickerItems()}
+              onInput={(e) => handleMaxItemsSliderChange(parseInt(e.target.value))}
+              class="range range-primary flex-1"
+              disabled={loading()}
+            />
+            <span class="text-lg font-mono w-20 text-right">{tempMaxTickerItems()} items</span>
+          </div>
+          <div class="flex justify-between text-xs text-gray-400">
+            <span>Min (5 items)</span>
+            <span>Max (50 items)</span>
+          </div>
         </div>
       </div>
 
@@ -266,6 +423,14 @@ const TickerViewport = () => {
                     when={editingId() === msg.id}
                     fallback={
                       <>
+                        <button
+                          onClick={() => toggleMessageSticky(msg.id)}
+                          class={`btn btn-sm ${msg.is_sticky ? 'btn-warning' : 'btn-ghost'}`}
+                          disabled={loading()}
+                          title={msg.is_sticky ? "Unpin (sticky item)" : "Pin (make sticky)"}
+                        >
+                          {msg.is_sticky ? '📌' : '📍'}
+                        </button>
                         <button
                           onClick={() => {
                             setEditingId(msg.id);

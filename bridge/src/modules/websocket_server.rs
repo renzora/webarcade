@@ -48,6 +48,63 @@ pub fn broadcast_goals_update(goals: serde_json::Value) {
     let _ = sender.send(message);
 }
 
+// Status config broadcast channel (for ticker speed and stream start date)
+static STATUS_CONFIG_BROADCAST: std::sync::OnceLock<broadcast::Sender<serde_json::Value>> = std::sync::OnceLock::new();
+
+pub fn get_status_config_broadcast_sender() -> broadcast::Sender<serde_json::Value> {
+    STATUS_CONFIG_BROADCAST.get_or_init(|| {
+        let (sender, _) = broadcast::channel(100);
+        sender
+    }).clone()
+}
+
+pub fn broadcast_status_config_update(config: serde_json::Value) {
+    let sender = get_status_config_broadcast_sender();
+    let message = serde_json::json!({
+        "type": "status_config_update",
+        "config": config
+    });
+    let _ = sender.send(message);
+}
+
+// Ticker messages broadcast channel
+static TICKER_MESSAGES_BROADCAST: std::sync::OnceLock<broadcast::Sender<serde_json::Value>> = std::sync::OnceLock::new();
+
+pub fn get_ticker_messages_broadcast_sender() -> broadcast::Sender<serde_json::Value> {
+    TICKER_MESSAGES_BROADCAST.get_or_init(|| {
+        let (sender, _) = broadcast::channel(100);
+        sender
+    }).clone()
+}
+
+pub fn broadcast_ticker_messages_update() {
+    let sender = get_ticker_messages_broadcast_sender();
+    let message = serde_json::json!({
+        "type": "ticker_messages_update"
+    });
+    let _ = sender.send(message);
+}
+
+// Layout broadcast channel
+static LAYOUT_BROADCAST: std::sync::OnceLock<broadcast::Sender<serde_json::Value>> = std::sync::OnceLock::new();
+
+pub fn get_layout_broadcast_sender() -> broadcast::Sender<serde_json::Value> {
+    LAYOUT_BROADCAST.get_or_init(|| {
+        let (sender, _) = broadcast::channel(100);
+        sender
+    }).clone()
+}
+
+pub fn broadcast_layout_update(layout_name: String, layout_data: serde_json::Value) {
+    let sender = get_layout_broadcast_sender();
+    let message = serde_json::json!({
+        "type": "layout_update",
+        "layout_name": layout_name,
+        "layout": layout_data
+    });
+    let _ = sender.send(message);
+}
+
 pub async fn set_twitch_manager(manager: Option<Arc<TwitchManager>>) {
     let _ = TWITCH_MANAGER.set(manager);
 }
@@ -130,6 +187,18 @@ async fn handle_websocket_connection(stream: TcpStream, client_addr: SocketAddr)
     let mut goals_receiver = get_goals_broadcast_sender().subscribe();
     info!("📡 WebSocket client {} subscribed to goals events", client_addr);
 
+    // Get status config event receiver
+    let mut status_config_receiver = get_status_config_broadcast_sender().subscribe();
+    info!("📡 WebSocket client {} subscribed to status config events", client_addr);
+
+    // Get ticker messages event receiver
+    let mut ticker_messages_receiver = get_ticker_messages_broadcast_sender().subscribe();
+    info!("📡 WebSocket client {} subscribed to ticker messages events", client_addr);
+
+    // Get layout event receiver
+    let mut layout_receiver = get_layout_broadcast_sender().subscribe();
+    info!("📡 WebSocket client {} subscribed to layout events", client_addr);
+
     info!("📡 WebSocket client {} subscribed to file changes", client_addr);
 
     loop {
@@ -137,9 +206,22 @@ async fn handle_websocket_connection(stream: TcpStream, client_addr: SocketAddr)
             // Handle incoming WebSocket messages from client
             ws_msg = ws_receiver.next() => {
                 match ws_msg {
-                    Some(Ok(Message::Text(_text))) => {
-                        // Client sent a text message - we can ignore for now
-                        debug!("📡 Received message from {}", client_addr);
+                    Some(Ok(Message::Text(text))) => {
+                        debug!("📡 Received message from {}: {}", client_addr, text);
+
+                        // Try to parse and handle layout updates from clients
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                            if json.get("type").and_then(|t| t.as_str()) == Some("layout_update") {
+                                // Client is sending a layout update - broadcast it to all other clients
+                                if let (Some(layout_name), Some(layout_data)) = (
+                                    json.get("layout_name").and_then(|n| n.as_str()),
+                                    json.get("layout")
+                                ) {
+                                    info!("📡 Received layout update from client for: {}", layout_name);
+                                    broadcast_layout_update(layout_name.to_string(), layout_data.clone());
+                                }
+                            }
+                        }
                     }
                     Some(Ok(Message::Close(_))) => {
                         info!("📡 WebSocket connection closed by client {}", client_addr);
@@ -272,6 +354,75 @@ async fn handle_websocket_connection(stream: TcpStream, client_addr: SocketAddr)
                     }
                     Err(broadcast::error::RecvError::Closed) => {
                         info!("📡 Goals broadcaster closed for {}", client_addr);
+                        break;
+                    }
+                }
+            }
+
+            // Handle status config events (ticker speed, stream start date)
+            status_config_event = status_config_receiver.recv() => {
+                match status_config_event {
+                    Ok(message) => {
+                        debug!("📡 Broadcasting status config update to {}", client_addr);
+
+                        if let Ok(message_text) = serde_json::to_string(&message) {
+                            if let Err(e) = ws_sender.send(Message::Text(message_text)).await {
+                                error!("Failed to send status config update to {}: {}", client_addr, e);
+                                break;
+                            }
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(count)) => {
+                        warn!("📡 WebSocket client {} lagged {} status config messages", client_addr, count);
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
+                        info!("📡 Status config broadcaster closed for {}", client_addr);
+                        break;
+                    }
+                }
+            }
+
+            // Handle ticker messages events
+            ticker_messages_event = ticker_messages_receiver.recv() => {
+                match ticker_messages_event {
+                    Ok(message) => {
+                        debug!("📡 Broadcasting ticker messages update to {}", client_addr);
+
+                        if let Ok(message_text) = serde_json::to_string(&message) {
+                            if let Err(e) = ws_sender.send(Message::Text(message_text)).await {
+                                error!("Failed to send ticker messages update to {}: {}", client_addr, e);
+                                break;
+                            }
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(count)) => {
+                        warn!("📡 WebSocket client {} lagged {} ticker messages", client_addr, count);
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
+                        info!("📡 Ticker messages broadcaster closed for {}", client_addr);
+                        break;
+                    }
+                }
+            }
+
+            // Handle layout events
+            layout_event = layout_receiver.recv() => {
+                match layout_event {
+                    Ok(message) => {
+                        debug!("📡 Broadcasting layout update to {}", client_addr);
+
+                        if let Ok(message_text) = serde_json::to_string(&message) {
+                            if let Err(e) = ws_sender.send(Message::Text(message_text)).await {
+                                error!("Failed to send layout update to {}: {}", client_addr, e);
+                                break;
+                            }
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(count)) => {
+                        warn!("📡 WebSocket client {} lagged {} layout messages", client_addr, count);
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
+                        info!("📡 Layout broadcaster closed for {}", client_addr);
                         break;
                     }
                 }

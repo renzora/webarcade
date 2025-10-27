@@ -16,20 +16,6 @@
     },
     {
       "enabled": true,
-      "id": "web-browser-plugin",
-      "main": "index.jsx",
-      "path": "/src/plugins/core/web-browser",
-      "priority": 1
-    },
-    {
-      "enabled": true,
-      "id": "code-plugin",
-      "main": "index.jsx",
-      "path": "/src/plugins/core/code",
-      "priority": 1
-    },
-    {
-      "enabled": true,
       "id": "menu",
       "main": "index.jsx",
       "path": "/src/plugins/core/menu",

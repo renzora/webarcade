@@ -13,42 +13,7 @@ const Layout = () => {
   const [globalTooltip, setGlobalTooltip] = createSignal(null);
   const [contextMenuAPI, setContextMenuAPI] = createSignal(null);
 
-  const handleOpenCodeEditor = async (event) => {
-    // Open the code editor viewport or switch to existing tab
-    const { pluginAPI } = await import('@/api/plugin');
-    const { viewportStore, viewportActions } = await import('@/panels/viewport/store');
-    const { file } = event.detail;
-    
-    if (!file) {
-      // No file specified, just open a new code editor
-      pluginAPI.open('code-editor', { 
-        label: 'Code Editor'
-      });
-      return;
-    }
-    
-    // Check if this file is already open in an existing code editor tab
-    const existingTab = viewportStore.tabs.find(tab => 
-      tab.type === 'code-editor' && 
-      tab.initialFile && 
-      tab.initialFile.path === file.path
-    );
-    
-    if (existingTab) {
-      // File is already open, switch to that tab
-      viewportActions.setActiveViewportTab(existingTab.id);
-    } else {
-      // File is not open, create a new tab
-      const tabName = file.name;
-      pluginAPI.open('code-editor', { 
-        label: tabName,
-        initialFile: file 
-      });
-    }
-  };
-
   onMount(() => {
-    document.addEventListener('engine:open-code-editor', handleOpenCodeEditor);
     
     // Listen for global tooltip events
     const handleTooltipShow = (e) => setGlobalTooltip(e.detail);
@@ -66,7 +31,6 @@ const Layout = () => {
     }, 100);
     
     onCleanup(() => {
-      document.removeEventListener('engine:open-code-editor', handleOpenCodeEditor);
       document.removeEventListener('global:tooltip-show', handleTooltipShow);
       document.removeEventListener('global:tooltip-hide', handleTooltipHide);
       keyboardShortcuts.disableContextMenu();

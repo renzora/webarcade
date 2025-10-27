@@ -434,6 +434,65 @@ impl TwitchManager {
 
     /// Broadcast an event to all subscribers
     pub fn broadcast_event(&self, event: TwitchEvent) {
+        // Save ticker-relevant events to database
+        let (event_type, event_json, display_text) = match &event {
+            TwitchEvent::Follow(e) => (
+                "follow",
+                serde_json::to_value(e).ok(),
+                Some(format!("👥 New Follower: {}!", e.user_name)),
+            ),
+            TwitchEvent::Subscription(e) => {
+                if e.is_gift {
+                    (
+                        "subscription",
+                        serde_json::to_value(e).ok(),
+                        Some(format!("🎁 {} gifted a sub!", e.user_name)),
+                    )
+                } else {
+                    (
+                        "subscription",
+                        serde_json::to_value(e).ok(),
+                        Some(format!("⭐ {} subscribed (Tier {})!", e.user_name, e.tier)),
+                    )
+                }
+            },
+            TwitchEvent::Resubscription(e) => (
+                "resubscription",
+                serde_json::to_value(e).ok(),
+                Some(format!("⭐ {} resubscribed for {} months!", e.user_name, e.cumulative_months)),
+            ),
+            TwitchEvent::GiftSubscription(e) => {
+                let gifter = if e.is_anonymous { "An anonymous gifter" } else { e.user_name.as_deref().unwrap_or("Someone") };
+                (
+                    "gift_subscription",
+                    serde_json::to_value(e).ok(),
+                    Some(format!("🎁 {} gifted {} sub{}!", gifter, e.total, if e.total > 1 { "s" } else { "" })),
+                )
+            },
+            TwitchEvent::Raid(e) => (
+                "raid",
+                serde_json::to_value(e).ok(),
+                Some(format!("🎯 {} raided with {} viewers!", e.from_broadcaster_user_name, e.viewers)),
+            ),
+            TwitchEvent::Cheer(e) => {
+                let cheerer = if e.is_anonymous { "An anonymous cheerer" } else { e.user_name.as_deref().unwrap_or("Someone") };
+                (
+                    "cheer",
+                    serde_json::to_value(e).ok(),
+                    Some(format!("💎 {} cheered {} bits!", cheerer, e.bits)),
+                )
+            },
+            _ => ("", None, None),
+        };
+
+        if let (Some(json), Some(text)) = (event_json, display_text) {
+            // Spawn task to save to database without blocking
+            let event_type_owned = event_type.to_string();
+            tokio::spawn(async move {
+                crate::modules::handlers::handle_twitch_event_for_ticker(&event_type_owned, &json, &text).await;
+            });
+        }
+
         let _ = self.event_sender.send(event);
     }
 

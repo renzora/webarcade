@@ -3,17 +3,29 @@ import { createSignal, createEffect, onCleanup } from 'solid-js';
 import '@/index.css';
 
 const WEBARCADE_API = 'http://localhost:3001';
+const WEBSOCKET_URL = 'ws://localhost:3002';
 
 function StatusOverlay() {
   const [currentTime, setCurrentTime] = createSignal('');
   const [streamDays, setStreamDays] = createSignal(0);
 
-  // Load stream start days
+  let ws = null;
+
+  // Load stream status config and calculate days
   const loadStreamDays = async () => {
     try {
       const response = await fetch(`${WEBARCADE_API}/api/status/config`);
       const data = await response.json();
-      setStreamDays(data.stream_start_days || 0);
+
+      // Calculate days from start date if available
+      if (data.stream_start_date) {
+        const startDate = new Date(data.stream_start_date);
+        const today = new Date();
+        const daysSince = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
+        setStreamDays(daysSince);
+      } else {
+        setStreamDays(0);
+      }
     } catch (error) {
       console.error('Failed to load stream days:', error);
     }
@@ -31,19 +43,60 @@ function StatusOverlay() {
     setCurrentTime(`${hours}:${minutes}:${seconds} ${ampm}`);
   };
 
+  // Connect to WebSocket
+  const connectWebSocket = () => {
+    ws = new WebSocket(WEBSOCKET_URL);
+
+    ws.onopen = () => {
+      console.log('✅ Status WebSocket connected');
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        // Handle status config updates
+        if (data.type === 'status_config_update' && data.config) {
+          console.log('📡 Received status config update:', data.config);
+
+          // Calculate days from start date if available
+          if (data.config.stream_start_date) {
+            const startDate = new Date(data.config.stream_start_date);
+            const today = new Date();
+            const daysSince = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
+            setStreamDays(daysSince);
+          } else {
+            setStreamDays(0);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to parse WebSocket message:', err);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('❌ Status WebSocket error:', error);
+    };
+
+    ws.onclose = () => {
+      console.log('🔌 Status WebSocket disconnected, reconnecting in 3 seconds...');
+      setTimeout(connectWebSocket, 3000);
+    };
+  };
+
   createEffect(() => {
     loadStreamDays();
     updateTime();
+    connectWebSocket();
 
     // Update time every second
     const timeInterval = setInterval(updateTime, 1000);
 
-    // Reload stream days every 5 minutes
-    const daysInterval = setInterval(loadStreamDays, 300000);
-
     onCleanup(() => {
       clearInterval(timeInterval);
-      clearInterval(daysInterval);
+      if (ws) {
+        ws.close();
+      }
     });
   });
 
@@ -111,4 +164,7 @@ function StatusOverlay() {
   );
 }
 
-render(() => <StatusOverlay />, document.getElementById('root'));
+// Only render when used as standalone (for OBS browser sources)
+if (document.getElementById('root')) {
+  render(() => <StatusOverlay />, document.getElementById('root'));
+}

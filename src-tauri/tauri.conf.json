@@ -202,7 +202,10 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "../bridge/target/debug/webarcade-bridge.exe"
+      "../bridge/target/release/webarcade-bridge.exe"
+    ],
+    "externalBin": [
+      "../bridge/target/release/webarcade-bridge"
     ]
   }
 }

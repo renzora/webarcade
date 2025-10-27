@@ -397,6 +397,116 @@ function createTwitchStore() {
     return await response.json();
   };
 
+  const getStreamInfo = async () => {
+    const response = await fetch(`${BRIDGE_URL}/twitch/stream-info`);
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(error);
+    }
+
+    return await response.json();
+  };
+
+  const updateStreamInfo = async (options) => {
+    const response = await fetch(`${BRIDGE_URL}/twitch/update-stream-info`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: options.title || undefined,
+        game_id: options.gameId || undefined,
+        broadcaster_language: options.language || undefined,
+        tags: options.tags || undefined,
+        content_classification_labels: options.contentClassificationLabels || undefined,
+        is_branded_content: options.isBrandedContent !== undefined ? options.isBrandedContent : undefined,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(error);
+    }
+
+    return await response.json();
+  };
+
+  const searchGames = async (query) => {
+    const response = await fetch(`${BRIDGE_URL}/twitch/search-games`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(error);
+    }
+
+    return await response.json();
+  };
+
+  // Account Management
+  const getAccounts = async () => {
+    console.log('[TwitchStore] Fetching accounts from:', `${BRIDGE_URL}/twitch/accounts`);
+    const response = await fetch(`${BRIDGE_URL}/twitch/accounts`);
+
+    console.log('[TwitchStore] Response status:', response.status);
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('[TwitchStore] Error fetching accounts:', error);
+      throw new Error(error);
+    }
+
+    const data = await response.json();
+    console.log('[TwitchStore] Fetched accounts data:', data);
+    return data;
+  };
+
+  const authenticateAccount = async (code, state, accountType) => {
+    const response = await fetch(`${BRIDGE_URL}/twitch/accounts/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, state, account_type: accountType }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(error);
+    }
+
+    return await response.json();
+  };
+
+  const activateAccount = async (accountId) => {
+    const response = await fetch(`${BRIDGE_URL}/twitch/accounts/activate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_id: accountId }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(error);
+    }
+
+    return await response.json();
+  };
+
+  const deleteAccount = async (accountId) => {
+    const response = await fetch(`${BRIDGE_URL}/twitch/accounts/delete`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_id: accountId }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(error);
+    }
+
+    return await response.json();
+  };
+
   // Return the store API
   return {
     // Signals (read-only)
@@ -429,6 +539,15 @@ function createTwitchStore() {
     joinChannel,
     partChannel,
     revokeToken,
+    getStreamInfo,
+    updateStreamInfo,
+    searchGames,
+
+    // Account Management
+    getAccounts,
+    authenticateAccount,
+    activateAccount,
+    deleteAccount,
   };
 }
 

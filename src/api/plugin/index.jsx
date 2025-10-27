@@ -952,30 +952,9 @@ export class PluginAPI {
   }
 
   createSceneViewport(options = {}) {
-    try {
-      import('@/panels/viewport/store').then(({ viewportActions }) => {
-        const newTabId = `viewport-${Date.now()}`;
-        const newTab = {
-          id: newTabId,
-          type: '3d-viewport',
-          name: options.name || 'Scene 1',
-          isPinned: options.isPinned || false,
-          hasUnsavedChanges: options.hasUnsavedChanges || false
-        };
-
-        // Creating 3D scene viewport with new ID
-        viewportActions.addViewportTab(newTab);
-        
-        if (options.setActive !== false) {
-          viewportActions.setActiveViewportTab(newTabId);
-        }
-      }).catch(err => {
-      });
-      
-      return true;
-    } catch (error) {
-      return false;
-    }
+    // Deprecated: 3d-viewport type no longer exists
+    console.warn('createSceneViewport is deprecated - 3d-viewport type no longer exists');
+    return false;
   }
 
   setPropertiesPanelVisible(visible) {

@@ -1,4 +1,4 @@
-import { IconRocket, IconBrandTwitch, IconCode, IconWorld, IconBook } from '@tabler/icons-solidjs';
+import { IconRocket, IconBrandTwitch, IconBook } from '@tabler/icons-solidjs';
 import { pluginAPI } from '@/api/plugin';
 
 export default function WelcomeViewport() {
@@ -18,31 +18,6 @@ export default function WelcomeViewport() {
 
         {/* Quick Start Cards */}
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Code Editor */}
-          <div class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
-            <div class="card-body">
-              <div class="flex items-center gap-3 mb-4">
-                <div class="p-3 bg-blue-500/20 rounded-lg">
-                  <IconCode size={32} class="text-blue-500" />
-                </div>
-                <h2 class="card-title text-2xl">Code Editor</h2>
-              </div>
-              <p class="text-base-content/70">
-                Edit your code with Monaco Editor. Full syntax highlighting, IntelliSense, and more.
-              </p>
-              <div class="card-actions justify-end mt-4">
-                <button
-                  class="btn btn-primary btn-sm"
-                  onClick={() => {
-                    pluginAPI.open('code-editor', { title: 'Code Editor' });
-                  }}
-                >
-                  Open Editor
-                </button>
-              </div>
-            </div>
-          </div>
-
           {/* Twitch Integration */}
           <div class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
             <div class="card-body">
@@ -63,31 +38,6 @@ export default function WelcomeViewport() {
                   }}
                 >
                   Setup Twitch
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Web Browser */}
-          <div class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow">
-            <div class="card-body">
-              <div class="flex items-center gap-3 mb-4">
-                <div class="p-3 bg-green-500/20 rounded-lg">
-                  <IconWorld size={32} class="text-green-500" />
-                </div>
-                <h2 class="card-title text-2xl">Web Browser</h2>
-              </div>
-              <p class="text-base-content/70">
-                Browse websites directly in the app. Perfect for documentation and testing.
-              </p>
-              <div class="card-actions justify-end mt-4">
-                <button
-                  class="btn btn-primary btn-sm"
-                  onClick={() => {
-                    pluginAPI.open('web-browser', { title: 'Web Browser' });
-                  }}
-                >
-                  Open Browser
                 </button>
               </div>
             </div>
@@ -151,10 +101,10 @@ export default function WelcomeViewport() {
             <h2 class="card-title text-2xl">Getting Started</h2>
             <ol class="list-decimal list-inside space-y-2">
               <li>Check the menu bar at the top for available tools</li>
-              <li>Open viewports using the File, Edit, or Help menus</li>
+              <li>Use the left panel to open viewports and tools</li>
               <li>Configure Twitch integration in Twitch → Settings</li>
-              <li>Explore the code editor for editing files</li>
-              <li>Use the web browser to view documentation</li>
+              <li>Switch between viewports using the tabs at the top</li>
+              <li>Explore the plugin system and API</li>
             </ol>
           </div>
         </div>

@@ -157,4 +157,7 @@ function TimerOverlay() {
   );
 }
 
-render(() => <TimerOverlay />, document.getElementById('root'));
+// Only render when used as standalone (for OBS browser sources)
+if (document.getElementById('root')) {
+  render(() => <TimerOverlay />, document.getElementById('root'));
+}
