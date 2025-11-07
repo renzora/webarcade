@@ -15,7 +15,7 @@ function StatusOverlay() {
   // Load stream status config and calculate days
   const loadStreamDays = async () => {
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/status/config`);
+      const response = await fetch(`${WEBARCADE_API}/status/config`);
       const data = await response.json();
 
       // Calculate days from start date if available
@@ -111,7 +111,7 @@ function StatusOverlay() {
   });
 
   return (
-    <div class="fixed inset-0 pointer-events-none overflow-hidden font-sans">
+    <div class="fixed inset-0 pointer-events-none overflow-hidden font-sans bg-transparent">
       {/* Status Bar - Top Left - Inline */}
       <div class="absolute top-4 left-4 flex items-center gap-3">
         {/* LIVE 24/7 Indicator */}

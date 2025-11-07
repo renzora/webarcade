@@ -30,7 +30,7 @@ export default function AlexaViewport() {
   // Fetch commands
   const fetchCommands = async () => {
     try {
-      const response = await fetch(`${BRIDGE_URL}/api/alexa/commands`);
+      const response = await fetch(`${BRIDGE_URL}/alexa/commands`);
       const data = await response.json();
       if (data.success && data.content) {
         const commands = typeof data.content === 'string' ? JSON.parse(data.content) : data.content;
@@ -44,7 +44,7 @@ export default function AlexaViewport() {
   // Fetch config
   const fetchConfig = async () => {
     try {
-      const response = await fetch(`${BRIDGE_URL}/api/alexa/config`);
+      const response = await fetch(`${BRIDGE_URL}/alexa/config`);
       const data = await response.json();
       if (data.success && data.content) {
         const config = typeof data.content === 'string' ? JSON.parse(data.content) : data.content;
@@ -58,7 +58,7 @@ export default function AlexaViewport() {
   // Fetch OBS status
   const fetchObsStatus = async () => {
     try {
-      const response = await fetch(`${BRIDGE_URL}/api/alexa/obs/status`);
+      const response = await fetch(`${BRIDGE_URL}/alexa/obs/status`);
       const data = await response.json();
       console.log('OBS Status Response:', data);
       if (data.success && data.content) {
@@ -75,7 +75,7 @@ export default function AlexaViewport() {
   // Fetch OBS scenes
   const fetchObsScenes = async () => {
     try {
-      const response = await fetch(`${BRIDGE_URL}/api/alexa/obs/scenes`);
+      const response = await fetch(`${BRIDGE_URL}/alexa/obs/scenes`);
       const data = await response.json();
       if (data.success && data.content) {
         const scenes = typeof data.content === 'string' ? JSON.parse(data.content) : data.content;
@@ -96,7 +96,7 @@ export default function AlexaViewport() {
   const handleSaveConfig = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${BRIDGE_URL}/api/alexa/config`, {
+      const response = await fetch(`${BRIDGE_URL}/alexa/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config()),
@@ -121,7 +121,7 @@ export default function AlexaViewport() {
   const handleObsConnect = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${BRIDGE_URL}/api/alexa/obs/connect`, {
+      const response = await fetch(`${BRIDGE_URL}/alexa/obs/connect`, {
         method: 'POST',
       });
 
@@ -148,7 +148,7 @@ export default function AlexaViewport() {
   const handleObsDisconnect = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${BRIDGE_URL}/api/alexa/obs/disconnect`, {
+      const response = await fetch(`${BRIDGE_URL}/alexa/obs/disconnect`, {
         method: 'POST',
       });
 
@@ -201,7 +201,7 @@ export default function AlexaViewport() {
 
     try {
       setLoading(true);
-      const response = await fetch(`${BRIDGE_URL}/api/alexa/commands`, {
+      const response = await fetch(`${BRIDGE_URL}/alexa/commands`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData()),
@@ -227,7 +227,7 @@ export default function AlexaViewport() {
     if (!confirm('Are you sure you want to delete this command?')) return;
 
     try {
-      const response = await fetch(`${BRIDGE_URL}/api/alexa/commands/${id}`, {
+      const response = await fetch(`${BRIDGE_URL}/alexa/commands/${id}`, {
         method: 'DELETE',
       });
 
@@ -481,7 +481,7 @@ export default function AlexaViewport() {
                 <li>Click "Connect" to establish connection with OBS</li>
                 <li>Create voice commands that map to OBS scenes or other actions</li>
                 <li>Set up your Alexa skill in the Amazon Developer Console</li>
-                <li>Configure your skill to send requests to: <code>http://localhost:3001/api/alexa/request</code></li>
+                <li>Configure your skill to send requests to: <code>http://localhost:3001/alexa/request</code></li>
                 <li>Use tunnel services like ngrok to expose your local server to Alexa</li>
               </ol>
             </div>

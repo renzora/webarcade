@@ -4,6 +4,7 @@ import '@/index.css';
 import { WEBARCADE_WS } from '@/api/bridge';
 
 const BRIDGE_URL = 'http://localhost:3001';
+const FRONTEND_URL = window.location.origin; // Use the same origin as the layout overlay
 
 function LayoutOverlay() {
   let containerRef;
@@ -35,7 +36,7 @@ function LayoutOverlay() {
     setLayoutName(name);
 
     try {
-      const response = await fetch(`${BRIDGE_URL}/api/layouts/${encodeURIComponent(name)}`);
+      const response = await fetch(`${BRIDGE_URL}/layouts/${encodeURIComponent(name)}`);
 
       if (!response.ok) {
         throw new Error(`Failed to load layout: ${response.statusText}`);
@@ -115,7 +116,7 @@ function LayoutOverlay() {
         // Create new iframe with cache-busting parameter
         iframe = document.createElement('iframe');
         const cacheBuster = Date.now();
-        iframe.src = `${BRIDGE_URL}/overlay/${overlay.type}?v=${cacheBuster}`;
+        iframe.src = `${FRONTEND_URL}/overlay/${overlay.type}?v=${cacheBuster}`;
         iframe.className = 'absolute border-none pointer-events-auto';
         iframe.style.display = 'block';
         iframe.style.border = 'none';
@@ -150,7 +151,7 @@ function LayoutOverlay() {
   });
 
   return (
-    <div class="fixed inset-0 pointer-events-none overflow-hidden">
+    <div class="fixed inset-0 pointer-events-none overflow-hidden bg-transparent">
       {/* Error Display */}
       <Show when={error()}>
         <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto">
@@ -177,7 +178,7 @@ function LayoutOverlay() {
       </Show>
 
       {/* Overlay Iframes Container */}
-      <div ref={containerRef} class="fixed inset-0 pointer-events-none"></div>
+      <div ref={containerRef} class="fixed inset-0 pointer-events-none bg-transparent"></div>
 
       {/* Debug info (hidden by default, can be shown for testing) */}
       <Show when={false}>

@@ -131,7 +131,7 @@ function ChatHighlightOverlay() {
   };
 
   return (
-    <div class="fixed inset-0 pointer-events-none overflow-hidden">
+    <div class="fixed inset-0 pointer-events-none overflow-hidden bg-transparent">
       <div class={`absolute ${getPositionClasses()} w-full max-w-4xl px-4`}>
         <div class="flex flex-col gap-3">
           <For each={highlights()}>

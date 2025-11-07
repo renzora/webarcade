@@ -22,7 +22,7 @@ export default function SnowPanel() {
 
   // Send settings update to overlay
   const broadcastSettings = () => {
-    fetch(`${BRIDGE_URL}/api/broadcast`, {
+    fetch(`${BRIDGE_URL}/system/broadcast`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -105,7 +105,7 @@ export default function SnowPanel() {
 
   // Clear all snowflakes
   const clearSnow = () => {
-    fetch(`${BRIDGE_URL}/api/broadcast`, {
+    fetch(`${BRIDGE_URL}/system/broadcast`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

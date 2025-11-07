@@ -13,7 +13,7 @@ const RouletteViewport = () => {
   // Load layout preference from database
   onMount(async () => {
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/settings?key=roulette-swap-layout`);
+      const response = await fetch(`${WEBARCADE_API}/system/settings?key=roulette-swap-layout`);
       const data = await response.json();
       if (data.value === 'true') {
         setSwapLayout(true);
@@ -33,7 +33,7 @@ const RouletteViewport = () => {
   // Load current game
   const loadCurrentGame = async () => {
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/roulette/game?channel=${channel()}`);
+      const response = await fetch(`${WEBARCADE_API}/roulette/game?channel=${channel()}`);
       const data = await response.json();
       setCurrentGame(data.game);
       setBets(data.bets || []);
@@ -45,7 +45,7 @@ const RouletteViewport = () => {
   // Load game history
   const loadHistory = async () => {
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/roulette/history?channel=${channel()}`);
+      const response = await fetch(`${WEBARCADE_API}/roulette/history?channel=${channel()}`);
       const data = await response.json();
       setHistory(data);
     } catch (error) {
@@ -120,7 +120,7 @@ const RouletteViewport = () => {
     setSwapLayout(newValue);
 
     try {
-      await fetch(`${WEBARCADE_API}/api/settings`, {
+      await fetch(`${WEBARCADE_API}/system/settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

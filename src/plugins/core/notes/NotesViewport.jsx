@@ -56,7 +56,7 @@ export default function NotesViewport() {
   const loadNotes = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/notes`);
+      const response = await fetch(`${WEBARCADE_API}/notes`);
       const data = await response.json();
       setNotes(data);
     } catch (e) {
@@ -67,7 +67,7 @@ export default function NotesViewport() {
 
   const loadCategories = async () => {
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/notes/categories`);
+      const response = await fetch(`${WEBARCADE_API}/notes/categories`);
       const data = await response.json();
       // Merge with default categories
       const allCategories = [...new Set([...DEFAULT_CATEGORIES, ...data])];
@@ -154,14 +154,14 @@ export default function NotesViewport() {
 
       if (editingNote()) {
         // Update existing note
-        await fetch(`${WEBARCADE_API}/api/notes`, {
+        await fetch(`${WEBARCADE_API}/notes`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: editingNote().id, ...payload })
         });
       } else {
         // Create new note
-        await fetch(`${WEBARCADE_API}/api/notes`, {
+        await fetch(`${WEBARCADE_API}/notes`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -183,7 +183,7 @@ export default function NotesViewport() {
 
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/notes`, {
+      await fetch(`${WEBARCADE_API}/notes`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: noteId })
@@ -198,7 +198,7 @@ export default function NotesViewport() {
 
   const toggleFavorite = async (noteId) => {
     try {
-      await fetch(`${WEBARCADE_API}/api/notes/toggle-favorite`, {
+      await fetch(`${WEBARCADE_API}/notes/toggle-favorite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: noteId })

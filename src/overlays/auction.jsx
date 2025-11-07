@@ -117,7 +117,7 @@ function Auction() {
   };
 
   return (
-    <div class="fixed inset-0 w-screen h-screen pointer-events-none overflow-hidden">
+    <div class="fixed inset-0 w-screen h-screen pointer-events-none overflow-hidden bg-transparent">
       <Show when={isVisible() && auctionState()}>
         <div class="absolute bottom-20 right-20 w-[500px] animate-fade-in">
           {/* Main Auction Display */}

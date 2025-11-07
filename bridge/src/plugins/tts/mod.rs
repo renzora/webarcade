@@ -7,11 +7,90 @@ use rusqlite::OptionalExtension;
 
 mod database;
 mod events;
+mod router;
 
-pub use database::*;
 pub use events::*;
 
 pub struct TtsPlugin;
+
+/// Available StreamElements TTS voices
+const VOICES: &[(&str, &str)] = &[
+    // English voices
+    ("Brian", "English (UK) - Male"),
+    ("Amy", "English (UK) - Female"),
+    ("Emma", "English (UK) - Female"),
+    ("Geraint", "English (Welsh) - Male"),
+    ("Russell", "English (Australian) - Male"),
+    ("Nicole", "English (Australian) - Female"),
+    ("Joey", "English (US) - Male"),
+    ("Justin", "English (US) - Male (Child)"),
+    ("Matthew", "English (US) - Male"),
+    ("Ivy", "English (US) - Female (Child)"),
+    ("Joanna", "English (US) - Female"),
+    ("Kendra", "English (US) - Female"),
+    ("Kimberly", "English (US) - Female"),
+    ("Salli", "English (US) - Female"),
+    ("Raveena", "English (Indian) - Female"),
+
+    // Other languages
+    ("Cristiano", "Portuguese (European) - Male"),
+    ("Ines", "Portuguese (European) - Female"),
+    ("Vitoria", "Portuguese (Brazilian) - Female"),
+    ("Ricardo", "Portuguese (Brazilian) - Male"),
+    ("Mizuki", "Japanese - Female"),
+    ("Takumi", "Japanese - Male"),
+    ("Seoyeon", "Korean - Female"),
+    ("Liv", "Norwegian - Female"),
+    ("Lotte", "Dutch - Female"),
+    ("Ruben", "Dutch - Male"),
+    ("Jacek", "Polish - Male"),
+    ("Jan", "Polish - Male"),
+    ("Ewa", "Polish - Female"),
+    ("Maja", "Polish - Female"),
+    ("Filiz", "Turkish - Female"),
+    ("Astrid", "Swedish - Female"),
+    ("Maxim", "Russian - Male"),
+    ("Tatyana", "Russian - Female"),
+    ("Carmen", "Romanian - Female"),
+    ("Gwyneth", "Welsh - Female"),
+    ("Mads", "Danish - Male"),
+    ("Naja", "Danish - Female"),
+    ("Hans", "German - Male"),
+    ("Marlene", "German - Female"),
+    ("Vicki", "German - Female"),
+    ("Karl", "Icelandic - Male"),
+    ("Dora", "Icelandic - Female"),
+    ("Giorgio", "Italian - Male"),
+    ("Carla", "Italian - Female"),
+    ("Bianca", "Italian - Female"),
+    ("Celine", "French - Female"),
+    ("Lea", "French - Female"),
+    ("Mathieu", "French - Male"),
+    ("Chantal", "French (Canadian) - Female"),
+    ("Penelope", "Spanish (US) - Female"),
+    ("Miguel", "Spanish (US) - Male"),
+    ("Enrique", "Spanish (European) - Male"),
+    ("Conchita", "Spanish (European) - Female"),
+    ("Lucia", "Spanish (European) - Female"),
+];
+
+/// Get voice name by partial match (case insensitive)
+fn find_voice(query: &str) -> Option<&'static str> {
+    let query_lower = query.to_lowercase();
+
+    // Exact match first
+    if let Some((name, _)) = VOICES.iter().find(|(name, _)| name.to_lowercase() == query_lower) {
+        return Some(name);
+    }
+
+    // Partial match
+    VOICES.iter()
+        .find(|(name, desc)| {
+            name.to_lowercase().contains(&query_lower) ||
+            desc.to_lowercase().contains(&query_lower)
+        })
+        .map(|(name, _)| *name)
+}
 
 #[async_trait]
 impl Plugin for TtsPlugin {
@@ -68,8 +147,32 @@ impl Plugin for TtsPlugin {
                 updated_at INTEGER NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS tts_whitelist (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel TEXT NOT NULL,
+                username TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                UNIQUE(channel, username)
+            );
+
+            CREATE TABLE IF NOT EXISTS tts_channel_settings (
+                channel TEXT PRIMARY KEY,
+                enabled INTEGER NOT NULL DEFAULT 0,
+                mode TEXT NOT NULL DEFAULT 'broadcaster'
+            );
+
+            CREATE TABLE IF NOT EXISTS tts_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel TEXT NOT NULL,
+                username TEXT NOT NULL,
+                voice TEXT NOT NULL DEFAULT 'Brian',
+                UNIQUE(channel, username)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_tts_queue_status ON tts_queue(status, priority DESC, created_at);
             CREATE INDEX IF NOT EXISTS idx_tts_history_created_at ON tts_history(created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_tts_whitelist_channel ON tts_whitelist(channel);
+            CREATE INDEX IF NOT EXISTS idx_tts_users ON tts_users(channel, username);
             "#,
         ])?;
 
@@ -284,6 +387,131 @@ impl Plugin for TtsPlugin {
             Ok(serde_json::json!({ "settings": settings_map }))
         }).await;
 
+        // Whitelist management services
+        ctx.provide_service("get_whitelist_users", |input| async move {
+            let channel: String = serde_json::from_value(input["channel"].clone())?;
+
+            let conn = crate::core::database::get_database_path();
+            let conn = rusqlite::Connection::open(conn)?;
+
+            let mut stmt = conn.prepare(
+                "SELECT username FROM tts_whitelist WHERE channel = ?1 ORDER BY username ASC"
+            )?;
+
+            let users: Vec<String> = stmt.query_map([&channel], |row| {
+                row.get(0)
+            })?.collect::<rusqlite::Result<Vec<_>>>()?;
+
+            Ok(serde_json::json!(users))
+        }).await;
+
+        ctx.provide_service("add_whitelist_user", |input| async move {
+            let channel: String = serde_json::from_value(input["channel"].clone())?;
+            let username: String = serde_json::from_value(input["username"].clone())?;
+
+            let conn = crate::core::database::get_database_path();
+            let conn = rusqlite::Connection::open(conn)?;
+
+            let now = current_timestamp();
+
+            conn.execute(
+                "INSERT OR IGNORE INTO tts_whitelist (channel, username, created_at) VALUES (?1, ?2, ?3)",
+                rusqlite::params![channel, username, now],
+            )?;
+
+            Ok(serde_json::json!({ "success": true }))
+        }).await;
+
+        ctx.provide_service("remove_whitelist_user", |input| async move {
+            let channel: String = serde_json::from_value(input["channel"].clone())?;
+            let username: String = serde_json::from_value(input["username"].clone())?;
+
+            let conn = crate::core::database::get_database_path();
+            let conn = rusqlite::Connection::open(conn)?;
+
+            conn.execute(
+                "DELETE FROM tts_whitelist WHERE channel = ?1 AND username = ?2",
+                rusqlite::params![channel, username],
+            )?;
+
+            Ok(serde_json::json!({ "success": true }))
+        }).await;
+
+        // Channel settings services
+        ctx.provide_service("get_channel_settings", |input| async move {
+            let channel: String = serde_json::from_value(input["channel"].clone())?;
+
+            let conn = crate::core::database::get_database_path();
+            let conn = rusqlite::Connection::open(conn)?;
+
+            let result: Option<(i64, String)> = conn.query_row(
+                "SELECT enabled, mode FROM tts_channel_settings WHERE channel = ?1",
+                [&channel],
+                |row| Ok((row.get(0)?, row.get(1)?))
+            ).optional()?;
+
+            let (enabled, mode) = result.unwrap_or((0, "broadcaster".to_string()));
+
+            Ok(serde_json::json!({
+                "enabled": enabled != 0,
+                "mode": mode
+            }))
+        }).await;
+
+        ctx.provide_service("update_channel_settings", |input| async move {
+            let channel: String = serde_json::from_value(input["channel"].clone())?;
+            let enabled: bool = serde_json::from_value(input["enabled"].clone())?;
+            let mode: String = serde_json::from_value(input["mode"].clone())?;
+
+            let conn = crate::core::database::get_database_path();
+            let conn = rusqlite::Connection::open(conn)?;
+
+            conn.execute(
+                "INSERT OR REPLACE INTO tts_channel_settings (channel, enabled, mode)
+                 VALUES (?1, ?2, ?3)",
+                rusqlite::params![channel, enabled as i64, mode],
+            )?;
+
+            Ok(serde_json::json!({ "success": true }))
+        }).await;
+
+        // User voice preference services
+        ctx.provide_service("set_user_voice", |input| async move {
+            let channel: String = serde_json::from_value(input["channel"].clone())?;
+            let username: String = serde_json::from_value(input["username"].clone())?;
+            let voice: String = serde_json::from_value(input["voice"].clone())?;
+
+            let conn = crate::core::database::get_database_path();
+            let conn = rusqlite::Connection::open(conn)?;
+
+            conn.execute(
+                "INSERT OR REPLACE INTO tts_users (channel, username, voice)
+                 VALUES (?1, ?2, ?3)",
+                rusqlite::params![channel, username, voice],
+            )?;
+
+            Ok(serde_json::json!({ "success": true }))
+        }).await;
+
+        ctx.provide_service("get_user_voice", |input| async move {
+            let channel: String = serde_json::from_value(input["channel"].clone())?;
+            let username: String = serde_json::from_value(input["username"].clone())?;
+
+            let conn = crate::core::database::get_database_path();
+            let conn = rusqlite::Connection::open(conn)?;
+
+            let voice: Option<String> = conn.query_row(
+                "SELECT voice FROM tts_users WHERE channel = ?1 AND username = ?2",
+                rusqlite::params![channel, username],
+                |row| row.get(0),
+            ).optional()?;
+
+            Ok(serde_json::json!({ "voice": voice.unwrap_or_else(|| "Brian".to_string()) }))
+        }).await;
+
+        // Register HTTP routes
+        router::register_routes(ctx).await?;
+
         log::info!("[TTS] Plugin initialized successfully");
         Ok(())
     }
@@ -322,6 +550,330 @@ impl Plugin for TtsPlugin {
             }
         });
 
+        // Subscribe to chat messages for TTS commands and auto-TTS
+        let ctx_chat = ctx.clone();
+        tokio::spawn(async move {
+            let mut events = ctx_chat.subscribe_to("twitch.chat_message").await;
+
+            while let Ok(event) = events.recv().await {
+                let channel = match serde_json::from_value::<String>(event.payload["channel"].clone()) {
+                    Ok(c) => c,
+                    Err(_) => continue,
+                };
+
+                let message = match serde_json::from_value::<String>(event.payload["message"].clone()) {
+                    Ok(m) => m,
+                    Err(_) => continue,
+                };
+
+                let username = match serde_json::from_value::<String>(event.payload["username"].clone()) {
+                    Ok(u) => u,
+                    Err(_) => continue,
+                };
+
+                // Use the boolean flags provided in the event
+                let is_broadcaster = event.payload["is_broadcaster"].as_bool().unwrap_or(false);
+                let is_mod = event.payload["is_mod"].as_bool().unwrap_or(false);
+
+                // Handle TTS commands
+                if message.starts_with("!tts ") {
+                    let parts: Vec<&str> = message.split_whitespace().collect();
+                    if parts.len() < 2 {
+                        continue;
+                    }
+
+                    let subcommand = parts[1];
+
+                    // Only broadcaster and mods can use TTS commands
+                    if !is_broadcaster && !is_mod {
+                        log::info!("[TTS] User {} is not authorized to use TTS commands", username);
+                        continue;
+                    }
+
+                    match subcommand {
+                        "on" => {
+                            log::info!("[TTS] Enabling TTS for channel {}", channel);
+                            let _ = ctx_chat.call_service("tts", "update_channel_settings", serde_json::json!({
+                                "channel": channel,
+                                "enabled": true,
+                                "mode": "whitelist"
+                            })).await;
+
+                            // Send confirmation to chat
+                            ctx_chat.emit("twitch.send_message", &serde_json::json!({
+                                "channel": channel,
+                                "message": "TTS has been enabled!"
+                            }));
+                        }
+                        "off" => {
+                            log::info!("[TTS] Disabling TTS for channel {}", channel);
+                            let _ = ctx_chat.call_service("tts", "update_channel_settings", serde_json::json!({
+                                "channel": channel,
+                                "enabled": false,
+                                "mode": "whitelist"
+                            })).await;
+
+                            // Send confirmation to chat
+                            ctx_chat.emit("twitch.send_message", &serde_json::json!({
+                                "channel": channel,
+                                "message": "TTS has been disabled!"
+                            }));
+                        }
+                        "add" => {
+                            if parts.len() < 3 {
+                                log::warn!("[TTS] !tts add command requires username parameter");
+                                continue;
+                            }
+
+                            let target_username = parts[2].trim_start_matches('@').to_lowercase();
+                            log::info!("[TTS] Adding {} to TTS whitelist for channel {}", target_username, channel);
+
+                            let _ = ctx_chat.call_service("tts", "add_whitelist_user", serde_json::json!({
+                                "channel": channel,
+                                "username": target_username
+                            })).await;
+
+                            // Send confirmation to chat
+                            ctx_chat.emit("twitch.send_message", &serde_json::json!({
+                                "channel": channel,
+                                "message": format!("Added {} to TTS whitelist!", target_username)
+                            }));
+                        }
+                        "remove" => {
+                            if parts.len() < 3 {
+                                log::warn!("[TTS] !tts remove command requires username parameter");
+                                continue;
+                            }
+
+                            let target_username = parts[2].trim_start_matches('@').to_lowercase();
+                            log::info!("[TTS] Removing {} from TTS whitelist for channel {}", target_username, channel);
+
+                            let _ = ctx_chat.call_service("tts", "remove_whitelist_user", serde_json::json!({
+                                "channel": channel,
+                                "username": target_username
+                            })).await;
+
+                            // Send confirmation to chat
+                            ctx_chat.emit("twitch.send_message", &serde_json::json!({
+                                "channel": channel,
+                                "message": format!("Removed {} from TTS whitelist!", target_username)
+                            }));
+                        }
+                        _ => {
+                            log::debug!("[TTS] Unknown TTS subcommand: {}", subcommand);
+                        }
+                    }
+                } else if message == "!voices" || message.starts_with("!voices ") {
+                    // List available TTS voices (available to everyone)
+                    let parts: Vec<&str> = message.split_whitespace().collect();
+                    let filter = parts.get(1).map(|s| s.to_lowercase());
+
+                    log::info!("[TTS] User {} requested voice list (filter: {:?})", username, filter);
+
+                    let filtered_voices: Vec<(&str, &str)> = VOICES.iter()
+                        .filter(|(name, desc)| {
+                            if let Some(ref f) = filter {
+                                desc.to_lowercase().contains(f) || name.to_lowercase().contains(f)
+                            } else {
+                                true
+                            }
+                        })
+                        .take(20)
+                        .copied()
+                        .collect();
+
+                    if filtered_voices.is_empty() {
+                        ctx_chat.emit("twitch.send_message", &serde_json::json!({
+                            "channel": channel,
+                            "message": format!("@{} No voices found matching '{}'", username, filter.unwrap_or_default())
+                        }));
+                    } else {
+                        // Build message with just voice names to fit in Twitch's 500 char limit
+                        let voice_names: Vec<&str> = filtered_voices.iter().map(|(name, _)| *name).collect();
+
+                        // Split into chunks that fit Twitch's message limit (500 chars)
+                        let mut current_msg = String::from("🔊 TTS Voices: ");
+                        let mut messages = Vec::new();
+
+                        for (i, name) in voice_names.iter().enumerate() {
+                            let separator = if i > 0 { ", " } else { "" };
+                            let addition = format!("{}{}", separator, name);
+
+                            // Check if adding this voice would exceed ~450 chars (safe limit)
+                            if current_msg.len() + addition.len() > 450 {
+                                messages.push(current_msg.clone());
+                                current_msg = format!("🔊 TTS Voices (cont.): {}", name);
+                            } else {
+                                current_msg.push_str(&addition);
+                            }
+                        }
+
+                        if !current_msg.is_empty() {
+                            messages.push(current_msg);
+                        }
+
+                        // Send all message chunks with small delay
+                        for msg in messages {
+                            ctx_chat.emit("twitch.send_message", &serde_json::json!({
+                                "channel": channel,
+                                "message": msg
+                            }));
+                            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                        }
+
+                        // Send usage tip
+                        ctx_chat.emit("twitch.send_message", &serde_json::json!({
+                            "channel": channel,
+                            "message": format!("@{} Use !voice <name> to set your voice. Filter: !voices english/french/male/female", username)
+                        }));
+                    }
+                } else if message == "!voice" || message.starts_with("!voice ") {
+                    // Set or show user's TTS voice (available to everyone)
+                    let parts: Vec<&str> = message.split_whitespace().collect();
+
+                    if parts.len() == 1 {
+                        // Show current voice
+                        match ctx_chat.call_service("tts", "get_user_voice", serde_json::json!({
+                            "channel": channel,
+                            "username": username
+                        })).await {
+                            Ok(result) => {
+                                if let Some(voice) = result["voice"].as_str() {
+                                    // Check if user has custom voice set
+                                    let conn = crate::core::database::get_database_path();
+                                    let has_custom = if let Ok(conn) = rusqlite::Connection::open(&conn) {
+                                        conn.query_row(
+                                            "SELECT COUNT(*) FROM tts_users WHERE channel = ?1 AND username = ?2",
+                                            rusqlite::params![&channel, &username],
+                                            |row| row.get::<_, i64>(0),
+                                        ).unwrap_or(0) > 0
+                                    } else {
+                                        false
+                                    };
+
+                                    let status = if has_custom {
+                                        format!("Your TTS voice is set to: {}", voice)
+                                    } else {
+                                        format!("You haven't set a TTS voice yet (using default: {}). Set one to enable TTS!", voice)
+                                    };
+
+                                    ctx_chat.emit("twitch.send_message", &serde_json::json!({
+                                        "channel": channel,
+                                        "message": format!("@{} {}. Use !voice <name> to change it or !voices to see all options.", username, status)
+                                    }));
+                                }
+                            }
+                            Err(e) => {
+                                log::error!("[TTS] Error getting user voice: {}", e);
+                            }
+                        }
+                    } else {
+                        // Set new voice
+                        let voice_query = parts[1..].join(" ");
+
+                        match find_voice(&voice_query) {
+                            Some(voice_name) => {
+                                log::info!("[TTS] User {} setting voice to {}", username, voice_name);
+
+                                match ctx_chat.call_service("tts", "set_user_voice", serde_json::json!({
+                                    "channel": channel,
+                                    "username": username,
+                                    "voice": voice_name
+                                })).await {
+                                    Ok(_) => {
+                                        let voice_desc = VOICES.iter()
+                                            .find(|(name, _)| name == &voice_name)
+                                            .map(|(_, desc)| *desc)
+                                            .unwrap_or("Unknown");
+
+                                        ctx_chat.emit("twitch.send_message", &serde_json::json!({
+                                            "channel": channel,
+                                            "message": format!("✅ @{} Your TTS voice is now set to: {} ({})", username, voice_name, voice_desc)
+                                        }));
+                                    }
+                                    Err(e) => {
+                                        log::error!("[TTS] Error setting voice: {}", e);
+                                    }
+                                }
+                            }
+                            None => {
+                                ctx_chat.emit("twitch.send_message", &serde_json::json!({
+                                    "channel": channel,
+                                    "message": format!("@{} Voice '{}' not found. Use !voices to see all available voices.", username, voice_query)
+                                }));
+                            }
+                        }
+                    }
+                } else {
+                    // Auto-TTS for regular messages
+                    // Check if TTS is enabled for this channel
+                    match ctx_chat.call_service("tts", "get_channel_settings", serde_json::json!({
+                        "channel": channel
+                    })).await {
+                        Ok(settings) => {
+                            let enabled = settings["enabled"].as_bool().unwrap_or(false);
+                            let mode = settings["mode"].as_str().unwrap_or("broadcaster");
+
+                            if !enabled {
+                                continue;
+                            }
+
+                            // Check if user is allowed to use TTS based on mode
+                            let is_allowed = match mode {
+                                "broadcaster" => is_broadcaster,
+                                "whitelist" => {
+                                    if is_broadcaster || is_mod {
+                                        true
+                                    } else {
+                                        // Check whitelist
+                                        match ctx_chat.call_service("tts", "get_whitelist_users", serde_json::json!({
+                                            "channel": channel
+                                        })).await {
+                                            Ok(users) => {
+                                                users.as_array()
+                                                    .map(|arr| arr.iter().any(|u| u.as_str() == Some(&username)))
+                                                    .unwrap_or(false)
+                                            }
+                                            Err(_) => false,
+                                        }
+                                    }
+                                }
+                                "everyone" => true,
+                                _ => false,
+                            };
+
+                            if is_allowed {
+                                log::info!("[TTS] Auto-TTS: {} said: {}", username, message);
+
+                                // Get user's voice preference
+                                let conn = crate::core::database::get_database_path();
+                                let voice = if let Ok(conn) = rusqlite::Connection::open(&conn) {
+                                    conn.query_row(
+                                        "SELECT voice FROM tts_users WHERE channel = ?1 AND username = ?2",
+                                        rusqlite::params![&channel, &username],
+                                        |row| row.get::<_, String>(0),
+                                    ).unwrap_or_else(|_| "Brian".to_string())
+                                } else {
+                                    "Brian".to_string()
+                                };
+
+                                // Add to TTS queue
+                                let _ = ctx_chat.call_service("tts", "speak", serde_json::json!({
+                                    "text": message,
+                                    "voice": voice,
+                                    "priority": 0,
+                                    "requested_by": username
+                                })).await;
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("[TTS] Error getting channel settings: {}", e);
+                        }
+                    }
+                }
+            }
+        });
+
         // Background worker to process TTS queue
         let ctx_worker = ctx.clone();
         tokio::spawn(async move {
@@ -345,14 +897,19 @@ impl Plugin for TtsPlugin {
                                 "voice": voice
                             }));
 
-                            // NOTE: Actual TTS synthesis would happen here
-                            // For now, we just simulate it with a delay
-                            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                            // Download and play TTS audio
+                            let duration_ms = match download_and_play_tts(text, voice).await {
+                                Ok(duration) => duration,
+                                Err(e) => {
+                                    log::error!("[TTS] Failed to play TTS: {}", e);
+                                    100 // Default duration on error
+                                }
+                            };
 
                             // Mark as complete
                             let _ = ctx_worker.call_service("tts", "complete_tts", serde_json::json!({
                                 "id": id,
-                                "duration_ms": 100
+                                "duration_ms": duration_ms
                             })).await;
 
                             // Emit completed event
@@ -377,9 +934,91 @@ impl Plugin for TtsPlugin {
     }
 }
 
-fn current_timestamp() -> i64 {
+pub(crate) fn current_timestamp() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs() as i64
+}
+
+/// Download and play TTS audio from StreamElements API
+async fn download_and_play_tts(text: &str, voice: &str) -> Result<i64> {
+    use std::time::Instant;
+
+    // URL encode the text
+    let encoded_text = percent_encoding::utf8_percent_encode(
+        text,
+        percent_encoding::NON_ALPHANUMERIC
+    ).to_string();
+
+    // Use StreamElements TTS API
+    let tts_url = format!(
+        "https://api.streamelements.com/kappa/v2/speech?voice={}&text={}",
+        voice, encoded_text
+    );
+
+    log::info!("[TTS] Downloading audio from StreamElements API...");
+    let start = Instant::now();
+
+    // Download the audio file
+    let response = reqwest::get(&tts_url).await
+        .map_err(|e| anyhow::anyhow!("Failed to download TTS audio: {}", e))?;
+
+    let bytes = response.bytes().await
+        .map_err(|e| anyhow::anyhow!("Failed to read TTS audio bytes: {}", e))?;
+
+    log::info!("[TTS] Downloaded {} bytes, playing audio...", bytes.len());
+
+    // Create temp directory if it doesn't exist
+    let temp_dir = std::path::PathBuf::from("data/temp");
+    std::fs::create_dir_all(&temp_dir)
+        .map_err(|e| anyhow::anyhow!("Failed to create temp directory: {}", e))?;
+
+    // Save to temp file
+    let temp_file = temp_dir.join("tts_current.mp3");
+    std::fs::write(&temp_file, bytes)
+        .map_err(|e| anyhow::anyhow!("Failed to write temp file: {}", e))?;
+
+    // Play audio using rodio in a blocking task
+    let temp_file_clone = temp_file.clone();
+    tokio::task::spawn_blocking(move || {
+        play_audio_file(&temp_file_clone)
+    }).await
+        .map_err(|e| anyhow::anyhow!("Failed to spawn audio task: {}", e))??;
+
+    let duration_ms = start.elapsed().as_millis() as i64;
+    log::info!("[TTS] Playback completed in {}ms", duration_ms);
+
+    Ok(duration_ms)
+}
+
+/// Play audio file using rodio (blocking)
+fn play_audio_file(file_path: &std::path::PathBuf) -> Result<()> {
+    use std::io::BufReader;
+    use rodio::{Decoder, OutputStream, Sink};
+
+    // Get an output stream handle to the default physical sound device
+    let (_stream, stream_handle) = OutputStream::try_default()
+        .map_err(|e| anyhow::anyhow!("Failed to get audio output: {}", e))?;
+
+    // Create a sink for audio playback
+    let sink = Sink::try_new(&stream_handle)
+        .map_err(|e| anyhow::anyhow!("Failed to create audio sink: {}", e))?;
+
+    // Load the audio file
+    let file = std::fs::File::open(file_path)
+        .map_err(|e| anyhow::anyhow!("Failed to open audio file: {}", e))?;
+    let buf_reader = BufReader::new(file);
+
+    // Decode the audio file
+    let source = Decoder::new(buf_reader)
+        .map_err(|e| anyhow::anyhow!("Failed to decode audio: {}", e))?;
+
+    // Play the audio
+    sink.append(source);
+
+    // Wait for playback to finish
+    sink.sleep_until_end();
+
+    Ok(())
 }

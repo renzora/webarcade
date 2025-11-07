@@ -399,7 +399,7 @@ function PackOpeningOverlay() {
   };
 
   return (
-    <div class="fixed inset-0 pointer-events-none">
+    <div class="fixed inset-0 pointer-events-none bg-transparent">
       <Show when={currentPack()}>
         <style>
           {`

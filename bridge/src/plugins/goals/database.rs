@@ -103,6 +103,60 @@ pub fn set_progress(conn: &Connection, goal_id: i64, current: i64) -> Result<()>
     Ok(())
 }
 
+pub fn update_goal(
+    conn: &Connection,
+    goal_id: i64,
+    title: Option<&str>,
+    description: Option<&str>,
+    goal_type: Option<&str>,
+    target: Option<i64>,
+    current: Option<i64>,
+    is_sub_goal: Option<bool>,
+) -> Result<()> {
+    let now = current_timestamp();
+
+    // Build dynamic UPDATE query
+    let mut updates = vec!["updated_at = ?1".to_string()];
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(now)];
+
+    if let Some(t) = title {
+        updates.push(format!("title = ?{}", params.len() + 1));
+        params.push(Box::new(t.to_string()));
+    }
+    if let Some(d) = description {
+        updates.push(format!("description = ?{}", params.len() + 1));
+        params.push(Box::new(d.to_string()));
+    }
+    if let Some(gt) = goal_type {
+        updates.push(format!("type = ?{}", params.len() + 1));
+        params.push(Box::new(gt.to_string()));
+    }
+    if let Some(tgt) = target {
+        updates.push(format!("target = ?{}", params.len() + 1));
+        params.push(Box::new(tgt));
+    }
+    if let Some(cur) = current {
+        updates.push(format!("current = ?{}", params.len() + 1));
+        params.push(Box::new(cur));
+    }
+    if let Some(is_sub) = is_sub_goal {
+        updates.push(format!("is_sub_goal = ?{}", params.len() + 1));
+        params.push(Box::new(is_sub as i64));
+    }
+
+    let query = format!(
+        "UPDATE goals SET {} WHERE id = ?{}",
+        updates.join(", "),
+        params.len() + 1
+    );
+    params.push(Box::new(goal_id));
+
+    let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    conn.execute(&query, params_refs.as_slice())?;
+
+    Ok(())
+}
+
 pub fn delete_goal(conn: &Connection, goal_id: i64) -> Result<()> {
     conn.execute("DELETE FROM goals WHERE id = ?1", params![goal_id])?;
     Ok(())

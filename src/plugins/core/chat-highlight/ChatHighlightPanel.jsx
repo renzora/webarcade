@@ -57,7 +57,7 @@ export default function ChatHighlightPanel() {
 
   // Send settings update to overlay
   const broadcastSettings = () => {
-    fetch(`${BRIDGE_URL}/api/broadcast`, {
+    fetch(`${BRIDGE_URL}/system/broadcast`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -87,7 +87,7 @@ export default function ChatHighlightPanel() {
 
   // Send a test highlight
   const sendTestHighlight = () => {
-    fetch(`${BRIDGE_URL}/api/broadcast`, {
+    fetch(`${BRIDGE_URL}/system/broadcast`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -104,7 +104,7 @@ export default function ChatHighlightPanel() {
 
   // Clear all highlights
   const clearHighlights = () => {
-    fetch(`${BRIDGE_URL}/api/broadcast`, {
+    fetch(`${BRIDGE_URL}/system/broadcast`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

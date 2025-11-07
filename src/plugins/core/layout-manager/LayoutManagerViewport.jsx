@@ -31,6 +31,7 @@ export default function LayoutManagerViewport() {
 
   let canvasContainerRef;
   let ws;
+  const [wsReady, setWsReady] = createSignal(false);
 
   // Use shared selected overlay from store
   const selectedOverlay = () => layoutManagerStore.selectedOverlay();
@@ -50,10 +51,12 @@ export default function LayoutManagerViewport() {
 
       ws.onopen = () => {
         console.log('✅ Layout Manager connected to WebSocket');
+        setWsReady(true);
       };
 
       ws.onclose = () => {
         console.log('❌ WebSocket disconnected, reconnecting...');
+        setWsReady(false);
         setTimeout(connectWebSocket, 3000);
       };
 
@@ -101,9 +104,10 @@ export default function LayoutManagerViewport() {
     // Track overlays changes
     const overlays = layoutManagerStore.overlaysInLayout();
     const name = layoutManagerStore.layoutName();
+    const ready = wsReady(); // Track WebSocket readiness
 
     // Only broadcast if we have a layout name and WebSocket is ready
-    if (name && overlays.length > 0 && ws && ws.readyState === WebSocket.OPEN) {
+    if (name && ready && ws && ws.readyState === WebSocket.OPEN) {
       // Send update via WebSocket for instant real-time updates
       const message = {
         type: 'layout_update',
@@ -114,7 +118,7 @@ export default function LayoutManagerViewport() {
         }
       };
       ws.send(JSON.stringify(message));
-      console.log('📡 Sent layout update via WebSocket:', name);
+      console.log('📡 Sent layout update via WebSocket:', name, 'overlays:', overlays.length);
     }
   });
 

@@ -31,7 +31,7 @@ const [selectedOverlay, setSelectedOverlay] = createSignal(null);
 // Fetch available overlays
 const fetchAvailableOverlays = async () => {
   try {
-    const response = await fetch(`${BRIDGE_URL}/api/overlay-files`);
+    const response = await fetch(`${BRIDGE_URL}/overlay-manager/files`);
     const data = await response.json();
     setAvailableOverlays(data.map(f => f.name));
   } catch (error) {
@@ -42,7 +42,7 @@ const fetchAvailableOverlays = async () => {
 // Fetch saved layouts
 const fetchLayouts = async () => {
   try {
-    const response = await fetch(`${BRIDGE_URL}/api/layouts`);
+    const response = await fetch(`${BRIDGE_URL}/layouts`);
     const data = await response.json();
     setSavedLayouts(data);
   } catch (error) {
@@ -88,7 +88,7 @@ const addOverlay = (overlayType) => {
 // Load layout
 const loadLayout = async (name) => {
   try {
-    const response = await fetch(`${BRIDGE_URL}/api/layouts/${encodeURIComponent(name)}`);
+    const response = await fetch(`${BRIDGE_URL}/layouts/${encodeURIComponent(name)}`);
     const layout = await response.json();
     setLayoutName(layout.name);
     setOverlaysInLayout(layout.overlays || []);
@@ -103,7 +103,7 @@ const deleteLayout = async (name) => {
   if (!confirm(`Delete layout "${name}"?`)) return;
 
   try {
-    await fetch(`${BRIDGE_URL}/api/layouts/${encodeURIComponent(name)}`, {
+    await fetch(`${BRIDGE_URL}/layouts/${encodeURIComponent(name)}`, {
       method: 'DELETE',
     });
     await fetchLayouts();
@@ -131,7 +131,7 @@ const saveLayout = async () => {
   };
 
   try {
-    const response = await fetch(`${BRIDGE_URL}/api/layouts/${encodeURIComponent(name)}`, {
+    const response = await fetch(`${BRIDGE_URL}/layouts/${encodeURIComponent(name)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(layout),
@@ -158,7 +158,7 @@ const broadcastLayoutUpdate = async () => {
   };
 
   try {
-    await fetch(`${BRIDGE_URL}/api/layouts/${encodeURIComponent(name)}`, {
+    await fetch(`${BRIDGE_URL}/layouts/${encodeURIComponent(name)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(layout),

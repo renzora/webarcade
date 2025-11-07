@@ -10,6 +10,8 @@ function WheelOverlay() {
   const [rotation, setRotation] = createSignal(0);
   const [options, setOptions] = createSignal([]);
   const [winner, setWinner] = createSignal(null);
+  const [prizeType, setPrizeType] = createSignal(null);
+  const [prizeData, setPrizeData] = createSignal(null);
   const [showWinner, setShowWinner] = createSignal(false);
   const [wheelSize, setWheelSize] = createSignal(700);
   const [wheelPosition, setWheelPosition] = createSignal('hidden'); // 'hidden', 'entering', 'center', 'exiting'
@@ -92,11 +94,16 @@ function WheelOverlay() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log('🎡 Wheel overlay received event:', data.type, data);
+        console.log('🎡 Wheel overlay received event:', data);
 
-        // Handle Twitch events - check for wheel_spin type (serde tagged enum)
-        if (data.type === 'twitch_event' && data.event?.type === 'wheel_spin') {
-          console.log('🎡 Processing wheel spin event:', data.event);
+        // Handle new modular event system
+        if (data.event_type === 'wheel_spin') {
+          console.log('🎡 Processing wheel spin event:', data.payload);
+          handleWheelSpin(data.payload);
+        }
+        // Legacy support for old twitch_event format
+        else if (data.type === 'twitch_event' && data.event?.type === 'wheel_spin') {
+          console.log('🎡 Processing legacy wheel spin event:', data.event);
           handleWheelSpin(data.event);
         }
       } catch (error) {
@@ -109,6 +116,8 @@ function WheelOverlay() {
     console.log('Wheel spin event:', data);
     setOptions(data.options || []);
     setWinner(data.winner);
+    setPrizeType(data.prize_type || null);
+    setPrizeData(data.prize_data || null);
     spinWheel(data.winner, data.options || []);
   };
 
@@ -171,7 +180,7 @@ function WheelOverlay() {
   });
 
   return (
-    <div class="fixed inset-0 pointer-events-none overflow-hidden font-sans">
+    <div class="fixed inset-0 pointer-events-none overflow-hidden font-sans bg-transparent">
       {/* Size Controls */}
       <Show when={options().length > 0 && wheelPosition() === 'center' && !isSpinning()}>
         <div class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-black/80 px-4 py-2 rounded-lg pointer-events-auto flex items-center gap-3 z-50">
@@ -331,9 +340,23 @@ function WheelOverlay() {
                 <h1 class="text-6xl font-black text-white mb-4 drop-shadow-2xl animate-bounce">
                   🎉 WINNER! 🎉
                 </h1>
-                <div class="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-yellow-400 to-yellow-500 drop-shadow-xl">
+                <div class="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-yellow-400 to-yellow-500 drop-shadow-xl mb-4">
                   {winner()}
                 </div>
+                <Show when={prizeType()}>
+                  <div class="mt-4 pt-4 border-t-2 border-yellow-500/50">
+                    <div class="text-2xl text-yellow-300 font-semibold mb-2">
+                      🎁 Prize Unlocked!
+                    </div>
+                    <div class="text-xl text-white font-medium">
+                      {prizeType() === 'xp' && `+${prizeData()} XP`}
+                      {prizeType() === 'currency' && `+${prizeData()} Coins`}
+                      {prizeType() === 'pack' && `${prizeData()} Pack`}
+                      {prizeType() === 'item' && 'Special Item'}
+                      {prizeType() === 'tts_voice' && `TTS Voice: ${prizeData()}`}
+                    </div>
+                  </div>
+                </Show>
               </div>
             </div>
           </div>

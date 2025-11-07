@@ -44,9 +44,9 @@ const TickerViewport = () => {
   // Load ticker messages
   const loadMessages = async () => {
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/ticker/messages`);
+      const response = await fetch(`${WEBARCADE_API}/ticker/messages`);
       const data = await response.json();
-      setMessages(data);
+      setMessages(data.messages || data || []);
     } catch (error) {
       console.error('Failed to load ticker messages:', error);
     }
@@ -55,7 +55,7 @@ const TickerViewport = () => {
   // Load status config (start date, ticker speed, and max items)
   const loadStatusConfig = async () => {
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/status/config`);
+      const response = await fetch(`${WEBARCADE_API}/status/config`);
       const data = await response.json();
       setStreamStartDate(data.stream_start_date || '');
       setTickerSpeed(data.ticker_speed || 30);
@@ -74,7 +74,7 @@ const TickerViewport = () => {
   // Load ticker segments
   const loadSegments = async () => {
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/ticker/segments`);
+      const response = await fetch(`${WEBARCADE_API}/ticker/segments`);
       const data = await response.json();
       setSegments(data);
     } catch (error) {
@@ -128,7 +128,7 @@ const TickerViewport = () => {
           break;
       }
 
-      await fetch(`${WEBARCADE_API}/api/ticker/segments`, {
+      await fetch(`${WEBARCADE_API}/ticker/segments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(segmentData)
@@ -147,7 +147,7 @@ const TickerViewport = () => {
 
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/ticker/segments/${id}`, {
+      await fetch(`${WEBARCADE_API}/ticker/segments/${id}`, {
         method: 'DELETE'
       });
       await loadSegments();
@@ -162,7 +162,7 @@ const TickerViewport = () => {
     setLoading(true);
     try {
       const segment = segments().find(s => s.id === id);
-      await fetch(`${WEBARCADE_API}/api/ticker/segments/${id}`, {
+      await fetch(`${WEBARCADE_API}/ticker/segments/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -225,7 +225,7 @@ const TickerViewport = () => {
     // Send reorder request to backend
     try {
       const segmentIds = segmentsCopy.map(s => s.id);
-      await fetch(`${WEBARCADE_API}/api/ticker/segments/reorder`, {
+      await fetch(`${WEBARCADE_API}/ticker/segments/reorder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ segment_ids: segmentIds })
@@ -249,7 +249,7 @@ const TickerViewport = () => {
   // Update segment duration
   const updateSegmentDuration = async (duration) => {
     try {
-      await fetch(`${WEBARCADE_API}/api/status/segment-duration`, {
+      await fetch(`${WEBARCADE_API}/status/segment-duration`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ duration: parseInt(duration) })
@@ -276,7 +276,7 @@ const TickerViewport = () => {
   // Load ticker events config
   const loadEventsConfig = async () => {
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/ticker/events/config`);
+      const response = await fetch(`${WEBARCADE_API}/ticker/events/config`);
       const data = await response.json();
       setEventsConfig(data);
     } catch (error) {
@@ -293,7 +293,7 @@ const TickerViewport = () => {
 
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/ticker/events/config`, {
+      await fetch(`${WEBARCADE_API}/ticker/events/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -315,7 +315,7 @@ const TickerViewport = () => {
 
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/ticker/messages`, {
+      await fetch(`${WEBARCADE_API}/ticker/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: msg })
@@ -336,7 +336,7 @@ const TickerViewport = () => {
     setLoading(true);
     try {
       const message = messages().find(m => m.id === id);
-      await fetch(`${WEBARCADE_API}/api/ticker/messages`, {
+      await fetch(`${WEBARCADE_API}/ticker/messages`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, message: msg, enabled: message.enabled, is_sticky: message.is_sticky })
@@ -354,7 +354,7 @@ const TickerViewport = () => {
   const toggleMessageSticky = async (id) => {
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/ticker/messages/toggle-sticky`, {
+      await fetch(`${WEBARCADE_API}/ticker/messages/toggle-sticky`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id })
@@ -372,7 +372,7 @@ const TickerViewport = () => {
 
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/ticker/messages`, {
+      await fetch(`${WEBARCADE_API}/ticker/messages`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id })
@@ -388,7 +388,7 @@ const TickerViewport = () => {
   const toggleMessage = async (id) => {
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/ticker/messages/toggle`, {
+      await fetch(`${WEBARCADE_API}/ticker/messages/toggle`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id })
@@ -404,7 +404,7 @@ const TickerViewport = () => {
   const updateStreamStartDate = async (date) => {
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/status/start-date`, {
+      await fetch(`${WEBARCADE_API}/status/start-date`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ start_date: date || null })
@@ -419,7 +419,7 @@ const TickerViewport = () => {
   // Update ticker speed (debounced)
   const updateTickerSpeed = async (speed) => {
     try {
-      await fetch(`${WEBARCADE_API}/api/status/ticker-speed`, {
+      await fetch(`${WEBARCADE_API}/status/ticker-speed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ speed: parseInt(speed) })
@@ -448,7 +448,7 @@ const TickerViewport = () => {
   // Update max ticker items
   const updateMaxTickerItems = async (maxItems) => {
     try {
-      await fetch(`${WEBARCADE_API}/api/status/max-ticker-items`, {
+      await fetch(`${WEBARCADE_API}/status/max-ticker-items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ max_items: parseInt(maxItems) })
@@ -478,7 +478,7 @@ const TickerViewport = () => {
   const updateBreakingNews = async (active, message) => {
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/status/breaking-news`, {
+      await fetch(`${WEBARCADE_API}/status/breaking-news`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active, message: message || null })

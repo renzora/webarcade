@@ -15,6 +15,8 @@ export default function WheelViewport() {
   const [newOptionWeight, setNewOptionWeight] = createSignal(1);
   const [newOptionPercentage, setNewOptionPercentage] = createSignal('');
   const [usePercentage, setUsePercentage] = createSignal(false);
+  const [newPrizeType, setNewPrizeType] = createSignal('');
+  const [newPrizeData, setNewPrizeData] = createSignal('');
 
   // Edit state
   const [editingId, setEditingId] = createSignal(null);
@@ -23,6 +25,8 @@ export default function WheelViewport() {
   const [editWeight, setEditWeight] = createSignal(1);
   const [editPercentage, setEditPercentage] = createSignal('');
   const [editUsePercentage, setEditUsePercentage] = createSignal(false);
+  const [editPrizeType, setEditPrizeType] = createSignal('');
+  const [editPrizeData, setEditPrizeData] = createSignal('');
 
   // Spin state
   const [isSpinning, setIsSpinning] = createSignal(false);
@@ -35,7 +39,7 @@ export default function WheelViewport() {
   onMount(async () => {
     const currentStatus = await twitchStore.fetchStatus();
     if (currentStatus) {
-      setStatus(currentStatus);
+      setStatus({ ...currentStatus, connected_channels: currentStatus.connected_channels || [] });
       if (currentStatus.connected_channels && currentStatus.connected_channels.length > 0) {
         setSelectedChannel(currentStatus.connected_channels[0]);
         await loadOptions(currentStatus.connected_channels[0]);
@@ -49,7 +53,7 @@ export default function WheelViewport() {
 
     try {
       setLoading(true);
-      const response = await bridgeFetch(`/database/wheel/options?channel=${channel}`);
+      const response = await bridgeFetch(`/wheel/options?channel=${channel}`);
       const data = await response.json();
       setOptions(data);
     } catch (e) {
@@ -83,7 +87,13 @@ export default function WheelViewport() {
         payload.weight = newOptionWeight();
       }
 
-      const response = await bridgeFetch('/database/wheel/options', {
+      // Add prize info if specified
+      if (newPrizeType()) {
+        payload.prize_type = newPrizeType();
+        payload.prize_data = newPrizeData();
+      }
+
+      const response = await bridgeFetch('/wheel/options', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -95,6 +105,8 @@ export default function WheelViewport() {
         setNewOptionWeight(1);
         setNewOptionPercentage('');
         setUsePercentage(false);
+        setNewPrizeType('');
+        setNewPrizeData('');
         await loadOptions(selectedChannel());
       }
     } catch (e) {
@@ -106,7 +118,7 @@ export default function WheelViewport() {
     if (!confirm('Delete this wheel option?')) return;
 
     try {
-      const response = await bridgeFetch(`/database/wheel/options/${id}`, {
+      const response = await bridgeFetch(`/wheel/options/${id}`, {
         method: 'DELETE',
       });
 
@@ -125,6 +137,8 @@ export default function WheelViewport() {
     setEditWeight(option.weight);
     setEditPercentage(option.chance_percentage ? option.chance_percentage.toString() : '');
     setEditUsePercentage(!!option.chance_percentage);
+    setEditPrizeType(option.prize_type || '');
+    setEditPrizeData(option.prize_data || '');
   };
 
   const cancelEdit = () => {
@@ -134,6 +148,8 @@ export default function WheelViewport() {
     setEditWeight(1);
     setEditPercentage('');
     setEditUsePercentage(false);
+    setEditPrizeType('');
+    setEditPrizeData('');
   };
 
   const saveEdit = async () => {
@@ -145,6 +161,7 @@ export default function WheelViewport() {
 
     try {
       const payload = {
+        id: id,
         option_text: text,
         color: editColor(),
       };
@@ -158,7 +175,16 @@ export default function WheelViewport() {
         payload.chance_percentage = null; // Clear percentage if using weight
       }
 
-      const response = await bridgeFetch(`/database/wheel/options/${id}`, {
+      // Add prize info if specified
+      if (editPrizeType()) {
+        payload.prize_type = editPrizeType();
+        payload.prize_data = editPrizeData();
+      } else {
+        payload.prize_type = null;
+        payload.prize_data = null;
+      }
+
+      const response = await bridgeFetch(`/wheel/options/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -175,7 +201,7 @@ export default function WheelViewport() {
 
   const toggleEnabled = async (id, currentEnabled) => {
     try {
-      const response = await bridgeFetch(`/database/wheel/options/${id}/toggle`, {
+      const response = await bridgeFetch(`/wheel/options/${id}/toggle`, {
         method: 'POST',
       });
 
@@ -204,9 +230,9 @@ export default function WheelViewport() {
 
     try {
       setIsSpinning(true);
-      console.log('Sending spin request to:', '/database/wheel/spin', 'for channel:', selectedChannel());
+      console.log('Sending spin request to:', '/wheel/spin', 'for channel:', selectedChannel());
 
-      const response = await bridgeFetch('/database/wheel/spin', {
+      const response = await bridgeFetch('/wheel/spin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -219,7 +245,15 @@ export default function WheelViewport() {
       if (response.ok) {
         const data = await response.json();
         console.log('Wheel spin result:', data);
-        alert(`Winner: ${data.winner}! 🎉`);
+
+        let message = `Winner: ${data.winner}! 🎉`;
+        if (data.prize_type) {
+          message += `\nPrize: ${data.prize_type}`;
+          if (data.prize_data) {
+            message += ` (${data.prize_data})`;
+          }
+        }
+        alert(message);
       } else {
         const errorText = await response.text();
         console.error('Spin request failed:', response.status, errorText);
@@ -247,7 +281,7 @@ export default function WheelViewport() {
         </div>
 
         <div class="flex items-center gap-2">
-          <Show when={status().connected_channels.length > 0}>
+          <Show when={status().connected_channels?.length > 0}>
             <button
               class={`btn btn-primary btn-sm ${isSpinning() ? 'loading' : ''}`}
               onClick={spinWheel}
@@ -261,7 +295,7 @@ export default function WheelViewport() {
               value={selectedChannel()}
               onChange={(e) => handleChannelChange(e.target.value)}
             >
-              {status().connected_channels.map((channel) => (
+              {status().connected_channels?.map((channel) => (
                 <option value={channel}>#{channel}</option>
               ))}
             </select>
@@ -347,6 +381,39 @@ export default function WheelViewport() {
               )}
             </For>
           </div>
+
+          {/* Prize Selection */}
+          <div class="flex gap-2 items-center">
+            <span class="text-xs text-base-content/60">Prize:</span>
+            <select
+              class="select select-bordered select-sm flex-1"
+              value={newPrizeType()}
+              onChange={(e) => setNewPrizeType(e.target.value)}
+            >
+              <option value="">No Prize</option>
+              <option value="xp">XP</option>
+              <option value="currency">Currency</option>
+              <option value="pack">Pack</option>
+              <option value="item">Item</option>
+              <option value="tts_voice">TTS Voice</option>
+            </select>
+            <Show when={newPrizeType()}>
+              <input
+                type="text"
+                placeholder={
+                  newPrizeType() === 'xp' ? 'XP amount' :
+                  newPrizeType() === 'currency' ? 'Coin amount' :
+                  newPrizeType() === 'pack' ? 'Pack ID' :
+                  newPrizeType() === 'item' ? '{"item_id":"...","quantity":1}' :
+                  newPrizeType() === 'tts_voice' ? 'Voice ID' :
+                  'Prize data'
+                }
+                class="input input-bordered input-sm flex-1"
+                value={newPrizeData()}
+                onInput={(e) => setNewPrizeData(e.target.value)}
+              />
+            </Show>
+          </div>
         </div>
       </div>
 
@@ -395,6 +462,14 @@ export default function WheelViewport() {
                                   {option.chance_percentage
                                     ? `${option.chance_percentage.toFixed(1)}% chance`
                                     : `Weight: ${option.weight}`} | {option.enabled ? 'Enabled' : 'Disabled'}
+                                  <Show when={option.prize_type}>
+                                    <span class="ml-2 px-2 py-0.5 bg-primary/20 text-primary rounded">
+                                      🎁 {option.prize_type}
+                                      <Show when={option.prize_data}>
+                                        : {option.prize_data}
+                                      </Show>
+                                    </span>
+                                  </Show>
                                 </p>
                               </div>
                             </div>
@@ -470,6 +545,40 @@ export default function WheelViewport() {
                               {editUsePercentage() ? '%' : 'W'}
                             </button>
                           </div>
+
+                          {/* Prize Selection in Edit Mode */}
+                          <div class="flex gap-2 items-center">
+                            <span class="text-xs text-base-content/60">Prize:</span>
+                            <select
+                              class="select select-bordered select-sm flex-1"
+                              value={editPrizeType()}
+                              onChange={(e) => setEditPrizeType(e.target.value)}
+                            >
+                              <option value="">No Prize</option>
+                              <option value="xp">XP</option>
+                              <option value="currency">Currency</option>
+                              <option value="pack">Pack</option>
+                              <option value="item">Item</option>
+                              <option value="tts_voice">TTS Voice</option>
+                            </select>
+                            <Show when={editPrizeType()}>
+                              <input
+                                type="text"
+                                placeholder={
+                                  editPrizeType() === 'xp' ? 'XP amount' :
+                                  editPrizeType() === 'currency' ? 'Coin amount' :
+                                  editPrizeType() === 'pack' ? 'Pack ID' :
+                                  editPrizeType() === 'item' ? '{"item_id":"...","quantity":1}' :
+                                  editPrizeType() === 'tts_voice' ? 'Voice ID' :
+                                  'Prize data'
+                                }
+                                class="input input-bordered input-sm flex-1"
+                                value={editPrizeData()}
+                                onInput={(e) => setEditPrizeData(e.target.value)}
+                              />
+                            </Show>
+                          </div>
+
                           <div class="flex gap-2 justify-end">
                             <button
                               class="btn btn-sm btn-ghost"

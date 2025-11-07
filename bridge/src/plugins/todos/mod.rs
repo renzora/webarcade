@@ -6,6 +6,7 @@ use anyhow::Result;
 
 mod database;
 mod events;
+mod router;
 
 pub use database::*;
 pub use events::*;
@@ -28,6 +29,7 @@ impl Plugin for TodosPlugin {
     async fn init(&self, ctx: &PluginContext) -> Result<()> {
         log::info!("[Todos] Initializing plugin...");
 
+        // Note: Table already exists with rewarded column
         ctx.migrate(&[
             r#"
             CREATE TABLE IF NOT EXISTS todos (
@@ -37,11 +39,13 @@ impl Plugin for TodosPlugin {
                 task TEXT NOT NULL,
                 completed INTEGER NOT NULL DEFAULT 0,
                 created_at INTEGER NOT NULL,
-                completed_at INTEGER
+                completed_at INTEGER,
+                rewarded INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE INDEX IF NOT EXISTS idx_todos_channel ON todos(channel);
             CREATE INDEX IF NOT EXISTS idx_todos_completed ON todos(completed);
+            CREATE INDEX IF NOT EXISTS idx_todos_user ON todos(channel, username, completed);
             "#,
         ])?;
 
@@ -88,6 +92,9 @@ impl Plugin for TodosPlugin {
             database::delete_todo(&conn, todo_id)?;
             Ok(serde_json::json!({ "success": true }))
         }).await;
+
+        // Register HTTP routes
+        router::register_routes(ctx).await?;
 
         log::info!("[Todos] Plugin initialized successfully");
         Ok(())

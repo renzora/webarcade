@@ -3,12 +3,10 @@ use crate::core::plugin_context::PluginContext;
 use async_trait::async_trait;
 use std::sync::Arc;
 use anyhow::Result;
-use rusqlite::OptionalExtension;
 
-mod database;
 mod events;
+mod router;
 
-pub use database::*;
 pub use events::*;
 
 pub struct PacksPlugin;
@@ -29,6 +27,10 @@ impl Plugin for PacksPlugin {
     async fn init(&self, ctx: &PluginContext) -> Result<()> {
         log::info!("[Packs] Initializing plugin...");
 
+        // Register HTTP routes
+        router::register_routes(ctx).await?;
+
+        // Migration 1: Create tables if not exists
         ctx.migrate(&[
             r#"
             CREATE TABLE IF NOT EXISTS pack_definitions (
@@ -75,12 +77,27 @@ impl Plugin for PacksPlugin {
                 opened_at INTEGER NOT NULL,
                 FOREIGN KEY (pack_id) REFERENCES pack_definitions(id)
             );
-
-            CREATE INDEX IF NOT EXISTS idx_user_inventory_user_id ON user_inventory(user_id);
-            CREATE INDEX IF NOT EXISTS idx_pack_openings_user_id ON pack_openings(user_id);
-            CREATE INDEX IF NOT EXISTS idx_pack_items_pack_id ON pack_items(pack_id);
             "#,
         ])?;
+
+        // Migration 2: Add indexes (only if schema matches)
+        let conn = crate::core::database::get_database_path();
+        if let Ok(conn) = rusqlite::Connection::open(conn) {
+            // Check if pack_id column exists in pack_items table
+            let has_pack_id = conn.query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('pack_items') WHERE name = 'pack_id'",
+                [],
+                |row| row.get::<_, i64>(0)
+            ).unwrap_or(0) > 0;
+
+            if has_pack_id {
+                let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_user_inventory_user_id ON user_inventory(user_id)", []);
+                let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_pack_openings_user_id ON pack_openings(user_id)", []);
+                let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_pack_items_pack_id ON pack_items(pack_id)", []);
+            } else {
+                log::warn!("[Packs] Skipping index creation - pack_id column not found in pack_items table");
+            }
+        }
 
         // Service: Create pack definition
         ctx.provide_service("create_pack", |input| async move {

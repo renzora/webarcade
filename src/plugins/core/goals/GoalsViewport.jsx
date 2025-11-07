@@ -22,7 +22,7 @@ export default function GoalsViewport() {
   onMount(async () => {
     const currentStatus = await twitchStore.fetchStatus();
     if (currentStatus) {
-      setStatus(currentStatus);
+      setStatus({ ...currentStatus, connected_channels: currentStatus.connected_channels || [] });
       if (currentStatus.connected_channels && currentStatus.connected_channels.length > 0) {
         setSelectedChannel(currentStatus.connected_channels[0]);
         await loadGoals(currentStatus.connected_channels[0]);
@@ -36,7 +36,7 @@ export default function GoalsViewport() {
 
     try {
       setLoading(true);
-      const response = await bridgeFetch(`/database/goals?channel=${channel}`);
+      const response = await bridgeFetch(`/goals/list?channel=${channel}`);
       const data = await response.json();
       setGoals(data);
     } catch (e) {
@@ -105,7 +105,7 @@ export default function GoalsViewport() {
           };
 
           // Create the goal first
-          const createResponse = await bridgeFetch('/database/goals', {
+          const createResponse = await bridgeFetch('/goals/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(tempGoalData),
@@ -116,7 +116,7 @@ export default function GoalsViewport() {
             const goalId = createData.id;
 
             // Now sync it with Twitch to get the current value
-            const syncResponse = await bridgeFetch(`/database/goals/${goalId}/sync-twitch`, {
+            const syncResponse = await bridgeFetch(`/goals/${goalId}/sync-twitch`, {
               method: 'POST',
             });
 
@@ -150,7 +150,7 @@ export default function GoalsViewport() {
 
       let response;
       if (editingGoal()) {
-        response = await bridgeFetch(`/database/goals/${editingGoal().id}`, {
+        response = await bridgeFetch(`/goals/${editingGoal().id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -159,7 +159,7 @@ export default function GoalsViewport() {
           }),
         });
       } else {
-        response = await bridgeFetch('/database/goals', {
+        response = await bridgeFetch('/goals/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(goalData),
@@ -180,7 +180,7 @@ export default function GoalsViewport() {
     if (!confirm('Are you sure you want to delete this goal?')) return;
 
     try {
-      const response = await bridgeFetch(`/database/goals/${goalId}`, {
+      const response = await bridgeFetch(`/goals/${goalId}`, {
         method: 'DELETE',
       });
 
@@ -194,7 +194,7 @@ export default function GoalsViewport() {
 
   const updateGoalProgress = async (goalId, newCurrent) => {
     try {
-      const response = await bridgeFetch(`/database/goals/${goalId}/progress`, {
+      const response = await bridgeFetch(`/goals/${goalId}/progress`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ current: newCurrent }),
@@ -210,7 +210,7 @@ export default function GoalsViewport() {
 
   const syncWithTwitch = async (goalId) => {
     try {
-      const response = await bridgeFetch(`/database/goals/${goalId}/sync-twitch`, {
+      const response = await bridgeFetch(`/goals/${goalId}/sync-twitch`, {
         method: 'POST',
       });
 
@@ -249,13 +249,13 @@ export default function GoalsViewport() {
         </div>
 
         <div class="flex items-center gap-2">
-          <Show when={status().connected_channels.length > 0}>
+          <Show when={status().connected_channels?.length > 0}>
             <select
               class="select select-bordered select-sm"
               value={selectedChannel()}
               onChange={(e) => handleChannelChange(e.target.value)}
             >
-              {status().connected_channels.map((channel) => (
+              {status().connected_channels?.map((channel) => (
                 <option value={channel}>#{channel}</option>
               ))}
             </select>

@@ -17,7 +17,7 @@ function GoalsOverlay() {
     if (!channelName) return;
 
     try {
-      const response = await fetch(`http://localhost:3001/database/goals?channel=${channelName}`);
+      const response = await fetch(`http://localhost:3001/goals/list?channel=${channelName}`);
       if (response.ok) {
         const data = await response.json();
         setGoals(data || []);
@@ -152,7 +152,7 @@ function GoalsOverlay() {
   });
 
   return (
-    <div class="fixed inset-0 pointer-events-none overflow-hidden font-sans">
+    <div class="fixed inset-0 pointer-events-none overflow-hidden font-sans bg-transparent">
       {/* Goals Display */}
       <Show when={goals().length > 0}>
         <div class="absolute top-0 left-0 right-0 pointer-events-none">

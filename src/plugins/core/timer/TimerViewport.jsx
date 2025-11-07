@@ -170,7 +170,7 @@ export default function TimerViewport() {
 
   const broadcastTimerState = async () => {
     try {
-      await fetch(`${BRIDGE_URL}/api/timer/broadcast`, {
+      await fetch(`${BRIDGE_URL}/timer/broadcast`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

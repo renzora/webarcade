@@ -115,14 +115,14 @@ export default function DashboardViewport() {
           }
         }
       } catch (error) {
-        // Silent fail
+        // Endpoint not yet implemented - silent fail
       }
     };
 
-    fetchScheduleData();
-    const interval = setInterval(fetchScheduleData, 30000); // Update every 30 seconds
-
-    onCleanup(() => clearInterval(interval));
+    // Skip schedule fetching for now - endpoint not implemented
+    // fetchScheduleData();
+    // const interval = setInterval(fetchScheduleData, 30000);
+    // onCleanup(() => clearInterval(interval));
   });
 
   const handleStartBot = async () => {
@@ -192,123 +192,6 @@ export default function DashboardViewport() {
   return (
     <div class="h-full overflow-y-auto bg-gradient-to-br from-base-300 to-base-200">
       <div class="max-w-6xl mx-auto p-8 space-y-6">
-        {/* Stats Cards */}
-        {systemStats() ? (
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* CPU Card */}
-            <div class="card bg-base-100 shadow-xl">
-              <div class="card-body">
-                <div class="flex items-center gap-3 mb-4">
-                  <div class="p-3 bg-blue-500/20 rounded-lg">
-                    <IconCpu size={32} class="text-blue-500" />
-                  </div>
-                  <div>
-                    <h2 class="card-title text-xl">CPU Usage</h2>
-                    <p class="text-xs text-base-content/60">Processor load</p>
-                  </div>
-                </div>
-
-                <div class="space-y-2">
-                  <div class="flex items-baseline gap-2">
-                    <span class={`text-4xl font-bold ${getUsageColor(Math.round(systemStats().cpu_usage))}`}>
-                      {Math.round(systemStats().cpu_usage)}%
-                    </span>
-                  </div>
-
-                  <progress
-                    class={`progress w-full ${getProgressColor(Math.round(systemStats().cpu_usage))}`}
-                    value={systemStats().cpu_usage}
-                    max="100"
-                  />
-
-                  <div class="flex justify-center">
-                    {renderMiniChart(statsHistory(), 'cpu')}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Memory Card */}
-            <div class="card bg-base-100 shadow-xl">
-              <div class="card-body">
-                <div class="flex items-center gap-3 mb-4">
-                  <div class="p-3 bg-green-500/20 rounded-lg">
-                    <IconDatabase size={32} class="text-green-500" />
-                  </div>
-                  <div>
-                    <h2 class="card-title text-xl">Memory Usage</h2>
-                    <p class="text-xs text-base-content/60">RAM utilization</p>
-                  </div>
-                </div>
-
-                <div class="space-y-2">
-                  <div class="flex items-baseline gap-2">
-                    <span class={`text-4xl font-bold ${getUsageColor(Math.round(systemStats().memory_usage))}`}>
-                      {Math.round(systemStats().memory_usage)}%
-                    </span>
-                  </div>
-
-                  <progress
-                    class={`progress w-full ${getProgressColor(Math.round(systemStats().memory_usage))}`}
-                    value={systemStats().memory_usage}
-                    max="100"
-                  />
-
-                  <div class="flex justify-center">
-                    {renderMiniChart(statsHistory(), 'memory')}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* GPU Card */}
-            <div class="card bg-base-100 shadow-xl">
-              <div class="card-body">
-                <div class="flex items-center gap-3 mb-4">
-                  <div class="p-3 bg-purple-500/20 rounded-lg">
-                    <IconActivity size={32} class="text-purple-500" />
-                  </div>
-                  <div>
-                    <h2 class="card-title text-xl">GPU Usage</h2>
-                    <p class="text-xs text-base-content/60">Graphics load</p>
-                  </div>
-                </div>
-
-                {systemStats().gpu_usage !== null && systemStats().gpu_usage !== undefined ? (
-                  <div class="space-y-2">
-                    <div class="flex items-baseline gap-2">
-                      <span class={`text-4xl font-bold ${getUsageColor(Math.round(systemStats().gpu_usage))}`}>
-                        {Math.round(systemStats().gpu_usage)}%
-                      </span>
-                    </div>
-
-                    <progress
-                      class={`progress w-full ${getProgressColor(Math.round(systemStats().gpu_usage))}`}
-                      value={systemStats().gpu_usage}
-                      max="100"
-                    />
-
-                    <div class="flex justify-center">
-                      {renderMiniChart(statsHistory(), 'gpu')}
-                    </div>
-                  </div>
-                ) : (
-                  <div class="flex items-center justify-center h-32">
-                    <p class="text-base-content/50">GPU stats unavailable</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div class="flex items-center justify-center h-64">
-            <div class="text-center">
-              <div class="loading loading-spinner loading-lg mb-4"></div>
-              <p class="text-base-content/70">Loading system stats...</p>
-            </div>
-          </div>
-        )}
-
         {/* Twitch Bot Control */}
         <Show when={twitchConfig()?.has_token}>
           <div class="card bg-base-100 shadow-xl border-2 border-purple-500/20">
@@ -344,7 +227,7 @@ export default function DashboardViewport() {
                     {twitchConfig()?.channels?.length || 0} connected
                   </p>
                 </div>
-                <Show when={twitchStatus().connected_channels}>
+                <Show when={twitchStatus().connected_channels?.length > 0}>
                   <div class="md:col-span-2">
                     <p class="text-xs text-base-content/60 mb-1">Connected To</p>
                     <div class="flex flex-wrap gap-2 mt-2">
@@ -444,33 +327,6 @@ export default function DashboardViewport() {
             </div>
           </div>
         </Show>
-
-        {/* System Information */}
-        {systemStats() && (
-          <div class="card bg-base-100 shadow-xl">
-            <div class="card-body">
-              <h2 class="card-title text-2xl mb-4">System Information</h2>
-              <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <p class="text-xs text-base-content/60 mb-1">Status</p>
-                  <p class="font-semibold">Running</p>
-                </div>
-                <div>
-                  <p class="text-xs text-base-content/60 mb-1">Bridge Server</p>
-                  <p class="font-semibold">localhost:3001</p>
-                </div>
-                <div>
-                  <p class="text-xs text-base-content/60 mb-1">Update Rate</p>
-                  <p class="font-semibold">1s</p>
-                </div>
-                <div>
-                  <p class="text-xs text-base-content/60 mb-1">History</p>
-                  <p class="font-semibold">{statsHistory().length}/{MAX_HISTORY} points</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Performance Tips */}
         <div class="card bg-primary text-primary-content shadow-xl">

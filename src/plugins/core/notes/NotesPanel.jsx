@@ -14,7 +14,7 @@ export default function NotesPanel() {
 
   const loadNotes = async () => {
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/notes`);
+      const response = await fetch(`${WEBARCADE_API}/notes`);
       const data = await response.json();
       // Show only the 5 most recent notes
       setNotes(data.slice(0, 5));
@@ -29,7 +29,7 @@ export default function NotesPanel() {
 
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/notes`, {
+      await fetch(`${WEBARCADE_API}/notes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -58,13 +58,40 @@ function ChatOverlay() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.type === 'twitch_event' && data.event.type === 'chat_message') {
-          handleChatMessage(data.event);
+        // New plugin-based event format
+        if (data.event_type === 'twitch.chat_message' && data.payload) {
+          handleChatMessage(data.payload);
         }
       } catch (error) {
         console.error('Error parsing message:', error);
       }
     };
+  };
+
+  // Parse emotes from IRC tags format
+  // Format: "emoteid:start-end,start-end/emoteid2:start-end"
+  const parseEmotesFromTags = (emotesTag) => {
+    if (!emotesTag) return [];
+
+    try {
+      const emotes = [];
+      const emoteParts = emotesTag.split('/');
+
+      for (const part of emoteParts) {
+        const [emoteId, positions] = part.split(':');
+        if (emoteId && positions) {
+          emotes.push({
+            id: emoteId,
+            positions: positions.split(',')
+          });
+        }
+      }
+
+      return emotes;
+    } catch (error) {
+      console.error('Error parsing emotes:', error);
+      return [];
+    }
   };
 
   // Detect if message is a command and extract command name
@@ -79,41 +106,52 @@ function ChatOverlay() {
     return null;
   };
 
-  const handleChatMessage = (event) => {
-    const command = detectCommand(event.message);
+  const handleChatMessage = (payload) => {
+    const command = detectCommand(payload.message);
+
+    // Extract data from IRC tags
+    const tags = payload.tags || {};
+    const color = tags.color || '#9146FF';
+
+    // Parse emotes from tags (format: "emoteid:start-end,start-end/emoteid:start-end")
+    const emotes = parseEmotesFromTags(tags.emotes || '');
+
+    // Parse badges (can be from badges string or tags)
+    const badgesStr = payload.badges || tags.badges || '';
+    const isBroadcaster = payload.is_broadcaster || badgesStr.includes('broadcaster');
+    const isModerator = payload.is_mod || badgesStr.includes('moderator');
+    const isVIP = badgesStr.includes('vip');
+    const isSubscriber = payload.is_subscriber || badgesStr.includes('subscriber');
 
     // Debug logging
     console.log('Chat message event:', {
-      username: event.username,
-      level: event.level,
-      current_xp: event.current_xp,
-      xp_for_next_level: event.xp_for_next_level,
-      progress_percent: event.current_xp && event.xp_for_next_level
-        ? ((event.current_xp / event.xp_for_next_level) * 100).toFixed(1) + '%'
-        : 'N/A'
+      username: payload.username,
+      display_name: payload.display_name,
+      message: payload.message,
+      tags: tags
     });
 
     const msg = {
       id: messageId++,
-      username: event.username,
-      displayName: event.display_name || event.username,
-      message: event.message,
-      color: event.color || '#9146FF',
-      profilePicture: event.profile_image_url || `https://static-cdn.jtvnw.net/user-default-pictures-uv/ce57700a-def9-11e9-842d-784f43822e80-profile_image-70x70.png`,
-      isBroadcaster: event.badges?.some(b => b.startsWith('broadcaster')) || false,
-      isModerator: event.badges?.some(b => b.startsWith('moderator')) || false,
-      isVIP: event.badges?.some(b => b.startsWith('vip')) || false,
-      isSubscriber: event.badges?.some(b => b.startsWith('subscriber')) || false,
-      emotes: event.emotes || [],
-      messageParts: parseMessageWithEmotes(event.message, event.emotes || []),
+      username: payload.username,
+      displayName: payload.display_name || payload.username,
+      message: payload.message,
+      color: color,
+      profilePicture: tags['profile-image-url'] || `https://static-cdn.jtvnw.net/user-default-pictures-uv/ce57700a-def9-11e9-842d-784f43822e80-profile_image-70x70.png`,
+      isBroadcaster: isBroadcaster,
+      isModerator: isModerator,
+      isVIP: isVIP,
+      isSubscriber: isSubscriber,
+      emotes: emotes,
+      messageParts: parseMessageWithEmotes(payload.message, emotes),
       timestamp: Date.now(),
       isCommand: !!command,
       commandName: command,
-      locationFlag: event.location_flag || null,
-      isBirthday: event.is_birthday || false,
-      level: event.level || null,
-      current_xp: event.current_xp || null,
-      xp_for_next_level: event.xp_for_next_level || null
+      locationFlag: null, // TODO: Add location flag support
+      isBirthday: false, // TODO: Add birthday support
+      level: null, // TODO: Add level support from levels plugin
+      current_xp: null,
+      xp_for_next_level: null
     };
 
     setMessages(prev => {
@@ -220,7 +258,7 @@ function ChatOverlay() {
   });
 
   return (
-    <div class="fixed inset-0 pointer-events-none overflow-hidden font-sans">
+    <div class="fixed inset-0 pointer-events-none overflow-hidden font-sans bg-transparent">
       {/* Chat Messages - Twitch Style */}
       <div class="absolute bottom-0 left-0 w-[420px] max-h-screen flex flex-col-reverse gap-1 p-2">
         <For each={messages()}>

@@ -24,7 +24,7 @@ export default function ViewerStatsViewport() {
   onMount(async () => {
     const currentStatus = await twitchStore.fetchStatus();
     if (currentStatus) {
-      setStatus(currentStatus);
+      setStatus({ ...currentStatus, connected_channels: currentStatus.connected_channels || [] });
       if (currentStatus.connected_channels && currentStatus.connected_channels.length > 0) {
         setSelectedChannel(currentStatus.connected_channels[0]);
         await loadViewers(currentStatus.connected_channels[0], 'day');
@@ -39,7 +39,7 @@ export default function ViewerStatsViewport() {
     try {
       setLoading(true);
       const offset = (page - 1) * ITEMS_PER_PAGE;
-      const response = await bridgeFetch(`/database/watchtime/by-period?channel=${channel}&period=${period}&limit=${ITEMS_PER_PAGE}&offset=${offset}`);
+      const response = await bridgeFetch(`/watchtime/by-period?channel=${channel}&period=${period}&limit=${ITEMS_PER_PAGE}&offset=${offset}`);
       const data = await response.json();
       setViewers(data.viewers || []);
       setTotalViewers(data.total || 0);
@@ -110,13 +110,13 @@ export default function ViewerStatsViewport() {
           <h2 class="text-lg font-semibold">Viewer Statistics</h2>
         </div>
 
-        <Show when={status().connected_channels.length > 0}>
+        <Show when={status().connected_channels?.length > 0}>
           <select
             class="select select-bordered select-sm"
             value={selectedChannel()}
             onChange={(e) => handleChannelChange(e.target.value)}
           >
-            {status().connected_channels.map((channel) => (
+            {status().connected_channels?.map((channel) => (
               <option value={channel}>#{channel}</option>
             ))}
           </select>

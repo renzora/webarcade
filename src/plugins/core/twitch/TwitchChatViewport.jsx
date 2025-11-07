@@ -14,7 +14,7 @@ export default function TwitchChatViewport() {
   onMount(async () => {
     const currentStatus = await twitchStore.fetchStatus();
     if (currentStatus) {
-      setStatus(currentStatus);
+      setStatus({ ...currentStatus, connected_channels: currentStatus.connected_channels || [] });
       if (currentStatus.connected_channels && currentStatus.connected_channels.length > 0) {
         setSelectedChannel(currentStatus.connected_channels[0]);
       }
@@ -111,13 +111,13 @@ export default function TwitchChatViewport() {
             <span class="text-[10px]">{status().status === 'connected' ? 'On' : 'Off'}</span>
           </div>
 
-          <Show when={status().connected_channels.length > 0}>
+          <Show when={status().connected_channels?.length > 0}>
             <select
               class="select select-bordered select-xs min-w-0 flex-1 text-xs h-6"
               value={selectedChannel()}
               onChange={(e) => setSelectedChannel(e.target.value)}
             >
-              {status().connected_channels.map((channel) => (
+              {status().connected_channels?.map((channel) => (
                 <option value={channel}>#{channel}</option>
               ))}
             </select>

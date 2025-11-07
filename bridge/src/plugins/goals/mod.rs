@@ -7,6 +7,7 @@ use rusqlite::OptionalExtension;
 
 mod database;
 mod events;
+mod router;
 
 pub use database::*;
 pub use events::*;
@@ -47,6 +48,9 @@ impl Plugin for GoalsPlugin {
             CREATE INDEX IF NOT EXISTS idx_goals_channel ON goals(channel);
             "#,
         ])?;
+
+        // Register HTTP routes
+        router::register_routes(ctx).await?;
 
         // Register services
         ctx.provide_service("create_goal", |input| async move {
@@ -93,6 +97,69 @@ impl Plugin for GoalsPlugin {
 
             database::delete_goal(&conn, goal_id)?;
             Ok(serde_json::json!({ "success": true }))
+        }).await;
+
+        ctx.provide_service("set_progress", |input| async move {
+            let goal_id: i64 = serde_json::from_value(input["goal_id"].clone())?;
+            let current: i64 = serde_json::from_value(input["current"].clone())?;
+
+            let conn = crate::core::database::get_database_path();
+            let conn = rusqlite::Connection::open(conn)?;
+
+            database::set_progress(&conn, goal_id, current)?;
+            Ok(serde_json::json!({ "success": true }))
+        }).await;
+
+        ctx.provide_service("update_goal", |input| async move {
+            let goal_id: i64 = serde_json::from_value(input["goal_id"].clone())?;
+            let title: Option<String> = serde_json::from_value(input["title"].clone()).ok();
+            let description: Option<String> = serde_json::from_value(input["description"].clone()).ok();
+            let goal_type: Option<String> = serde_json::from_value(input["type"].clone()).ok();
+            let target: Option<i64> = serde_json::from_value(input["target"].clone()).ok();
+            let current: Option<i64> = serde_json::from_value(input["current"].clone()).ok();
+            let is_sub_goal: Option<bool> = serde_json::from_value(input["is_sub_goal"].clone()).ok();
+
+            let conn = crate::core::database::get_database_path();
+            let conn = rusqlite::Connection::open(conn)?;
+
+            database::update_goal(
+                &conn,
+                goal_id,
+                title.as_deref(),
+                description.as_deref(),
+                goal_type.as_deref(),
+                target,
+                current,
+                is_sub_goal,
+            )?;
+            Ok(serde_json::json!({ "success": true }))
+        }).await;
+
+        ctx.provide_service("sync_twitch", |input| async move {
+            let goal_id: i64 = serde_json::from_value(input["goal_id"].clone())?;
+
+            let conn = crate::core::database::get_database_path();
+            let conn = rusqlite::Connection::open(conn)?;
+
+            // Get the goal to check its type
+            let goal = database::get_goal(&conn, goal_id)?
+                .ok_or_else(|| anyhow::anyhow!("Goal not found"))?;
+
+            // Fetch current count from Twitch based on goal type
+            match goal.goal_type.as_str() {
+                "follower" => {
+                    // Call Twitch API to get follower count
+                    // This would require access to Twitch API - for now return error
+                    return Err(anyhow::anyhow!("Twitch sync not implemented yet"));
+                }
+                "subscriber" => {
+                    // Call Twitch API to get subscriber count
+                    return Err(anyhow::anyhow!("Twitch sync not implemented yet"));
+                }
+                _ => {
+                    return Err(anyhow::anyhow!("Goal type does not support Twitch sync"));
+                }
+            }
         }).await;
 
         log::info!("[Goals] Plugin initialized successfully");

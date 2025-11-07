@@ -193,49 +193,34 @@ function createTwitchStore() {
    */
 
   const startBot = async () => {
-    const response = await fetch(`${BRIDGE_URL}/twitch/start`, {
-      method: 'POST',
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error);
-    }
-
-    const result = await response.json();
-    await fetchStatus();
-    return result;
+    // Bot start functionality would be implemented when IRC client is ready
+    console.log('[TwitchStore] Bot start not yet implemented');
+    return { success: false, message: 'Bot functionality not yet implemented' };
   };
 
   const stopBot = async () => {
-    const response = await fetch(`${BRIDGE_URL}/twitch/stop`, {
-      method: 'POST',
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error);
-    }
-
-    const result = await response.json();
-    await fetchStatus();
-    return result;
+    // Bot stop functionality would be implemented when IRC client is ready
+    console.log('[TwitchStore] Bot stop not yet implemented');
+    return { success: false, message: 'Bot functionality not yet implemented' };
   };
 
   const fetchStatus = async () => {
     try {
-      const response = await fetch(`${BRIDGE_URL}/twitch/status`);
+      const response = await fetch(`${BRIDGE_URL}/twitch/auth/status`);
+      if (!response.ok) {
+        return { authenticated: false };
+      }
       const status = await response.json();
       setBotStatus(status);
       return status;
     } catch (e) {
       console.error('[TwitchStore] Failed to fetch status:', e);
-      return null;
+      return { authenticated: false };
     }
   };
 
   const getAuthUrl = async () => {
-    const response = await fetch(`${BRIDGE_URL}/twitch/auth-url`);
+    const response = await fetch(`${BRIDGE_URL}/twitch/auth/url`);
 
     if (!response.ok) {
       const error = await response.text();
@@ -252,10 +237,8 @@ function createTwitchStore() {
   };
 
   const completeOAuth = async (code, state) => {
-    const response = await fetch(`${BRIDGE_URL}/twitch/callback`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, state }),
+    const response = await fetch(`${BRIDGE_URL}/twitch/auth/callback?code=${code}&state=${state}`, {
+      method: 'GET',
     });
 
     if (!response.ok) {
@@ -267,7 +250,7 @@ function createTwitchStore() {
   };
 
   const sendMessage = async (channel, message) => {
-    const response = await fetch(`${BRIDGE_URL}/twitch/send-message`, {
+    const response = await fetch(`${BRIDGE_URL}/twitch/messages/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ channel, message }),
@@ -312,9 +295,12 @@ function createTwitchStore() {
   const fetchCommands = async () => {
     try {
       const response = await fetch(`${BRIDGE_URL}/twitch/commands`);
+      if (!response.ok) {
+        return { commands: [] };
+      }
       const commandsData = await response.json();
-      setCommands(commandsData);
-      return commandsData;
+      setCommands(commandsData.commands || []);
+      return commandsData.commands || [];
     } catch (e) {
       console.error('[TwitchStore] Failed to fetch commands:', e);
       return [];
@@ -322,7 +308,7 @@ function createTwitchStore() {
   };
 
   const registerCommand = async (command) => {
-    const response = await fetch(`${BRIDGE_URL}/twitch/register-command`, {
+    const response = await fetch(`${BRIDGE_URL}/twitch/commands/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(command),
@@ -338,53 +324,31 @@ function createTwitchStore() {
   };
 
   const unregisterCommand = async (name) => {
-    const response = await fetch(`${BRIDGE_URL}/twitch/unregister-command`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error);
-    }
-
-    await fetchCommands();
-    return await response.json();
+    // This endpoint doesn't exist yet in the backend
+    console.log('[TwitchStore] Unregister command not yet implemented');
+    return { success: false, message: 'Not implemented' };
   };
 
   const joinChannel = async (channel) => {
-    const response = await fetch(`${BRIDGE_URL}/twitch/join-channel`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channel }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error);
+    // For now, just update the channels in config
+    const currentConfig = await fetchConfig();
+    const channels = currentConfig.channels || [];
+    if (!channels.includes(channel)) {
+      channels.push(channel);
+      return await saveConfig({ ...currentConfig, channels });
     }
-
-    return await response.json();
+    return { success: true };
   };
 
   const partChannel = async (channel) => {
-    const response = await fetch(`${BRIDGE_URL}/twitch/part-channel`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channel }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error);
-    }
-
-    return await response.json();
+    // For now, just update the channels in config
+    const currentConfig = await fetchConfig();
+    const channels = (currentConfig.channels || []).filter(ch => ch !== channel);
+    return await saveConfig({ ...currentConfig, channels });
   };
 
   const revokeToken = async () => {
-    const response = await fetch(`${BRIDGE_URL}/twitch/revoke`, {
+    const response = await fetch(`${BRIDGE_URL}/twitch/auth/revoke`, {
       method: 'POST',
     });
 
@@ -398,113 +362,62 @@ function createTwitchStore() {
   };
 
   const getStreamInfo = async () => {
-    const response = await fetch(`${BRIDGE_URL}/twitch/stream-info`);
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error);
-    }
-
-    return await response.json();
+    // Stream info endpoints not yet implemented in backend
+    console.log('[TwitchStore] Stream info not yet implemented');
+    return { stream: null };
   };
 
   const updateStreamInfo = async (options) => {
-    const response = await fetch(`${BRIDGE_URL}/twitch/update-stream-info`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: options.title || undefined,
-        game_id: options.gameId || undefined,
-        broadcaster_language: options.language || undefined,
-        tags: options.tags || undefined,
-        content_classification_labels: options.contentClassificationLabels || undefined,
-        is_branded_content: options.isBrandedContent !== undefined ? options.isBrandedContent : undefined,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error);
-    }
-
-    return await response.json();
+    // Stream info endpoints not yet implemented in backend
+    console.log('[TwitchStore] Update stream info not yet implemented');
+    return { success: false, message: 'Not implemented' };
   };
 
   const searchGames = async (query) => {
-    const response = await fetch(`${BRIDGE_URL}/twitch/search-games`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error);
-    }
-
-    return await response.json();
+    // Game search not yet implemented in backend
+    console.log('[TwitchStore] Search games not yet implemented');
+    return { games: [] };
   };
 
   // Account Management
   const getAccounts = async () => {
-    console.log('[TwitchStore] Fetching accounts from:', `${BRIDGE_URL}/twitch/accounts`);
-    const response = await fetch(`${BRIDGE_URL}/twitch/accounts`);
-
-    console.log('[TwitchStore] Response status:', response.status);
-    if (!response.ok) {
-      const error = await response.text();
-      console.error('[TwitchStore] Error fetching accounts:', error);
-      throw new Error(error);
+    // For now, return auth status as a single account
+    // This can be expanded when multi-account support is added to backend
+    try {
+      const authStatus = await fetchStatus();
+      if (authStatus && authStatus.authenticated) {
+        return {
+          accounts: [{
+            user_id: authStatus.user_id,
+            username: authStatus.username,
+            account_type: 'bot',
+            is_active: true,
+            expires_at: authStatus.expires_at,
+            is_expired: authStatus.is_expired
+          }]
+        };
+      }
+      return { accounts: [] };
+    } catch (e) {
+      console.error('[TwitchStore] Error fetching accounts:', e);
+      return { accounts: [] };
     }
-
-    const data = await response.json();
-    console.log('[TwitchStore] Fetched accounts data:', data);
-    return data;
   };
 
   const authenticateAccount = async (code, state, accountType) => {
-    const response = await fetch(`${BRIDGE_URL}/twitch/accounts/auth`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, state, account_type: accountType }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error);
-    }
-
-    return await response.json();
+    // Use the existing OAuth callback
+    return await completeOAuth(code, state);
   };
 
   const activateAccount = async (accountId) => {
-    const response = await fetch(`${BRIDGE_URL}/twitch/accounts/activate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ account_id: accountId }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error);
-    }
-
-    return await response.json();
+    // Not needed for single account setup
+    console.log('[TwitchStore] Account activation not needed for single account');
+    return { success: true };
   };
 
   const deleteAccount = async (accountId) => {
-    const response = await fetch(`${BRIDGE_URL}/twitch/accounts/delete`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ account_id: accountId }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error);
-    }
-
-    return await response.json();
+    // Use revoke token for now
+    return await revokeToken();
   };
 
   // Return the store API

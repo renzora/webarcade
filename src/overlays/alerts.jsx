@@ -103,36 +103,51 @@ function AlertsOverlay() {
     ws = new WebSocket(WEBARCADE_WS);
 
     ws.onopen = () => {
-      console.log('WebSocket connected');
+      console.log('🟢 WebSocket connected to', WEBARCADE_WS);
       setIsConnected(true);
       ws.send(JSON.stringify({ type: 'subscribe', channels: ['twitch'] }));
+      console.log('📤 Sent subscription request for twitch channel');
     };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log('WebSocket message received:', data);
+        console.log('📨 WebSocket message received:', data);
 
         // Handle different message types
         if (data.type === 'connected') {
-          console.log('WebSocket connection confirmed');
+          console.log('✅ WebSocket connection confirmed');
+          return;
+        }
+
+        // Handle alert.show events from alerts plugin
+        if (data.event_type === 'alert.show' && data.payload) {
+          console.log('🔔 ALERT.SHOW EVENT RECEIVED!');
+          console.log('📦 Alert payload:', data.payload);
+          console.log('🕒 Timestamp:', data.timestamp);
+          console.log('🔌 Source plugin:', data.source_plugin);
+          handleTwitchEvent(data.payload);
           return;
         }
 
         if (data.type === 'twitch_event' && data.event) {
-          console.log('Received twitch_event, extracting event:', data.event);
+          console.log('📡 Received twitch_event, extracting event:', data.event);
           handleTwitchEvent(data.event);
           return;
         }
 
         // Direct TwitchEvent format
         if (data.type) {
+          console.log('🎯 Direct event type:', data.type);
           handleTwitchEvent(data);
         } else if (data.channel === 'twitch' && data.event) {
+          console.log('📺 Channel event:', data.event);
           handleTwitchEvent(data.event);
+        } else {
+          console.log('⚠️ Unhandled WebSocket message format:', data);
         }
       } catch (error) {
-        console.error('WebSocket message error:', error);
+        console.error('❌ WebSocket message error:', error);
       }
     };
 
@@ -148,10 +163,13 @@ function AlertsOverlay() {
   };
 
   const handleTwitchEvent = (event) => {
+    console.log('🎬 handleTwitchEvent called with event:', event);
+    console.log('📋 Event type:', event.type);
     let alert;
 
     switch (event.type) {
       case 'follow':
+        console.log('💙 Processing FOLLOW event');
         alert = {
           type: 'follow',
           username: event.user_name || event.display_name || event.username,
@@ -160,6 +178,7 @@ function AlertsOverlay() {
         break;
 
       case 'subscription':
+        console.log('⭐ Processing SUBSCRIPTION event');
         alert = {
           type: 'sub',
           username: event.user_name || event.display_name || event.username,
@@ -169,6 +188,7 @@ function AlertsOverlay() {
         break;
 
       case 'resubscription':
+        console.log('🎉 Processing RESUBSCRIPTION event');
         alert = {
           type: 'resub',
           username: event.user_name || event.display_name || event.username,
@@ -179,6 +199,7 @@ function AlertsOverlay() {
         break;
 
       case 'gift_subscription':
+        console.log('🎁 Processing GIFT SUBSCRIPTION event');
         alert = {
           type: 'gift_sub',
           gifterName: event.user_name || event.gifter_display_name || event.gifter_name,
@@ -189,6 +210,7 @@ function AlertsOverlay() {
         break;
 
       case 'raid':
+        console.log('⚔️ Processing RAID event');
         alert = {
           type: 'raid',
           username: event.from_broadcaster_user_name || event.display_name,
@@ -198,6 +220,8 @@ function AlertsOverlay() {
         break;
 
       case 'cheer':
+      case 'bits':
+        console.log('💎 Processing BITS/CHEER event');
         alert = {
           type: 'bits',
           username: event.user_name || event.display_name || event.username,
@@ -207,37 +231,45 @@ function AlertsOverlay() {
         break;
 
       case 'channel_points_redemption':
+      case 'channel_points':
+        console.log('✨ Processing CHANNEL POINTS event');
         alert = {
           type: 'channel_points',
           username: event.user_name || event.display_name || event.username,
-          reward: event.reward?.title || 'Channel Points',
-          message: event.reward?.title || 'Redeemed!'
+          reward: event.reward?.title || event.reward_title || 'Channel Points',
+          message: event.reward?.title || event.reward_title || 'Redeemed!'
         };
         break;
 
       default:
-        console.log('Unknown event type:', event.type);
+        console.log('❓ Unknown event type:', event.type);
+        console.log('Full event data:', event);
         return;
     }
 
     if (alert) {
+      console.log('🎨 Alert created, calling handleAlert:', alert);
       handleAlert(alert);
+    } else {
+      console.log('⚠️ No alert object created!');
     }
   };
 
   const handleAlert = (alert) => {
-    console.log('🔔 handleAlert called with:', alert);
-    console.log('Current queue before:', alertQueue());
-    console.log('Current animation phase:', animationPhase());
+    console.log('🔔🔔🔔 handleAlert called with:', alert);
+    console.log('📊 Current queue before:', alertQueue());
+    console.log('🎭 Current animation phase:', animationPhase());
 
-    setAlertQueue([...alertQueue(), alert]);
-    console.log('Queue updated to:', alertQueue());
+    const newQueue = [...alertQueue(), alert];
+    setAlertQueue(newQueue);
+    console.log('📊 Queue updated to:', newQueue);
+    console.log('📊 Queue length:', newQueue.length);
 
     if (animationPhase() === 'hidden') {
-      console.log('Animation phase is hidden, calling showNextAlert');
+      console.log('✅ Animation phase is hidden, calling showNextAlert');
       showNextAlert();
     } else {
-      console.log('Animation phase is NOT hidden, alert queued');
+      console.log('⏳ Animation phase is NOT hidden (' + animationPhase() + '), alert queued');
     }
   };
 
@@ -483,20 +515,23 @@ function AlertsOverlay() {
   };
 
   const showNextAlert = () => {
-    console.log('showNextAlert called');
+    console.log('🎬🎬🎬 showNextAlert called');
     const queue = alertQueue();
-    console.log('Current queue:', queue);
+    console.log('📊 Current queue:', queue);
+    console.log('📊 Queue length:', queue.length);
 
     if (queue.length === 0) {
-      console.log('Queue is empty, returning');
+      console.log('⚠️ Queue is empty, returning');
       return;
     }
 
     const [next, ...rest] = queue;
-    console.log('Showing alert:', next);
+    console.log('🎯 Showing alert:', next);
+    console.log('📊 Remaining queue:', rest);
 
     setAlertQueue(rest);
     setCurrentAlert(next);
+    console.log('✅ Current alert set to:', next);
 
     const config = alertConfigs[next.type] || alertConfigs.follow;
 
@@ -630,9 +665,12 @@ function AlertsOverlay() {
   });
 
   createEffect(() => {
-    console.log('=== ALERTS OVERLAY INITIALIZED ===');
+    console.log('═══════════════════════════════════════════');
+    console.log('🚀 ALERTS OVERLAY INITIALIZED');
+    console.log('═══════════════════════════════════════════');
+    console.log('🎨 Initializing Babylon.js 3D engine...');
     initBabylon();
-    console.log('Connecting to WebSocket:', WEBARCADE_WS);
+    console.log('🔌 Connecting to WebSocket:', WEBARCADE_WS);
     connectWebSocket();
 
     // Expose test function
@@ -659,7 +697,7 @@ function AlertsOverlay() {
   });
 
   return (
-    <div class="fixed inset-0 pointer-events-none">
+    <div class="fixed inset-0 pointer-events-none bg-transparent">
       {/* Babylon.js 3D Canvas */}
       <canvas ref={canvasRef} class="w-full h-full absolute inset-0 z-50" style={{ display: 'block' }} />
 

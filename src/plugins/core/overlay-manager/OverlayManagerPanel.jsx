@@ -12,7 +12,7 @@ export default function OverlayManagerPanel() {
   const fetchOverlayFiles = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${BRIDGE_URL}/api/overlay-files`);
+      const response = await fetch(`${BRIDGE_URL}/overlay-manager/files`);
       const data = await response.json();
       setOverlayFiles(data);
     } catch (error) {
@@ -50,13 +50,13 @@ export default function OverlayManagerPanel() {
     if (!confirm(`Delete overlay "${file.name}"?`)) return;
 
     try {
-      const response = await fetch(`${BRIDGE_URL}/api/overlay-files/${file.name}.jsx`, {
+      const response = await fetch(`${BRIDGE_URL}/overlay-manager/files/${file.name}.jsx`, {
         method: 'DELETE'
       });
 
       if (response.ok) {
         // Trigger rebuild
-        await fetch(`${BRIDGE_URL}/api/rebuild-overlays`, { method: 'POST' });
+        await fetch(`${BRIDGE_URL}/overlay-manager/rebuild`, { method: 'POST' });
         await fetchOverlayFiles();
       } else {
         throw new Error('Failed to delete overlay');

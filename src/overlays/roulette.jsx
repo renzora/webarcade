@@ -112,6 +112,7 @@ function RouletteOverlay() {
         const data = JSON.parse(event.data);
         console.log('[Roulette] WebSocket message:', data);
 
+        // Handle connection event (old format)
         if (data.type === 'connected' && data.channel) {
           const channelName = data.channel;
           setChannel(channelName);
@@ -119,29 +120,37 @@ function RouletteOverlay() {
           loadCurrentGame();
           loadHistory();
           loadLayoutPreference();
-        } else if (data.type === 'roulette_game_started') {
-          console.log('[Roulette] Game started! Timer:', data.timer_seconds, 'seconds');
-          setShowWheel(true);
-          setShowResult(false); // Hide any previous results
-          setWinningNumber(null); // Clear previous winning number
-          loadCurrentGame();
-          startIdleSpin();
-          startBetTimer(data.timer_seconds || 30);
-        } else if (data.type === 'roulette_game_stopped') {
-          console.log('[Roulette] Game stopped!');
-          setShowWheel(false);
-          setCurrentGame(null);
-          stopBetTimer();
-          setBets([]);
-          if (idleSpinFrame) cancelAnimationFrame(idleSpinFrame);
-        } else if (data.type === 'roulette_bet_placed') {
-          loadCurrentGame();
-        } else if (data.type === 'roulette_spin_started') {
-          // Start physics-based spin animation
-          startPhysicsSpin(data.game_id);
-        } else if (data.type === 'roulette_result') {
-          handleRouletteResult(data);
-          loadHistory();
+          return;
+        }
+
+        // Handle new plugin-based event format
+        if (data.event_type && data.payload) {
+          const eventType = data.event_type;
+          const payload = data.payload;
+
+          if (eventType === 'roulette.game_started') {
+            console.log('[Roulette] Game started! Timer:', payload.timer_seconds, 'seconds');
+            setShowWheel(true);
+            setShowResult(false);
+            setWinningNumber(null);
+            loadCurrentGame();
+            startIdleSpin();
+            startBetTimer(payload.timer_seconds || 30);
+          } else if (eventType === 'roulette.game_stopped') {
+            console.log('[Roulette] Game stopped!');
+            setShowWheel(false);
+            setCurrentGame(null);
+            stopBetTimer();
+            setBets([]);
+            if (idleSpinFrame) cancelAnimationFrame(idleSpinFrame);
+          } else if (eventType === 'roulette.bet_placed') {
+            loadCurrentGame();
+          } else if (eventType === 'roulette.spin_started') {
+            startPhysicsSpin(payload.game_id);
+          } else if (eventType === 'roulette.result') {
+            handleRouletteResult(payload);
+            loadHistory();
+          }
         }
       } catch (error) {
         console.error('[Roulette] WebSocket message error:', error);
@@ -164,7 +173,7 @@ function RouletteOverlay() {
     if (!channel()) return;
 
     try {
-      const response = await fetch(`${API_URL}/api/roulette/game?channel=${channel()}`);
+      const response = await fetch(`${API_URL}/roulette/game?channel=${channel()}`);
       const data = await response.json();
       setCurrentGame(data.game);
       setBets(data.bets || []);
@@ -215,7 +224,7 @@ function RouletteOverlay() {
     if (!channel()) return;
 
     try {
-      const response = await fetch(`${API_URL}/api/roulette/history?channel=${channel()}&limit=5`);
+      const response = await fetch(`${API_URL}/roulette/history?channel=${channel()}&limit=5`);
       const data = await response.json();
       setHistory(data || []);
     } catch (error) {
@@ -226,7 +235,7 @@ function RouletteOverlay() {
   // Load layout preference from database
   const loadLayoutPreference = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/settings?key=roulette-swap-layout`);
+      const response = await fetch(`${API_URL}/system/settings?key=roulette-swap-layout`);
       const data = await response.json();
       if (data.value === 'true') {
         console.log('[Roulette] Setting swapped layout from database');
@@ -355,7 +364,7 @@ function RouletteOverlay() {
 
     // Send result to backend
     try {
-      const response = await fetch(`${API_URL}/api/roulette/result`, {
+      const response = await fetch(`${API_URL}/roulette/result`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -455,7 +464,7 @@ function RouletteOverlay() {
       // Auto-start new game after result display
       try {
         console.log('[Roulette] Calling auto-start API for channel:', channel());
-        const response = await fetch(`${API_URL}/api/roulette/start?channel=${channel()}`);
+        const response = await fetch(`${API_URL}/roulette/start?channel=${channel()}`);
 
         if (!response.ok) {
           console.error('[Roulette] HTTP error:', response.status, response.statusText);
@@ -531,7 +540,7 @@ function RouletteOverlay() {
   });
 
   return (
-    <div class="fixed inset-0 pointer-events-none overflow-hidden">
+    <div class="fixed inset-0 pointer-events-none overflow-hidden bg-transparent">
       <Show when={showWheel()}>
         <div class={`flex h-full ${swapLayout() ? 'flex-row-reverse' : ''}`}>
           {/* LEFT/RIGHT SIDE: Betting Table */}

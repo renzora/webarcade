@@ -24,6 +24,7 @@ pub struct CaptureState {
 #[derive(Clone)]
 pub struct ActiveCapture {
     pub id: String,
+    #[allow(dead_code)]
     pub screen_id: usize,
     pub latest_frame: Arc<Mutex<Option<Vec<u8>>>>,
     pub running: Arc<Mutex<bool>>,

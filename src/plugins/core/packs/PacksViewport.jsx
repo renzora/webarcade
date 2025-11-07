@@ -30,7 +30,7 @@ const PacksViewport = () => {
   // Load packs
   const loadPacks = async () => {
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/packs`);
+      const response = await fetch(`${WEBARCADE_API}/packs`);
       const data = await response.json();
       setPacks(data);
     } catch (error) {
@@ -41,7 +41,7 @@ const PacksViewport = () => {
   // Load items
   const loadItems = async () => {
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/packs/items`);
+      const response = await fetch(`${WEBARCADE_API}/packs/items`);
       const data = await response.json();
       setItems(data);
     } catch (error) {
@@ -56,7 +56,7 @@ const PacksViewport = () => {
 
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/packs`, {
+      await fetch(`${WEBARCADE_API}/packs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -80,7 +80,7 @@ const PacksViewport = () => {
 
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/packs`, {
+      await fetch(`${WEBARCADE_API}/packs`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(pack)
@@ -99,7 +99,7 @@ const PacksViewport = () => {
 
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/packs`, {
+      await fetch(`${WEBARCADE_API}/packs`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id })
@@ -115,7 +115,7 @@ const PacksViewport = () => {
   const togglePack = async (id) => {
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/packs/toggle`, {
+      await fetch(`${WEBARCADE_API}/packs/toggle`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id })
@@ -134,7 +134,7 @@ const PacksViewport = () => {
 
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/packs/items`, {
+      await fetch(`${WEBARCADE_API}/packs/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -160,7 +160,7 @@ const PacksViewport = () => {
 
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/packs/items`, {
+      await fetch(`${WEBARCADE_API}/packs/items`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(item)
@@ -179,7 +179,7 @@ const PacksViewport = () => {
 
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/packs/items`, {
+      await fetch(`${WEBARCADE_API}/packs/items`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id })
@@ -195,7 +195,7 @@ const PacksViewport = () => {
   const toggleItem = async (id) => {
     setLoading(true);
     try {
-      await fetch(`${WEBARCADE_API}/api/packs/items/toggle`, {
+      await fetch(`${WEBARCADE_API}/packs/items/toggle`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id })
@@ -213,7 +213,7 @@ const PacksViewport = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/packs/seed`, {
+      const response = await fetch(`${WEBARCADE_API}/packs/seed`, {
         method: 'POST'
       });
       const data = await response.json();
@@ -233,7 +233,7 @@ const PacksViewport = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/packs/clear`, {
+      const response = await fetch(`${WEBARCADE_API}/packs/clear`, {
         method: 'DELETE'
       });
       const data = await response.json();

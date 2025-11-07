@@ -6,6 +6,7 @@ use anyhow::Result;
 
 mod database;
 mod events;
+mod router;
 
 pub use database::*;
 pub use events::*;
@@ -28,15 +29,19 @@ impl Plugin for LevelsPlugin {
     async fn init(&self, ctx: &PluginContext) -> Result<()> {
         log::info!("[Levels] Initializing plugin...");
 
+        // Note: Table already exists with (channel, username) as unique key
+        // Schema: id, channel, username, xp, level, total_messages, last_xp_gain
         ctx.migrate(&[
             r#"
             CREATE TABLE IF NOT EXISTS user_levels (
-                user_id TEXT PRIMARY KEY,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel TEXT NOT NULL,
                 username TEXT NOT NULL,
-                total_xp INTEGER NOT NULL DEFAULT 0,
+                xp INTEGER NOT NULL DEFAULT 0,
                 level INTEGER NOT NULL DEFAULT 1,
-                last_xp_at INTEGER NOT NULL,
-                created_at INTEGER NOT NULL
+                total_messages INTEGER NOT NULL DEFAULT 0,
+                last_xp_gain INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(channel, username)
             );
 
             CREATE TABLE IF NOT EXISTS xp_transactions (
@@ -47,6 +52,8 @@ impl Plugin for LevelsPlugin {
                 created_at INTEGER NOT NULL
             );
 
+            CREATE INDEX IF NOT EXISTS idx_user_levels ON user_levels(channel, username);
+            CREATE INDEX IF NOT EXISTS idx_user_levels_leaderboard ON user_levels(channel, level DESC, xp DESC);
             CREATE INDEX IF NOT EXISTS idx_user_levels_level ON user_levels(level DESC);
             CREATE INDEX IF NOT EXISTS idx_xp_transactions_user ON xp_transactions(user_id);
             "#,
@@ -54,7 +61,7 @@ impl Plugin for LevelsPlugin {
 
         // Register services
         ctx.provide_service("add_xp", |input| async move {
-            let user_id: String = serde_json::from_value(input["user_id"].clone())?;
+            let channel: String = serde_json::from_value(input["channel"].clone())?;
             let username: String = serde_json::from_value(input["username"].clone())?;
             let amount: i64 = serde_json::from_value(input["amount"].clone())?;
             let reason: Option<String> = serde_json::from_value(input["reason"].clone()).ok();
@@ -62,7 +69,7 @@ impl Plugin for LevelsPlugin {
             let conn = crate::core::database::get_database_path();
             let conn = rusqlite::Connection::open(conn)?;
 
-            let (old_level, new_level) = database::add_xp(&conn, &user_id, &username, amount, reason.as_deref())?;
+            let (old_level, new_level) = database::add_xp(&conn, &channel, &username, amount, reason.as_deref())?;
             Ok(serde_json::json!({
                 "old_level": old_level,
                 "new_level": new_level,
@@ -71,24 +78,29 @@ impl Plugin for LevelsPlugin {
         }).await;
 
         ctx.provide_service("get_level", |input| async move {
-            let user_id: String = serde_json::from_value(input["user_id"].clone())?;
+            let channel: String = serde_json::from_value(input["channel"].clone())?;
+            let username: String = serde_json::from_value(input["username"].clone())?;
 
             let conn = crate::core::database::get_database_path();
             let conn = rusqlite::Connection::open(conn)?;
 
-            let user_level = database::get_user_level(&conn, &user_id)?;
+            let user_level = database::get_user_level(&conn, &channel, &username)?;
             Ok(serde_json::to_value(user_level)?)
         }).await;
 
         ctx.provide_service("get_leaderboard", |input| async move {
+            let channel: String = serde_json::from_value(input["channel"].clone())?;
             let limit: usize = serde_json::from_value(input["limit"].clone()).unwrap_or(10);
 
             let conn = crate::core::database::get_database_path();
             let conn = rusqlite::Connection::open(conn)?;
 
-            let leaderboard = database::get_leaderboard(&conn, limit)?;
+            let leaderboard = database::get_leaderboard(&conn, &channel, limit)?;
             Ok(serde_json::to_value(leaderboard)?)
         }).await;
+
+        // Register HTTP routes
+        router::register_routes(ctx).await?;
 
         log::info!("[Levels] Plugin initialized successfully");
         Ok(())
@@ -103,13 +115,13 @@ impl Plugin for LevelsPlugin {
             let mut events = ctx_clone.subscribe_to("twitch.chat_message").await;
 
             while let Ok(event) = events.recv().await {
-                if let (Ok(user_id), Ok(username)) = (
-                    serde_json::from_value::<String>(event.payload["user_id"].clone()),
+                if let (Ok(channel), Ok(username)) = (
+                    serde_json::from_value::<String>(event.payload["channel"].clone()),
                     serde_json::from_value::<String>(event.payload["username"].clone()),
                 ) {
                     // Award 1 XP per message (with cooldown handled elsewhere)
                     let _ = ctx_clone.call_service("levels", "add_xp", serde_json::json!({
-                        "user_id": user_id,
+                        "channel": channel,
                         "username": username,
                         "amount": 1,
                         "reason": "Chat message"

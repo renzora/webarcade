@@ -123,7 +123,7 @@ function TodosOverlay() {
   });
 
   return (
-    <div class="fixed inset-0 pointer-events-none overflow-hidden font-sans">
+    <div class="fixed inset-0 pointer-events-none overflow-hidden font-sans bg-transparent">
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(-10px); }

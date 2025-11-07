@@ -18,7 +18,7 @@ export default function WatchtimeViewport() {
   onMount(async () => {
     const currentStatus = await twitchStore.fetchStatus();
     if (currentStatus) {
-      setStatus(currentStatus);
+      setStatus({ ...currentStatus, connected_channels: currentStatus.connected_channels || [] });
       if (currentStatus.connected_channels && currentStatus.connected_channels.length > 0) {
         setSelectedChannel(currentStatus.connected_channels[0]);
         await loadWatchers(currentStatus.connected_channels[0]);
@@ -33,7 +33,7 @@ export default function WatchtimeViewport() {
     try {
       setLoading(true);
       const offset = (page - 1) * ITEMS_PER_PAGE;
-      const response = await bridgeFetch(`/database/watchtime/all?channel=${channel}&limit=${ITEMS_PER_PAGE}&offset=${offset}`);
+      const response = await bridgeFetch(`/watchtime/all?channel=${channel}&limit=${ITEMS_PER_PAGE}&offset=${offset}`);
       const data = await response.json();
       setWatchers(data.watchers || []);
       setTotalWatchers(data.total || 0);
@@ -53,7 +53,7 @@ export default function WatchtimeViewport() {
 
     try {
       setLoading(true);
-      const response = await bridgeFetch(`/database/watchtime/search?channel=${channel}&search=${encodeURIComponent(query)}`);
+      const response = await bridgeFetch(`/watchtime/search?channel=${channel}&search=${encodeURIComponent(query)}`);
       const data = await response.json();
       setWatchers(data || []);
       setTotalWatchers(data.length || 0);
@@ -127,13 +127,13 @@ export default function WatchtimeViewport() {
           <h2 class="text-lg font-semibold">Watchtime</h2>
         </div>
 
-        <Show when={status().connected_channels.length > 0}>
+        <Show when={status().connected_channels?.length > 0}>
           <select
             class="select select-bordered select-sm"
             value={selectedChannel()}
             onChange={(e) => handleChannelChange(e.target.value)}
           >
-            {status().connected_channels.map((channel) => (
+            {status().connected_channels?.map((channel) => (
               <option value={channel}>#{channel}</option>
             ))}
           </select>

@@ -1,5 +1,7 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
+
 pub mod modules;
-pub mod commands;
 pub mod core;
 pub mod plugins;
 

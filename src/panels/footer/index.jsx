@@ -2,6 +2,7 @@ import { createSignal, createEffect, onCleanup, For } from 'solid-js';
 import { editorStore } from '@/layout/stores/EditorStore';
 import { IconAlertTriangle } from '@tabler/icons-solidjs';
 import { footerButtons } from '@/api/plugin';
+import BuildProgress from './BuildProgress';
 
 const Footer = () => {
   const [engineInfo] = createSignal('Engine Ready');
@@ -11,18 +12,19 @@ const Footer = () => {
   createEffect(() => {
     const fetchSystemStats = async () => {
       try {
-        const response = await fetch('http://localhost:3001/system/stats');
+        const response = await fetch('/system/stats');
         if (response.ok) {
           const stats = await response.json();
           setSystemStats(stats);
         }
       } catch (error) {
+        // Silently fail - system stats are not critical
       }
     };
-    
+
     fetchSystemStats();
-    const interval = setInterval(fetchSystemStats, 100); // 100ms = near real-time
-    
+    const interval = setInterval(fetchSystemStats, 2000); // Poll every 2 seconds
+
     onCleanup(() => clearInterval(interval));
   });
   
@@ -152,10 +154,16 @@ const Footer = () => {
       {/* Right side - Status info */}
       <div class="flex items-center gap-4">
         {renderSystemStatsInfo()}
+
+        <span class="text-base-content/30">|</span>
+
+        {/* Build Progress */}
+        <BuildProgress />
+
         <span class="text-base-content/90">
           {engineInfo()}
         </span>
-        
+
         {/* Plugin footer buttons */}
         <For each={Array.from(footerButtons().entries())}>
           {([_id, button]) => {

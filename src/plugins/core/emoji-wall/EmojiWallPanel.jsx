@@ -89,7 +89,7 @@ export default function EmojiWallPanel() {
 
   // Send settings update to overlay
   const broadcastSettings = () => {
-    fetch(`${BRIDGE_URL}/api/broadcast`, {
+    fetch(`${BRIDGE_URL}/system/broadcast`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -144,7 +144,7 @@ export default function EmojiWallPanel() {
 
   // Spawn a single Twitch emote manually
   const spawnEmote = (emoteId, emoteName) => {
-    fetch(`${BRIDGE_URL}/api/broadcast`, {
+    fetch(`${BRIDGE_URL}/system/broadcast`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -157,7 +157,7 @@ export default function EmojiWallPanel() {
 
   // Clear all emotes
   const clearEmotes = () => {
-    fetch(`${BRIDGE_URL}/api/broadcast`, {
+    fetch(`${BRIDGE_URL}/system/broadcast`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

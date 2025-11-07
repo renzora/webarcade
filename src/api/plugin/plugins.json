@@ -65,9 +65,9 @@
     },
     {
       "enabled": true,
-      "id": "song-requests-plugin",
+      "id": "song_requests-plugin",
       "main": "index.jsx",
-      "path": "/src/plugins/core/song-requests",
+      "path": "/src/plugins/core/song_requests",
       "priority": 2
     },
     {

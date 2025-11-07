@@ -5,12 +5,14 @@ use crate::core::plugin::{Plugin, PluginMetadata};
 use crate::core::plugin_context::PluginContext;
 use crate::core::events::EventBus;
 use crate::core::services::ServiceRegistry;
+use crate::core::plugin_router::RouterRegistry;
 
 pub struct PluginManager {
     plugins: HashMap<String, Box<dyn Plugin>>,
     contexts: HashMap<String, Arc<PluginContext>>,
     event_bus: Arc<EventBus>,
     service_registry: Arc<ServiceRegistry>,
+    router_registry: RouterRegistry,
     config: HashMap<String, serde_json::Value>,
     db_path: String,
 }
@@ -19,6 +21,7 @@ impl PluginManager {
     pub fn new(
         event_bus: Arc<EventBus>,
         service_registry: Arc<ServiceRegistry>,
+        router_registry: RouterRegistry,
         config: HashMap<String, serde_json::Value>,
         db_path: String,
     ) -> Self {
@@ -27,6 +30,7 @@ impl PluginManager {
             contexts: HashMap::new(),
             event_bus,
             service_registry,
+            router_registry,
             config,
             db_path,
         }
@@ -44,6 +48,7 @@ impl PluginManager {
             plugin_id.clone(),
             self.event_bus.clone(),
             self.service_registry.clone(),
+            self.router_registry.clone_registry(),
             self.config.get(&plugin_id).cloned().unwrap_or(serde_json::json!({})),
             self.db_path.clone(),
         ));

@@ -9,7 +9,7 @@ const ConfessionsViewport = () => {
   // Fetch confessions from the backend
   const fetchConfessions = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/confessions');
+      const response = await fetch('http://localhost:3001/confessions');
       if (response.ok) {
         const data = await response.json();
         setConfessions(data);
@@ -28,7 +28,7 @@ const ConfessionsViewport = () => {
     }
 
     try {
-      const response = await fetch(`http://localhost:3001/api/confessions/${id}`, {
+      const response = await fetch(`http://localhost:3001/confessions/${id}`, {
         method: 'DELETE'
       });
 

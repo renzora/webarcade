@@ -31,8 +31,8 @@ function TickerOverlay() {
 
       // Fetch both messages and events in parallel
       const [messagesResponse, eventsResponse] = await Promise.all([
-        fetch(`${WEBARCADE_API}/api/ticker/messages/enabled`),
-        fetch(`${WEBARCADE_API}/api/ticker/events`)
+        fetch(`${WEBARCADE_API}/ticker/messages/enabled`),
+        fetch(`${WEBARCADE_API}/ticker/events`)
       ]);
 
       const messagesData = await messagesResponse.json();
@@ -76,7 +76,7 @@ function TickerOverlay() {
   // Load stream status config
   const loadStatusConfig = async () => {
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/status/config`);
+      const response = await fetch(`${WEBARCADE_API}/status/config`);
       const data = await response.json();
 
       // Calculate days from start date if available
@@ -105,7 +105,7 @@ function TickerOverlay() {
   // Load ticker segments
   const loadSegments = async () => {
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/ticker/segments`);
+      const response = await fetch(`${WEBARCADE_API}/ticker/segments`);
       const data = await response.json();
       console.log('📺 Ticker segments loaded (all):', data);
       const enabledSegments = data.filter(s => s.enabled);
@@ -398,7 +398,7 @@ function TickerOverlay() {
   };
 
   return (
-    <div class="fixed inset-0 pointer-events-none overflow-hidden">
+    <div class="fixed inset-0 pointer-events-none overflow-hidden bg-transparent">
       {/* Ticker Bar at Bottom */}
       <div class={`ticker-bar absolute bottom-0 left-0 right-0 ${breakingNews().active ? 'bg-gradient-to-r from-red-900/95 via-red-800/95 to-red-900/95' : 'bg-gradient-to-r from-purple-900/95 via-blue-900/95 to-purple-900/95'} backdrop-blur-sm border-t-4 border-black/20 shadow-lg h-16 flex items-center overflow-hidden`}>
         {/* Status Elements - Left Side */}

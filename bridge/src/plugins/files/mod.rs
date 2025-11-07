@@ -1,3 +1,5 @@
+mod router;
+
 use crate::core::plugin::{Plugin, PluginMetadata};
 use crate::core::plugin_context::PluginContext;
 use async_trait::async_trait;
@@ -84,6 +86,9 @@ impl Plugin for FilesPlugin {
             Ok(serde_json::json!({ "files": entries }))
         }).await;
 
+        // Register HTTP routes
+        router::register_routes(ctx).await?;
+
         log::info!("[Files] Plugin initialized successfully");
         Ok(())
     }
@@ -99,7 +104,7 @@ impl Plugin for FilesPlugin {
     }
 }
 
-fn validate_file_path(path: &str) -> Result<()> {
+pub(crate) fn validate_file_path(path: &str) -> Result<()> {
     // Prevent path traversal
     if path.contains("..") {
         return Err(anyhow::anyhow!("Path traversal not allowed"));
@@ -116,7 +121,7 @@ fn validate_file_path(path: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_file_extension(path: &str) -> Result<()> {
+pub(crate) fn validate_file_extension(path: &str) -> Result<()> {
     let path = std::path::Path::new(path);
 
     if let Some(extension) = path.extension().and_then(|s| s.to_str()) {

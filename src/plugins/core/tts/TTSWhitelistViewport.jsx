@@ -15,7 +15,7 @@ export default function TTSWhitelistViewport() {
   onMount(async () => {
     const currentStatus = await twitchStore.fetchStatus();
     if (currentStatus) {
-      setStatus(currentStatus);
+      setStatus({ ...currentStatus, connected_channels: currentStatus.connected_channels || [] });
       if (currentStatus.connected_channels && currentStatus.connected_channels.length > 0) {
         setSelectedChannel(currentStatus.connected_channels[0]);
         await loadTTSSettings(currentStatus.connected_channels[0]);
@@ -29,7 +29,7 @@ export default function TTSWhitelistViewport() {
     if (!channel) return;
 
     try {
-      const response = await bridgeFetch(`/database/tts/settings?channel=${channel}`);
+      const response = await bridgeFetch(`/tts/settings?channel=${channel}`);
       const data = await response.json();
       setTtsEnabled(data.enabled);
       setTtsMode(data.mode);
@@ -43,7 +43,7 @@ export default function TTSWhitelistViewport() {
 
     try {
       setLoading(true);
-      const response = await bridgeFetch(`/database/tts/users?channel=${channel}`);
+      const response = await bridgeFetch(`/tts/whitelist?channel=${channel}`);
       const data = await response.json();
       setUsers(data);
     } catch (e) {
@@ -64,7 +64,7 @@ export default function TTSWhitelistViewport() {
     if (!username || !selectedChannel()) return;
 
     try {
-      const response = await bridgeFetch('/database/tts/users/add', {
+      const response = await bridgeFetch('/tts/whitelist/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -84,7 +84,7 @@ export default function TTSWhitelistViewport() {
 
   const removeUser = async (username) => {
     try {
-      const response = await bridgeFetch('/database/tts/users', {
+      const response = await bridgeFetch('/tts/whitelist', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -103,7 +103,7 @@ export default function TTSWhitelistViewport() {
 
   const updateTTSSettings = async (enabled, mode) => {
     try {
-      const response = await bridgeFetch('/database/tts/settings', {
+      const response = await bridgeFetch('/tts/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -139,13 +139,13 @@ export default function TTSWhitelistViewport() {
           <h2 class="text-lg font-semibold">TTS Settings</h2>
         </div>
 
-        <Show when={status().connected_channels.length > 0}>
+        <Show when={status().connected_channels?.length > 0}>
           <select
             class="select select-bordered select-sm"
             value={selectedChannel()}
             onChange={(e) => handleChannelChange(e.target.value)}
           >
-            {status().connected_channels.map((channel) => (
+            {status().connected_channels?.map((channel) => (
               <option value={channel}>#{channel}</option>
             ))}
           </select>

@@ -3,6 +3,7 @@ import { rspack } from '@rspack/core'
 import { resolve } from 'node:path'
 import fs from 'fs'
 import refresh from 'solid-refresh/babel'
+import { RspackProgressPlugin } from './rspack-progress-plugin.js'
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -62,7 +63,16 @@ const config = {
             options: {
               postcssOptions: {
                 plugins: [
-                  '@tailwindcss/postcss'
+                  '@tailwindcss/postcss',
+                  // Remove all CSS comments including daisyUI banner
+                  {
+                    postcssPlugin: 'remove-comments',
+                    Once(root) {
+                      root.walkComments(comment => {
+                        comment.remove();
+                      });
+                    }
+                  }
                 ]
               }
             }
@@ -97,6 +107,7 @@ const config = {
       '__DEV__': JSON.stringify(!isProduction),
     }),
     !isProduction && new rspack.HotModuleReplacementPlugin(),
+    !isProduction && new RspackProgressPlugin({ backendUrl: 'http://localhost:3001' }),
     // Bridge server runs standalone on port 3001
   ].filter(Boolean),
   
@@ -126,6 +137,13 @@ const config = {
       },
     },
     minimize: isProduction,
+    minimizer: isProduction ? [
+      new rspack.LightningCssMinimizerRspackPlugin({
+        minimizerOptions: {
+          targets: 'defaults',
+        },
+      }),
+    ] : [],
   },
   
   performance: {
@@ -168,6 +186,11 @@ if (!isProduction) {
         directory: resolve(import.meta.dirname, 'dist'),
         publicPath: '/',
       },
+      {
+        directory: resolve(import.meta.dirname, 'dist/overlays'),
+        publicPath: '/overlay',
+        watch: true,
+      },
     ],
     headers: {
       'Access-Control-Allow-Origin': '*',
@@ -192,7 +215,18 @@ if (!isProduction) {
     allowedHosts: 'all',
     proxy: [
       {
-        context: ['/system', '/health', '/twitch', '/database', '/hue', '/withings', '/discord', '/song-requests', '/alexa'],
+        context: [
+          '/system', '/health', '/twitch', '/database', '/hue', '/withings', '/discord', '/song_requests', '/alexa',
+          '/ticker', '/status', '/goals', '/counters', '/wheel', '/auction', '/roulette', '/notes', '/packs',
+          '/confessions', '/todos', '/watchtime', '/viewer-stats', '/tts', '/levels', '/text_commands',
+          '/user_profiles', '/files', '/household', '/currency', '/layouts', '/overlay-manager'
+        ],
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false,
+      },
+      {
+        context: ['/overlay/layout'],
         target: 'http://localhost:3001',
         changeOrigin: true,
         secure: false,

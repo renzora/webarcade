@@ -90,7 +90,7 @@ function ViewerCounterOverlay() {
   });
 
   return (
-    <div class="fixed inset-0 pointer-events-none overflow-hidden font-sans">
+    <div class="fixed inset-0 pointer-events-none overflow-hidden font-sans bg-transparent">
       {/* Viewer Counter - Top Right */}
       <div class="absolute top-4 right-4">
         <div class="bg-gradient-to-r from-purple-900/95 via-indigo-900/95 to-purple-900/95 backdrop-blur-sm px-5 py-3 rounded-lg shadow-2xl border-2 border-purple-500/50 flex items-center gap-3">

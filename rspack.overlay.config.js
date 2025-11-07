@@ -93,15 +93,24 @@ const config = {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WebArcade Overlay - ${name}</title>
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
+    /* Force light color scheme to prevent browser theme from affecting background */
+    :root {
+      color-scheme: only light;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html, body, #root {
+      margin: 0 !important;
+      padding: 0 !important;
       background: transparent !important;
       background-color: transparent !important;
-      overflow: hidden;
+      overflow: hidden !important;
     }
-    #root {
+    /* Override any DaisyUI theme backgrounds */
+    body, html, #root, .bg-base-100, .bg-base-200, .bg-base-300 {
       background: transparent !important;
+      background-color: transparent !important;
     }
     @keyframes slideUp {
       from { opacity: 0; transform: translateY(30px) scale(0.95); }
@@ -130,7 +139,7 @@ const config = {
     path: resolve(import.meta.dirname, 'dist/overlays'),
     filename: '[name].js',
     clean: true,
-    publicPath: '/',
+    publicPath: '/overlay/',
   }
 };
 

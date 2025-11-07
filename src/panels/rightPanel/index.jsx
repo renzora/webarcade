@@ -9,7 +9,8 @@ import { IconBox } from '@tabler/icons-solidjs';
 const RightPanel = () => {
   const { showContextMenu } = useViewportContextMenu();
   const [_contextMenu, _setContextMenu] = createSignal(null);
-  
+  const [isCollapsed, setIsCollapsed] = createSignal(false);
+
   // Get reactive store values
   const selection = () => editorStore.selection;
   const ui = () => editorStore.ui;
@@ -141,16 +142,28 @@ const RightPanel = () => {
 
   const handleRightPanelToggle = () => {
     const currentState = isScenePanelOpen();
-    setScenePanelOpen(!currentState);
-    
-    if (!currentState && (!selectedRightTool() || selectedRightTool() === 'select')) {
-      // Get the first available tab from property tabs
-      const availableTabs = Array.from(propertyTabs().values())
-        .filter(tab => !tab.condition || tab.condition())
-        .sort((a, b) => (a.order || 0) - (b.order || 0));
-      
-      const firstTabId = availableTabs.length > 0 ? availableTabs[0].id : null;
-      setSelectedRightTool(firstTabId);
+
+    if (currentState && !isCollapsed()) {
+      // Currently expanded -> collapse to icons
+      setIsCollapsed(true);
+    } else if (currentState && isCollapsed()) {
+      // Currently collapsed -> hide completely
+      setScenePanelOpen(false);
+      setIsCollapsed(false);
+    } else {
+      // Currently hidden -> show expanded
+      setScenePanelOpen(true);
+      setIsCollapsed(false);
+
+      if (!selectedRightTool() || selectedRightTool() === 'select') {
+        // Get the first available tab from property tabs
+        const availableTabs = Array.from(propertyTabs().values())
+          .filter(tab => !tab.condition || tab.condition())
+          .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+        const firstTabId = availableTabs.length > 0 ? availableTabs[0].id : null;
+        setSelectedRightTool(firstTabId);
+      }
     }
   };
   
@@ -211,32 +224,34 @@ const RightPanel = () => {
       <div
         className={`relative no-select flex-shrink-0 h-full ${!isResizingRight() ? 'transition-all duration-300' : ''}`}
         style={{
-          width: isScenePanelOpen() ? `${rightPanelWidth()}px` : '0px'
+          width: isScenePanelOpen() ? (isCollapsed() ? '48px' : `${rightPanelWidth()}px`) : '0px'
         }}
       >
         <Show when={isScenePanelOpen()}>
           <div className="relative h-full flex">
-            {/* Resize handle */}
-            <PanelResizer
-              type="right"
-              isResizing={isResizingRight}
-              onResizeStart={handleRightResizeStart}
-              onResizeEnd={handleRightResizeEnd}
-              onResize={handleRightResizeMove}
-              isLeftPanel={isLeftPanel()}
-              position={{
-                left: '-4px',
-                top: 0,
-                bottom: 0,
-                width: '8px',
-                zIndex: 30
-              }}
-              className="!bg-transparent !opacity-0 hover:!bg-primary/20 hover:!opacity-100"
-            />
+            {/* Resize handle - hide when collapsed */}
+            <Show when={!isCollapsed()}>
+              <PanelResizer
+                type="right"
+                isResizing={isResizingRight}
+                onResizeStart={handleRightResizeStart}
+                onResizeEnd={handleRightResizeEnd}
+                onResize={handleRightResizeMove}
+                isLeftPanel={isLeftPanel()}
+                position={{
+                  left: '-4px',
+                  top: 0,
+                  bottom: 0,
+                  width: '8px',
+                  zIndex: 30
+                }}
+                className="!bg-transparent !opacity-0 hover:!bg-primary/20 hover:!opacity-100"
+              />
+            </Show>
 
             <div className="flex-1 min-w-0 overflow-hidden">
               <div className="flex flex-col h-full">
-                {/* Close button - positioned inside panel */}
+                {/* Collapse/Expand button - positioned inside panel */}
                 <div className="absolute top-2 right-2 z-10">
                   <button
                     onClick={(e) => {
@@ -252,7 +267,7 @@ const RightPanel = () => {
                       'border-top-left-radius': '6px',
                       'border-bottom-left-radius': '6px'
                     }}
-                    title="Close panel"
+                    title={isCollapsed() ? "Hide panel" : "Collapse panel"}
                   >
                     <div className="w-3 h-3 flex items-center justify-center">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="w-3 h-3">
@@ -262,7 +277,7 @@ const RightPanel = () => {
 
                     <div className="absolute right-full mr-1 top-1/2 -translate-y-1/2 bg-base-300 backdrop-blur-sm border border-base-300 text-base-content text-xs px-3 py-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-2xl"
                          style={{ 'z-index': 50 }}>
-                      Close panel
+                      {isCollapsed() ? "Hide panel" : "Collapse panel"}
                       <div className="absolute left-full top-1/2 -translate-y-1/2 w-0 h-0 border-l-4 border-l-base-300 border-t-4 border-t-transparent border-b-4 border-b-transparent"></div>
                     </div>
                   </button>
@@ -276,7 +291,12 @@ const RightPanel = () => {
                     <div className="w-auto flex-shrink-0 h-full">
                       <TabMenu
                         selectedTool={selectedRightTool()}
-                        onToolSelect={setSelectedRightTool}
+                        onToolSelect={(tool) => {
+                          setSelectedRightTool(tool);
+                          if (isCollapsed()) {
+                            setIsCollapsed(false);
+                          }
+                        }}
                         scenePanelOpen={isScenePanelOpen()}
                         onScenePanelToggle={handleRightPanelToggle}
                         isLeftPanel={isLeftPanel()}
@@ -288,10 +308,12 @@ const RightPanel = () => {
                       />
                     </div>
 
-                    {/* Tab content */}
-                    <div className="flex-1 min-w-0 overflow-y-auto scrollbar-thin">
-                      {renderTabContent()}
-                    </div>
+                    {/* Tab content - hide when collapsed */}
+                    <Show when={!isCollapsed()}>
+                      <div className="flex-1 min-w-0 overflow-y-auto scrollbar-thin">
+                        {renderTabContent()}
+                      </div>
+                    </Show>
                   </div>
                 </div>
               </div>

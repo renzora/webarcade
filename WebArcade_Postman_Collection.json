@@ -1,0 +1,2843 @@
+{
+  "info": {
+    "name": "WebArcade Bridge API",
+    "description": "Complete API collection for WebArcade Bridge with all plugin endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "2.0.0"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:3001",
+      "type": "string"
+    },
+    {
+      "key": "wsUrl",
+      "value": "ws://127.0.0.1:3002",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auction",
+      "item": [
+        {
+          "name": "Get Active Auctions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auction/active",
+              "host": ["{{baseUrl}}"],
+              "path": ["auction", "active"]
+            }
+          }
+        },
+        {
+          "name": "Get Specific Auction",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auction/:auction_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["auction", ":auction_id"],
+              "variable": [
+                {
+                  "key": "auction_id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Auction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"item\": \"Item Name\",\n  \"starting_bid\": 100,\n  \"duration_seconds\": 300\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auction/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["auction", "create"]
+            }
+          }
+        },
+        {
+          "name": "Place Bid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"auction_id\": 1,\n  \"user_id\": \"user123\",\n  \"amount\": 150\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auction/bid",
+              "host": ["{{baseUrl}}"],
+              "path": ["auction", "bid"]
+            }
+          }
+        },
+        {
+          "name": "Get Auction Bids",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auction/:auction_id/bids",
+              "host": ["{{baseUrl}}"],
+              "path": ["auction", ":auction_id", "bids"],
+              "variable": [
+                {
+                  "key": "auction_id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Confessions",
+      "item": [
+        {
+          "name": "Submit Confession",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"user_id\": \"user123\",\n  \"text\": \"My confession text\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/confessions/submit",
+              "host": ["{{baseUrl}}"],
+              "path": ["confessions", "submit"]
+            }
+          }
+        },
+        {
+          "name": "Get Pending Confessions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/confessions/pending?channel=yourchannel",
+              "host": ["{{baseUrl}}"],
+              "path": ["confessions", "pending"],
+              "query": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Approve Confession",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confession_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/confessions/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["confessions", "approve"]
+            }
+          }
+        },
+        {
+          "name": "Reject Confession",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confession_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/confessions/reject",
+              "host": ["{{baseUrl}}"],
+              "path": ["confessions", "reject"]
+            }
+          }
+        },
+        {
+          "name": "Get Random Confession",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/confessions/random?channel=yourchannel",
+              "host": ["{{baseUrl}}"],
+              "path": ["confessions", "random"],
+              "query": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add Reaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confession_id\": 1,\n  \"reaction\": \"like\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/confessions/reaction",
+              "host": ["{{baseUrl}}"],
+              "path": ["confessions", "reaction"]
+            }
+          }
+        },
+        {
+          "name": "Get Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/confessions/stats?channel=yourchannel",
+              "host": ["{{baseUrl}}"],
+              "path": ["confessions", "stats"],
+              "query": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Settings",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"settings\": {}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/confessions/settings",
+              "host": ["{{baseUrl}}"],
+              "path": ["confessions", "settings"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Counters",
+      "item": [
+        {
+          "name": "Get All Counters",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/counters/:channel",
+              "host": ["{{baseUrl}}"],
+              "path": ["counters", ":channel"],
+              "variable": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Increment Counter",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"counter_name\": \"deaths\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/counters/increment",
+              "host": ["{{baseUrl}}"],
+              "path": ["counters", "increment"]
+            }
+          }
+        },
+        {
+          "name": "Decrement Counter",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"counter_name\": \"deaths\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/counters/decrement",
+              "host": ["{{baseUrl}}"],
+              "path": ["counters", "decrement"]
+            }
+          }
+        },
+        {
+          "name": "Reset Counter",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"counter_name\": \"deaths\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/counters/reset",
+              "host": ["{{baseUrl}}"],
+              "path": ["counters", "reset"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Currency",
+      "item": [
+        {
+          "name": "Get Balance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/currency/balance/:user_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["currency", "balance", ":user_id"],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "user123"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add Currency",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user123\",\n  \"amount\": 100,\n  \"reason\": \"Bonus\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/currency/add",
+              "host": ["{{baseUrl}}"],
+              "path": ["currency", "add"]
+            }
+          }
+        },
+        {
+          "name": "Deduct Currency",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user123\",\n  \"amount\": 50,\n  \"reason\": \"Purchase\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/currency/deduct",
+              "host": ["{{baseUrl}}"],
+              "path": ["currency", "deduct"]
+            }
+          }
+        },
+        {
+          "name": "Transfer Currency",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from_user_id\": \"user123\",\n  \"to_user_id\": \"user456\",\n  \"amount\": 25\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/currency/transfer",
+              "host": ["{{baseUrl}}"],
+              "path": ["currency", "transfer"]
+            }
+          }
+        },
+        {
+          "name": "Get Leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/currency/leaderboard?limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["currency", "leaderboard"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Transactions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/currency/transactions/:user_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["currency", "transactions", ":user_id"],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "user123"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Database",
+      "item": [
+        {
+          "name": "List Tables",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/database/tables",
+              "host": ["{{baseUrl}}"],
+              "path": ["database", "tables"]
+            }
+          }
+        },
+        {
+          "name": "Get Schema",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/database/schema?table=users",
+              "host": ["{{baseUrl}}"],
+              "path": ["database", "schema"],
+              "query": [
+                {
+                  "key": "table",
+                  "value": "users"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Execute Query",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"SELECT * FROM users LIMIT 10\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/database/query",
+              "host": ["{{baseUrl}}"],
+              "path": ["database", "query"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Files",
+      "item": [
+        {
+          "name": "Read File",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/files/read/path/to/file.txt",
+              "host": ["{{baseUrl}}"],
+              "path": ["files", "read", "path", "to", "file.txt"]
+            }
+          }
+        },
+        {
+          "name": "Get File",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/files/file/path/to/file.txt",
+              "host": ["{{baseUrl}}"],
+              "path": ["files", "file", "path", "to", "file.txt"]
+            }
+          }
+        },
+        {
+          "name": "Write File",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"File content here\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/files/write/path/to/file.txt",
+              "host": ["{{baseUrl}}"],
+              "path": ["files", "write", "path", "to", "file.txt"]
+            }
+          }
+        },
+        {
+          "name": "Write Binary File",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"data\": \"base64encodeddata\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/files/write-binary/path/to/file.bin",
+              "host": ["{{baseUrl}}"],
+              "path": ["files", "write-binary", "path", "to", "file.bin"]
+            }
+          }
+        },
+        {
+          "name": "Delete File",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/files/delete/path/to/file.txt",
+              "host": ["{{baseUrl}}"],
+              "path": ["files", "delete", "path", "to", "file.txt"]
+            }
+          }
+        },
+        {
+          "name": "List Directory",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/files/list/path/to/directory",
+              "host": ["{{baseUrl}}"],
+              "path": ["files", "list", "path", "to", "directory"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Goals",
+      "item": [
+        {
+          "name": "Get All Goals",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/goals/:channel",
+              "host": ["{{baseUrl}}"],
+              "path": ["goals", ":channel"],
+              "variable": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Specific Goal",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/goals/goal/:goal_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["goals", "goal", ":goal_id"],
+              "variable": [
+                {
+                  "key": "goal_id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Goal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"title\": \"Goal Title\",\n  \"target\": 1000,\n  \"current\": 0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/goals/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["goals", "create"]
+            }
+          }
+        },
+        {
+          "name": "Update Goal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"goal_id\": 1,\n  \"title\": \"Updated Title\",\n  \"target\": 2000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/goals/update",
+              "host": ["{{baseUrl}}"],
+              "path": ["goals", "update"]
+            }
+          }
+        },
+        {
+          "name": "Update Progress (Increment)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"goal_id\": 1,\n  \"amount\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/goals/progress",
+              "host": ["{{baseUrl}}"],
+              "path": ["goals", "progress"]
+            }
+          }
+        },
+        {
+          "name": "Set Progress (Absolute)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"goal_id\": 1,\n  \"value\": 500\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/goals/set-progress",
+              "host": ["{{baseUrl}}"],
+              "path": ["goals", "set-progress"]
+            }
+          }
+        },
+        {
+          "name": "Delete Goal",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/goals/:goal_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["goals", ":goal_id"],
+              "variable": [
+                {
+                  "key": "goal_id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sync with Twitch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"goal_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/goals/sync-twitch",
+              "host": ["{{baseUrl}}"],
+              "path": ["goals", "sync-twitch"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Household",
+      "item": [
+        {
+          "name": "Create Task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Task Name\",\n  \"description\": \"Task Description\",\n  \"assigned_to\": \"member_id\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/household/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["household", "tasks"]
+            }
+          }
+        },
+        {
+          "name": "Get All Tasks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/household/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["household", "tasks"]
+            }
+          }
+        },
+        {
+          "name": "Delete Task",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/household/tasks/:task_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["household", "tasks", ":task_id"],
+              "variable": [
+                {
+                  "key": "task_id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Complete Task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"completed_by\": \"member_id\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/household/tasks/:task_id/complete",
+              "host": ["{{baseUrl}}"],
+              "path": ["household", "tasks", ":task_id", "complete"],
+              "variable": [
+                {
+                  "key": "task_id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Completions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/household/completions",
+              "host": ["{{baseUrl}}"],
+              "path": ["household", "completions"]
+            }
+          }
+        },
+        {
+          "name": "Add Member",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Member Name\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/household/members",
+              "host": ["{{baseUrl}}"],
+              "path": ["household", "members"]
+            }
+          }
+        },
+        {
+          "name": "Get All Members",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/household/members",
+              "host": ["{{baseUrl}}"],
+              "path": ["household", "members"]
+            }
+          }
+        },
+        {
+          "name": "Get Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/household/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["household", "stats"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Hue",
+      "item": [
+        {
+          "name": "Register Bridge",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ip_address\": \"192.168.1.100\",\n  \"name\": \"My Bridge\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/hue/bridge/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["hue", "bridge", "register"]
+            }
+          }
+        },
+        {
+          "name": "Register Light",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bridge_id\": \"bridge123\",\n  \"light_id\": \"light456\",\n  \"name\": \"Desk Lamp\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/hue/light/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["hue", "light", "register"]
+            }
+          }
+        },
+        {
+          "name": "Get All Lights",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/hue/lights?bridge_id=bridge123",
+              "host": ["{{baseUrl}}"],
+              "path": ["hue", "lights"],
+              "query": [
+                {
+                  "key": "bridge_id",
+                  "value": "bridge123"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Set Light State",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"light_id\": \"light456\",\n  \"on\": true,\n  \"brightness\": 200,\n  \"color\": \"#FF0000\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/hue/light/state",
+              "host": ["{{baseUrl}}"],
+              "path": ["hue", "light", "state"]
+            }
+          }
+        },
+        {
+          "name": "Create Scene",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Scene Name\",\n  \"light_states\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/hue/scene/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["hue", "scene", "create"]
+            }
+          }
+        },
+        {
+          "name": "Get All Scenes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/hue/scenes",
+              "host": ["{{baseUrl}}"],
+              "path": ["hue", "scenes"]
+            }
+          }
+        },
+        {
+          "name": "Activate Scene",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scene_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/hue/scene/activate",
+              "host": ["{{baseUrl}}"],
+              "path": ["hue", "scene", "activate"]
+            }
+          }
+        },
+        {
+          "name": "Create Automation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Automation Name\",\n  \"trigger\": \"event_name\",\n  \"actions\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/hue/automation/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["hue", "automation", "create"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Levels",
+      "item": [
+        {
+          "name": "Get User Level",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/levels/user/:channel/:username",
+              "host": ["{{baseUrl}}"],
+              "path": ["levels", "user", ":channel", ":username"],
+              "variable": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                },
+                {
+                  "key": "username",
+                  "value": "username123"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add XP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"username\": \"username123\",\n  \"xp\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/levels/add_xp",
+              "host": ["{{baseUrl}}"],
+              "path": ["levels", "add_xp"]
+            }
+          }
+        },
+        {
+          "name": "Get Leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/levels/leaderboard?channel=yourchannel&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["levels", "leaderboard"],
+              "query": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notes",
+      "item": [
+        {
+          "name": "Get All Notes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/notes",
+              "host": ["{{baseUrl}}"],
+              "path": ["notes"]
+            }
+          }
+        },
+        {
+          "name": "Get Note by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/notes/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["notes", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Note Title\",\n  \"content\": \"Note content\",\n  \"category\": \"general\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/notes",
+              "host": ["{{baseUrl}}"],
+              "path": ["notes"]
+            }
+          }
+        },
+        {
+          "name": "Update Note",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Title\",\n  \"content\": \"Updated content\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/notes/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["notes", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Note",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/notes/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["notes", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Notes by Category",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/notes/category/:category",
+              "host": ["{{baseUrl}}"],
+              "path": ["notes", "category", ":category"],
+              "variable": [
+                {
+                  "key": "category",
+                  "value": "general"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Packs",
+      "item": [
+        {
+          "name": "Get All Packs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/packs/list",
+              "host": ["{{baseUrl}}"],
+              "path": ["packs", "list"]
+            }
+          }
+        },
+        {
+          "name": "Create Pack",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Pack Name\",\n  \"description\": \"Pack description\",\n  \"cost\": 100\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/packs/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["packs", "create"]
+            }
+          }
+        },
+        {
+          "name": "Add Item to Pack",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pack_id\": 1,\n  \"item_name\": \"Item Name\",\n  \"rarity\": \"common\",\n  \"weight\": 1.0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/packs/add-item",
+              "host": ["{{baseUrl}}"],
+              "path": ["packs", "add-item"]
+            }
+          }
+        },
+        {
+          "name": "Open Pack",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user123\",\n  \"pack_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/packs/open",
+              "host": ["{{baseUrl}}"],
+              "path": ["packs", "open"]
+            }
+          }
+        },
+        {
+          "name": "Get User Inventory",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/packs/inventory/:user_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["packs", "inventory", ":user_id"],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "user123"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Pack History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/packs/history/:user_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["packs", "history", ":user_id"],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "user123"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Roulette",
+      "item": [
+        {
+          "name": "Start Game",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"duration_seconds\": 60\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/roulette/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["roulette", "start"]
+            }
+          }
+        },
+        {
+          "name": "Place Bet",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"game_id\": 1,\n  \"user_id\": \"user123\",\n  \"bet_type\": \"red\",\n  \"amount\": 50\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/roulette/bet",
+              "host": ["{{baseUrl}}"],
+              "path": ["roulette", "bet"]
+            }
+          }
+        },
+        {
+          "name": "Spin Wheel",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"game_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/roulette/spin",
+              "host": ["{{baseUrl}}"],
+              "path": ["roulette", "spin"]
+            }
+          }
+        },
+        {
+          "name": "Get Active Game",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/roulette/active/:channel",
+              "host": ["{{baseUrl}}"],
+              "path": ["roulette", "active", ":channel"],
+              "variable": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel Game",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"game_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/roulette/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["roulette", "cancel"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Get All Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/system/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["system", "stats"]
+            }
+          }
+        },
+        {
+          "name": "Get CPU Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/system/cpu",
+              "host": ["{{baseUrl}}"],
+              "path": ["system", "cpu"]
+            }
+          }
+        },
+        {
+          "name": "Get Memory Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/system/memory",
+              "host": ["{{baseUrl}}"],
+              "path": ["system", "memory"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Text Commands",
+      "item": [
+        {
+          "name": "Create/Update Command",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"command\": \"!hello\",\n  \"response\": \"Hello, world!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/text_commands/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["text_commands", "create"]
+            }
+          }
+        },
+        {
+          "name": "Get All Commands",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/text_commands/all?channel=yourchannel",
+              "host": ["{{baseUrl}}"],
+              "path": ["text_commands", "all"],
+              "query": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Specific Command",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/text_commands/:command?channel=yourchannel",
+              "host": ["{{baseUrl}}"],
+              "path": ["text_commands", ":command"],
+              "query": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "command",
+                  "value": "!hello"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Command",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/text_commands/:command?channel=yourchannel",
+              "host": ["{{baseUrl}}"],
+              "path": ["text_commands", ":command"],
+              "query": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "command",
+                  "value": "!hello"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ticker",
+      "item": [
+        {
+          "name": "Add Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"message\": \"Ticker message text\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ticker/messages",
+              "host": ["{{baseUrl}}"],
+              "path": ["ticker", "messages"]
+            }
+          }
+        },
+        {
+          "name": "Get All Messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ticker/messages?channel=yourchannel",
+              "host": ["{{baseUrl}}"],
+              "path": ["ticker", "messages"],
+              "query": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Message",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ticker/messages/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["ticker", "messages", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"event\": \"Event text\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ticker/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["ticker", "events"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Todos",
+      "item": [
+        {
+          "name": "Create Todo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"text\": \"Todo item text\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/todos/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["todos", "create"]
+            }
+          }
+        },
+        {
+          "name": "Get Todos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/todos/list?channel=yourchannel",
+              "host": ["{{baseUrl}}"],
+              "path": ["todos", "list"],
+              "query": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Toggle Todo",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/todos/toggle/:todo_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["todos", "toggle", ":todo_id"],
+              "variable": [
+                {
+                  "key": "todo_id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Todo",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/todos/:todo_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["todos", ":todo_id"],
+              "variable": [
+                {
+                  "key": "todo_id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Completed Todos",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/todos/completed?channel=yourchannel",
+              "host": ["{{baseUrl}}"],
+              "path": ["todos", "completed"],
+              "query": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "TTS",
+      "item": [
+        {
+          "name": "Speak (Add to Queue)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"text\": \"Text to speak\",\n  \"voice\": \"default\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tts/speak",
+              "host": ["{{baseUrl}}"],
+              "path": ["tts", "speak"]
+            }
+          }
+        },
+        {
+          "name": "Get Next from Queue",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tts/next?channel=yourchannel",
+              "host": ["{{baseUrl}}"],
+              "path": ["tts", "next"],
+              "query": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mark Complete",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tts/complete",
+              "host": ["{{baseUrl}}"],
+              "path": ["tts", "complete"]
+            }
+          }
+        },
+        {
+          "name": "Get Queue Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tts/queue/status?channel=yourchannel",
+              "host": ["{{baseUrl}}"],
+              "path": ["tts", "queue", "status"],
+              "query": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Voices",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tts/voices",
+              "host": ["{{baseUrl}}"],
+              "path": ["tts", "voices"]
+            }
+          }
+        },
+        {
+          "name": "Update Settings",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"settings\": {}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tts/settings",
+              "host": ["{{baseUrl}}"],
+              "path": ["tts", "settings"]
+            }
+          }
+        },
+        {
+          "name": "Get Settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tts/settings?channel=yourchannel",
+              "host": ["{{baseUrl}}"],
+              "path": ["tts", "settings"],
+              "query": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Whitelist",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tts/whitelist/:channel",
+              "host": ["{{baseUrl}}"],
+              "path": ["tts", "whitelist", ":channel"],
+              "variable": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add to Whitelist",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"user_id\": \"user123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tts/whitelist/add",
+              "host": ["{{baseUrl}}"],
+              "path": ["tts", "whitelist", "add"]
+            }
+          }
+        },
+        {
+          "name": "Remove from Whitelist",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"user_id\": \"user123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tts/whitelist/remove",
+              "host": ["{{baseUrl}}"],
+              "path": ["tts", "whitelist", "remove"]
+            }
+          }
+        },
+        {
+          "name": "Get Channel Settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tts/channel/:channel/settings",
+              "host": ["{{baseUrl}}"],
+              "path": ["tts", "channel", ":channel", "settings"],
+              "variable": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Channel Settings",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"settings\": {}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tts/channel/settings",
+              "host": ["{{baseUrl}}"],
+              "path": ["tts", "channel", "settings"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Twitch",
+      "item": [
+        {
+          "name": "Get Auth URL",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/twitch/auth/url",
+              "host": ["{{baseUrl}}"],
+              "path": ["twitch", "auth", "url"]
+            }
+          }
+        },
+        {
+          "name": "Auth Callback",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/twitch/auth/callback?code=authcode",
+              "host": ["{{baseUrl}}"],
+              "path": ["twitch", "auth", "callback"],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "authcode"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"your_refresh_token\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/twitch/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["twitch", "auth", "refresh"]
+            }
+          }
+        },
+        {
+          "name": "Validate Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"access_token\": \"your_access_token\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/twitch/auth/validate",
+              "host": ["{{baseUrl}}"],
+              "path": ["twitch", "auth", "validate"]
+            }
+          }
+        },
+        {
+          "name": "Revoke Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"your_token\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/twitch/auth/revoke",
+              "host": ["{{baseUrl}}"],
+              "path": ["twitch", "auth", "revoke"]
+            }
+          }
+        },
+        {
+          "name": "Get Auth Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/twitch/auth/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["twitch", "auth", "status"]
+            }
+          }
+        },
+        {
+          "name": "Get Channel Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/twitch/channel/info/:channel_name",
+              "host": ["{{baseUrl}}"],
+              "path": ["twitch", "channel", "info", ":channel_name"],
+              "variable": [
+                {
+                  "key": "channel_name",
+                  "value": "yourchannel"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Channel Info",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"title\": \"New Stream Title\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/twitch/channel/update",
+              "host": ["{{baseUrl}}"],
+              "path": ["twitch", "channel", "update"]
+            }
+          }
+        },
+        {
+          "name": "Get Recent Messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/twitch/messages/:channel",
+              "host": ["{{baseUrl}}"],
+              "path": ["twitch", "messages", ":channel"],
+              "variable": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Send Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"message\": \"Message text\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/twitch/messages/send",
+              "host": ["{{baseUrl}}"],
+              "path": ["twitch", "messages", "send"]
+            }
+          }
+        },
+        {
+          "name": "Get Config",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/twitch/config",
+              "host": ["{{baseUrl}}"],
+              "path": ["twitch", "config"]
+            }
+          }
+        },
+        {
+          "name": "Save Config",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_id\": \"your_client_id\",\n  \"client_secret\": \"your_client_secret\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/twitch/config",
+              "host": ["{{baseUrl}}"],
+              "path": ["twitch", "config"]
+            }
+          }
+        },
+        {
+          "name": "Get Commands",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/twitch/commands",
+              "host": ["{{baseUrl}}"],
+              "path": ["twitch", "commands"]
+            }
+          }
+        },
+        {
+          "name": "Register Command",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"command\": \"!test\",\n  \"handler\": \"handler_name\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/twitch/commands/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["twitch", "commands", "register"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "User Profiles",
+      "item": [
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user_profiles/profile/:user_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["user_profiles", "profile", ":user_id"],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "user123"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user123\",\n  \"display_name\": \"Display Name\",\n  \"bio\": \"User bio\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user_profiles/update",
+              "host": ["{{baseUrl}}"],
+              "path": ["user_profiles", "update"]
+            }
+          }
+        },
+        {
+          "name": "Set Custom Field",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user123\",\n  \"field_name\": \"favorite_game\",\n  \"field_value\": \"Minecraft\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user_profiles/field",
+              "host": ["{{baseUrl}}"],
+              "path": ["user_profiles", "field"]
+            }
+          }
+        },
+        {
+          "name": "Get Birthdays",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user_profiles/birthdays",
+              "host": ["{{baseUrl}}"],
+              "path": ["user_profiles", "birthdays"]
+            }
+          }
+        },
+        {
+          "name": "Search Profiles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user_profiles/search?query=searchterm",
+              "host": ["{{baseUrl}}"],
+              "path": ["user_profiles", "search"],
+              "query": [
+                {
+                  "key": "query",
+                  "value": "searchterm"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Watchtime",
+      "item": [
+        {
+          "name": "Get All Watchtime",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/watchtime/all?limit=50&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["watchtime", "all"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Search by Username",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/watchtime/search?username=username123",
+              "host": ["{{baseUrl}}"],
+              "path": ["watchtime", "search"],
+              "query": [
+                {
+                  "key": "username",
+                  "value": "username123"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get by Period",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/watchtime/period?start_date=2025-01-01&end_date=2025-12-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["watchtime", "period"],
+              "query": [
+                {
+                  "key": "start_date",
+                  "value": "2025-01-01"
+                },
+                {
+                  "key": "end_date",
+                  "value": "2025-12-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add Watchtime",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"username123\",\n  \"minutes\": 60\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/watchtime/add",
+              "host": ["{{baseUrl}}"],
+              "path": ["watchtime", "add"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Wheel",
+      "item": [
+        {
+          "name": "Get Wheel Options",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/wheel/options?channel=yourchannel",
+              "host": ["{{baseUrl}}"],
+              "path": ["wheel", "options"],
+              "query": [
+                {
+                  "key": "channel",
+                  "value": "yourchannel"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add Wheel Option",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\",\n  \"text\": \"Option Text\",\n  \"weight\": 1.0,\n  \"color\": \"#FF0000\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/wheel/options",
+              "host": ["{{baseUrl}}"],
+              "path": ["wheel", "options"]
+            }
+          }
+        },
+        {
+          "name": "Update Wheel Option",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Updated Text\",\n  \"weight\": 2.0,\n  \"color\": \"#00FF00\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/wheel/options/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["wheel", "options", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Wheel Option",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/wheel/options/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["wheel", "options", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Toggle Option",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/wheel/options/:id/toggle",
+              "host": ["{{baseUrl}}"],
+              "path": ["wheel", "options", ":id", "toggle"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Spin Wheel",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"yourchannel\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/wheel/spin",
+              "host": ["{{baseUrl}}"],
+              "path": ["wheel", "spin"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Withings",
+      "item": [
+        {
+          "name": "Record Weight",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user123\",\n  \"weight_kg\": 70.5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/withings/weight",
+              "host": ["{{baseUrl}}"],
+              "path": ["withings", "weight"]
+            }
+          }
+        },
+        {
+          "name": "Get Weight History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/withings/weight/:user_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["withings", "weight", ":user_id"],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "user123"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Latest Weight",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/withings/weight/latest/:user_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["withings", "weight", "latest", ":user_id"],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "user123"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Record Activity",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user123\",\n  \"activity_type\": \"running\",\n  \"duration_minutes\": 30,\n  \"calories\": 250\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/withings/activity",
+              "host": ["{{baseUrl}}"],
+              "path": ["withings", "activity"]
+            }
+          }
+        },
+        {
+          "name": "Get Activity History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/withings/activity/:user_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["withings", "activity", ":user_id"],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "user123"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Record Sleep",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user123\",\n  \"duration_hours\": 8,\n  \"quality\": \"good\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/withings/sleep",
+              "host": ["{{baseUrl}}"],
+              "path": ["withings", "sleep"]
+            }
+          }
+        },
+        {
+          "name": "Get Sleep History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/withings/sleep/:user_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["withings", "sleep", ":user_id"],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "user123"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Set Goal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user123\",\n  \"goal_type\": \"weight\",\n  \"target_value\": 65.0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/withings/goals",
+              "host": ["{{baseUrl}}"],
+              "path": ["withings", "goals"]
+            }
+          }
+        },
+        {
+          "name": "Get Goals",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/withings/goals/:user_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["withings", "goals", ":user_id"],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "user123"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/withings/stats/:user_id",
+              "host": ["{{baseUrl}}"],
+              "path": ["withings", "stats", ":user_id"],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "user123"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

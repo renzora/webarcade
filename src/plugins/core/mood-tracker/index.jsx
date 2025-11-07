@@ -33,7 +33,7 @@ const MoodTrackerViewport = () => {
   // Load current mood data
   const loadMoodData = async () => {
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/mood-ticker/data`);
+      const response = await fetch(`${WEBARCADE_API}/mood-tracker/data`);
       const data = await response.json();
       setMood(data.mood || 5);
       setWeight(data.weight ? data.weight.toString() : '');
@@ -59,7 +59,7 @@ const MoodTrackerViewport = () => {
         updated_at: Math.floor(Date.now() / 1000)
       };
 
-      await fetch(`${WEBARCADE_API}/api/mood-ticker/data`, {
+      await fetch(`${WEBARCADE_API}/mood-tracker/data`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -94,7 +94,7 @@ const MoodTrackerViewport = () => {
   const fetchWithingsWeight = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${WEBARCADE_API}/api/mood-ticker/withings/weight`);
+      const response = await fetch(`${WEBARCADE_API}/mood-tracker/withings/weight`);
       const data = await response.json();
       if (data.weight) {
         setWeight(data.weight.toString());

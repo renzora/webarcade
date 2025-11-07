@@ -9,8 +9,12 @@ use tokio::net::TcpListener;
 use log::{info, error};
 use anyhow::Result;
 
-use webarcade_bridge::core::{EventBus, ServiceRegistry, PluginManager, HttpRouter, WebSocketBridge};
+use webarcade_bridge::core::{EventBus, ServiceRegistry, PluginManager, WebSocketBridge, RouterRegistry};
 use webarcade_bridge::plugins;
+use hyper::{Request, Response, StatusCode, body::Incoming};
+use hyper::body::Bytes;
+use http_body_util::{Full, combinators::BoxBody};
+use std::convert::Infallible;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -41,10 +45,14 @@ async fn main() -> Result<()> {
     // Load plugin configuration
     let plugin_config = load_plugin_config()?;
 
+    // Create router registry
+    let router_registry = RouterRegistry::new();
+
     // Create plugin manager
     let mut plugin_manager = PluginManager::new(
         event_bus.clone(),
         service_registry.clone(),
+        router_registry.clone_registry(),
         plugin_config,
         db_path.to_string_lossy().to_string(),
     );
@@ -70,12 +78,6 @@ async fn main() -> Result<()> {
 
     info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
-    // Create HTTP router
-    let http_router = Arc::new(HttpRouter::new(
-        service_registry.clone(),
-        event_bus.clone(),
-    ));
-
     // Start WebSocket server for real-time events
     let event_bus_ws = event_bus.clone();
     let ws_port_clone = ws_port.clone();
@@ -94,18 +96,20 @@ async fn main() -> Result<()> {
     info!("📡 WebSocket server listening on ws://127.0.0.1:{}", ws_port);
     info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     info!("✨ WebArcade Bridge is ready!");
+    info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("\n🟢 SERVER READY - You can now use the application!\n");
 
     loop {
         let (stream, _) = listener.accept().await?;
         let io = TokioIo::new(stream);
-        let router = http_router.clone();
+        let router_registry = router_registry.clone_registry();
 
         tokio::spawn(async move {
             if let Err(err) = http1::Builder::new()
                 .serve_connection(io, service_fn(move |req| {
-                    let router = router.clone();
+                    let router = router_registry.clone_registry();
                     async move {
-                        Ok::<_, std::convert::Infallible>(router.route(req).await)
+                        Ok::<_, std::convert::Infallible>(handle_request(req, router).await)
                     }
                 }))
                 .await
@@ -114,6 +118,72 @@ async fn main() -> Result<()> {
             }
         });
     }
+}
+
+async fn handle_request(req: Request<Incoming>, router_registry: RouterRegistry) -> Response<BoxBody<Bytes, Infallible>> {
+    let method = req.method().clone();
+    let path = req.uri().path().to_string();
+    let query = req.uri().query().unwrap_or("").to_string();
+
+    // Health check endpoint
+    if path == "/health" || path == "/api/health" {
+        return health_response();
+    }
+
+    // Parse plugin name from path
+    // Expected format: /{plugin_name}/{route}
+    if path.len() > 1 {
+        let path_parts: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+        if !path_parts.is_empty() {
+            let plugin_name = path_parts[0];
+            let plugin_path = if path_parts.len() > 1 {
+                format!("/{}", path_parts[1..].join("/"))
+            } else {
+                "/".to_string()
+            };
+
+            // Try to route to plugin
+            if let Some(response) = router_registry.route(
+                plugin_name,
+                &method,
+                &plugin_path,
+                &query,
+                req,
+            ).await {
+                return response;
+            } else {
+                return error_response(StatusCode::NOT_FOUND, &format!("Route not found: {}", path));
+            }
+        }
+    }
+
+    error_response(StatusCode::NOT_FOUND, "Invalid path")
+}
+
+fn health_response() -> Response<BoxBody<Bytes, Infallible>> {
+    let json = serde_json::json!({"status": "ok", "message": "WebArcade Bridge is ready"}).to_string();
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .header("Access-Control-Allow-Origin", "*")
+        .body(full_body(&json))
+        .unwrap()
+}
+
+fn error_response(status: StatusCode, message: &str) -> Response<BoxBody<Bytes, Infallible>> {
+    let json = serde_json::json!({"error": message}).to_string();
+    Response::builder()
+        .status(status)
+        .header("Content-Type", "application/json")
+        .header("Access-Control-Allow-Origin", "*")
+        .body(full_body(&json))
+        .unwrap()
+}
+
+fn full_body(s: &str) -> BoxBody<Bytes, Infallible> {
+    use http_body_util::combinators::BoxBody;
+    use http_body_util::BodyExt;
+    BoxBody::new(Full::new(Bytes::from(s.to_string())).map_err(|err: Infallible| match err {}))
 }
 
 fn load_plugin_config() -> Result<std::collections::HashMap<String, serde_json::Value>> {

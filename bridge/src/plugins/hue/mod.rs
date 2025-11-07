@@ -6,8 +6,8 @@ use anyhow::Result;
 
 mod database;
 mod events;
+mod router;
 
-pub use database::*;
 pub use events::*;
 
 pub struct HuePlugin;
@@ -27,6 +27,9 @@ impl Plugin for HuePlugin {
 
     async fn init(&self, ctx: &PluginContext) -> Result<()> {
         log::info!("[Hue] Initializing plugin...");
+
+        // Register HTTP routes
+        router::register_routes(ctx).await?;
 
         ctx.migrate(&[
             r#"
@@ -83,6 +86,15 @@ impl Plugin for HuePlugin {
                 action_data TEXT NOT NULL,
                 triggered_by TEXT,
                 timestamp INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS hue_animated_scenes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scene_name TEXT NOT NULL UNIQUE,
+                description TEXT,
+                frames_data TEXT NOT NULL,
+                duration_ms INTEGER NOT NULL,
+                created_at INTEGER NOT NULL
             );
 
             CREATE INDEX IF NOT EXISTS idx_hue_lights_bridge_id ON hue_lights(bridge_id);

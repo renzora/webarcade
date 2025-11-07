@@ -1,6 +1,5 @@
 import { createPlugin } from '@/api/plugin';
-import { IconHome, IconSettings, IconChartLine } from '@tabler/icons-solidjs';
-import WelcomeViewport from './WelcomeViewport.jsx';
+import { IconSettings, IconChartLine } from '@tabler/icons-solidjs';
 import DashboardViewport from './DashboardViewport.jsx';
 import PropertiesPanel from './PropertiesPanel.jsx';
 
@@ -16,14 +15,6 @@ export default createPlugin({
   },
 
   async onStart(api) {
-    // Register welcome viewport
-    api.viewport('welcome', {
-      label: 'Welcome',
-      component: WelcomeViewport,
-      icon: IconHome,
-      description: 'Welcome to WebArcade'
-    });
-
     // Register dashboard viewport
     api.viewport('dashboard', {
       label: 'Dashboard',

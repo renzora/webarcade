@@ -95,7 +95,7 @@ function WeightOverlay() {
   });
 
   return (
-    <div class="fixed inset-0 pointer-events-none overflow-hidden font-sans">
+    <div class="fixed inset-0 pointer-events-none overflow-hidden font-sans bg-transparent">
       <Show when={visible() && currentWeight()}>
         <div class="absolute bottom-8 right-8 pointer-events-none">
           <div class="bg-gradient-to-br from-black/90 to-black/70 backdrop-blur-xl shadow-2xl rounded-2xl overflow-hidden min-w-[320px] border border-white/10">

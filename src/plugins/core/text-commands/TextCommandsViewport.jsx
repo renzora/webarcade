@@ -56,8 +56,6 @@ export default function TextCommandsViewport() {
     };
 
     fetchCommands();
-    const interval = setInterval(fetchCommands, 5000);
-    onCleanup(() => clearInterval(interval));
   });
 
   const handleAddCommand = async (e) => {

@@ -1,7 +1,6 @@
 // Twitch command system
 // Handles command parsing, permissions, and cooldowns
 
-use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;

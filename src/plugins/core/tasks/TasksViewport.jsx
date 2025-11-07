@@ -57,7 +57,7 @@ export default function TasksViewport() {
   onMount(async () => {
     const currentStatus = await twitchStore.fetchStatus();
     if (currentStatus) {
-      setStatus(currentStatus);
+      setStatus({ ...currentStatus, connected_channels: currentStatus.connected_channels || [] });
       if (currentStatus.connected_channels && currentStatus.connected_channels.length > 0) {
         setSelectedChannel(currentStatus.connected_channels[0]);
         await loadTasks(currentStatus.connected_channels[0]);
@@ -78,7 +78,7 @@ export default function TasksViewport() {
     try {
       setLoading(true);
       // Load all tasks for the channel (no username filter)
-      const response = await bridgeFetch(`/database/todos?channel=${encodeURIComponent(channel)}`);
+      const response = await bridgeFetch(`/todos/list?channel=${encodeURIComponent(channel)}`);
       const data = await response.json();
       setTasks(data);
     } catch (e) {
@@ -112,7 +112,7 @@ export default function TasksViewport() {
       const config = await twitchStore.fetchConfig();
       if (!config || !config.bot_username) return;
 
-      const response = await bridgeFetch('/database/todos/add', {
+      const response = await bridgeFetch('/todos/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -133,13 +133,11 @@ export default function TasksViewport() {
 
   const completeTask = async (id, username) => {
     try {
-      const response = await bridgeFetch('/database/todos/complete', {
+      const response = await bridgeFetch('/todos/toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          channel: selectedChannel(),
-          username: username,
-          id,
+          todo_id: id,
         }),
       });
 
@@ -153,14 +151,8 @@ export default function TasksViewport() {
 
   const deleteTask = async (id, username) => {
     try {
-      const response = await bridgeFetch('/database/todos', {
+      const response = await bridgeFetch(`/todos/${id}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          channel: selectedChannel(),
-          username: username,
-          id,
-        }),
       });
 
       if (response.ok) {
@@ -253,13 +245,13 @@ export default function TasksViewport() {
         <IconChecklist size={20} class="text-primary" />
         <h2 class="text-lg font-semibold">Channel Tasks</h2>
 
-        <Show when={status().connected_channels.length > 0}>
+        <Show when={status().connected_channels?.length > 0}>
           <select
             class="select select-bordered select-sm"
             value={selectedChannel()}
             onChange={(e) => handleChannelChange(e.target.value)}
           >
-            {status().connected_channels.map((channel) => (
+            {status().connected_channels?.map((channel) => (
               <option value={channel}>#{channel}</option>
             ))}
           </select>

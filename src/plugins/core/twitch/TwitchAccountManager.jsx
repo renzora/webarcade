@@ -1,37 +1,48 @@
-import { createSignal, onMount, For, Show } from 'solid-js';
+import { createSignal, onMount, Show } from 'solid-js';
 import twitchStore from './TwitchStore.jsx';
-import { IconUserPlus, IconCheck, IconTrash, IconRobot, IconBroadcast } from '@tabler/icons-solidjs';
+import { IconBrandTwitch, IconCheck, IconTrash, IconAlertCircle, IconUser } from '@tabler/icons-solidjs';
 
 export default function TwitchAccountManager() {
-  const [accounts, setAccounts] = createSignal([]);
+  const [authStatus, setAuthStatus] = createSignal(null);
+  const [botAuthStatus, setBotAuthStatus] = createSignal(null);
   const [loading, setLoading] = createSignal(true);
-  const [addingAccount, setAddingAccount] = createSignal(false);
-  const [accountType, setAccountType] = createSignal('broadcaster'); // 'bot' or 'broadcaster'
+  const [botLoading, setBotLoading] = createSignal(true);
+  const [authenticating, setAuthenticating] = createSignal(false);
+  const [botAuthenticating, setBotAuthenticating] = createSignal(false);
 
   onMount(async () => {
-    await loadAccounts();
+    await loadAuthStatus();
+    await loadBotAuthStatus();
   });
 
-  const loadAccounts = async () => {
+  const loadAuthStatus = async () => {
     try {
-      console.log('[AccountManager] Loading accounts...');
-      const accountList = await twitchStore.getAccounts();
-      console.log('[AccountManager] Received accounts:', accountList);
-      setAccounts(accountList);
+      const status = await twitchStore.fetchStatus();
+      setAuthStatus(status);
     } catch (e) {
-      console.error('[AccountManager] Failed to load accounts:', e);
+      console.error('[AccountManager] Failed to load auth status:', e);
+      setAuthStatus({ authenticated: false });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAddAccount = async () => {
+  const loadBotAuthStatus = async () => {
     try {
-      setAddingAccount(true);
+      const response = await fetch('/twitch/bot/auth/status');
+      const status = await response.json();
+      setBotAuthStatus(status);
+    } catch (e) {
+      console.error('[AccountManager] Failed to load bot auth status:', e);
+      setBotAuthStatus({ authenticated: false });
+    } finally {
+      setBotLoading(false);
+    }
+  };
 
-      // Store account type in localStorage for the callback to use
-      localStorage.setItem('twitch_account_type', accountType());
-      localStorage.setItem('twitch_multi_account_mode', 'true');
+  const handleAuthenticate = async () => {
+    try {
+      setAuthenticating(true);
 
       const url = await twitchStore.getAuthUrl();
 
@@ -39,9 +50,7 @@ export default function TwitchAccountManager() {
 
       if (!authWindow) {
         alert('Popup was blocked. Please allow popups for this site and try again.');
-        localStorage.removeItem('twitch_account_type');
-        localStorage.removeItem('twitch_multi_account_mode');
-        setAddingAccount(false);
+        setAuthenticating(false);
         return;
       }
 
@@ -50,84 +59,90 @@ export default function TwitchAccountManager() {
         try {
           if (authWindow.closed) {
             clearInterval(checkOAuth);
-            // Clean up localStorage
-            localStorage.removeItem('twitch_account_type');
-            localStorage.removeItem('twitch_multi_account_mode');
             // Wait a moment for the backend to process
             await new Promise(resolve => setTimeout(resolve, 1000));
-            await loadAccounts();
-            setAddingAccount(false);
+            await loadAuthStatus();
+            setAuthenticating(false);
           }
         } catch (e) {
           console.error('Error checking OAuth:', e);
         }
       }, 1000);
     } catch (e) {
-      console.error('Failed to add account:', e);
-      alert(`Failed to add account: ${e.message}`);
-      localStorage.removeItem('twitch_account_type');
-      localStorage.removeItem('twitch_multi_account_mode');
-      setAddingAccount(false);
+      console.error('Failed to authenticate:', e);
+      alert(`Failed to authenticate: ${e.message}`);
+      setAuthenticating(false);
     }
   };
 
-  const handleActivateAccount = async (accountId) => {
-    try {
-      await twitchStore.activateAccount(accountId);
-      await loadAccounts();
-    } catch (e) {
-      console.error('Failed to activate account:', e);
-      alert(`Failed to activate account: ${e.message}`);
-    }
-  };
-
-  const handleDeleteAccount = async (accountId, username) => {
-    if (!confirm(`Are you sure you want to remove account "${username}"?`)) {
+  const handleRevoke = async () => {
+    if (!confirm('Are you sure you want to disconnect your Twitch account?')) {
       return;
     }
 
     try {
-      await twitchStore.deleteAccount(accountId);
-      await loadAccounts();
+      await twitchStore.revokeToken();
+      await loadAuthStatus();
     } catch (e) {
-      console.error('Failed to delete account:', e);
-      alert(`Failed to delete account: ${e.message}`);
+      console.error('Failed to revoke auth:', e);
+      alert(`Failed to disconnect: ${e.message}`);
+    }
+  };
+
+  const handleBotAuthenticate = async () => {
+    try {
+      setBotAuthenticating(true);
+
+      const response = await fetch('/twitch/bot/auth/url');
+      const data = await response.json();
+
+      const authWindow = window.open(data.url, 'TwitchBotOAuth', 'width=600,height=800');
+
+      if (!authWindow) {
+        alert('Popup was blocked. Please allow popups for this site and try again.');
+        setBotAuthenticating(false);
+        return;
+      }
+
+      // Poll to check if authentication is complete
+      const checkOAuth = setInterval(async () => {
+        try {
+          if (authWindow.closed) {
+            clearInterval(checkOAuth);
+            // Wait a moment for the backend to process
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await loadBotAuthStatus();
+            setBotAuthenticating(false);
+          }
+        } catch (e) {
+          console.error('Error checking bot OAuth:', e);
+        }
+      }, 1000);
+    } catch (e) {
+      console.error('Failed to authenticate bot:', e);
+      alert(`Failed to authenticate bot: ${e.message}`);
+      setBotAuthenticating(false);
+    }
+  };
+
+  const handleBotRevoke = async () => {
+    if (!confirm('Are you sure you want to disconnect your bot account?')) {
+      return;
+    }
+
+    try {
+      await fetch('/twitch/bot/auth/revoke', { method: 'POST' });
+      await loadBotAuthStatus();
+    } catch (e) {
+      console.error('Failed to revoke bot auth:', e);
+      alert(`Failed to disconnect bot: ${e.message}`);
     }
   };
 
   return (
     <div class="space-y-4">
       <div class="flex items-center justify-between">
-        <h3 class="text-lg font-semibold text-white">Authenticated Accounts</h3>
-        <button
-          onClick={handleAddAccount}
-          disabled={addingAccount()}
-          class="btn btn-sm btn-primary gap-2"
-        >
-          <IconUserPlus size={16} />
-          {addingAccount() ? 'Authenticating...' : 'Add Account'}
-        </button>
-      </div>
-
-      {/* Account Type Selector (for next auth) */}
-      <div class="flex items-center gap-4 p-3 bg-base-200 rounded-lg">
-        <span class="text-sm text-base-content/70">Next account type:</span>
-        <div class="flex gap-2">
-          <button
-            onClick={() => setAccountType('bot')}
-            class={`btn btn-sm gap-2 ${accountType() === 'bot' ? 'btn-primary' : 'btn-ghost'}`}
-          >
-            <IconRobot size={16} />
-            Bot
-          </button>
-          <button
-            onClick={() => setAccountType('broadcaster')}
-            class={`btn btn-sm gap-2 ${accountType() === 'broadcaster' ? 'btn-primary' : 'btn-ghost'}`}
-          >
-            <IconBroadcast size={16} />
-            Broadcaster
-          </button>
-        </div>
+        <h3 class="text-lg font-semibold">Broadcaster Authentication</h3>
       </div>
 
       <Show when={loading()}>
@@ -136,76 +151,189 @@ export default function TwitchAccountManager() {
         </div>
       </Show>
 
-      <Show when={!loading() && accounts().length === 0}>
-        <div class="text-center py-8 text-base-content/50">
-          No accounts connected. Add an account to get started.
-        </div>
-      </Show>
+      <Show when={!loading()}>
+        <Show when={!authStatus()?.authenticated}>
+          {/* Not Authenticated */}
+          <div class="text-center py-8 space-y-4">
+            <div class="text-base-content/50">
+              <IconBrandTwitch size={48} class="mx-auto mb-4 opacity-50" />
+              <p>Connect your Twitch broadcaster account to get started</p>
+            </div>
+            <button
+              onClick={handleAuthenticate}
+              disabled={authenticating()}
+              class="btn btn-primary btn-lg gap-2"
+            >
+              <IconBrandTwitch size={24} />
+              {authenticating() ? 'Authenticating...' : 'Authenticate with Twitch'}
+            </button>
+          </div>
+        </Show>
 
-      <Show when={!loading() && accounts().length > 0}>
-        <div class="space-y-2">
-          <For each={accounts()}>
-            {(account) => (
-              <div class={`flex items-center justify-between p-4 rounded-lg border-2 ${
-                account.is_active
-                  ? 'bg-primary/10 border-primary'
-                  : 'bg-base-200 border-base-300'
-              }`}>
+        <Show when={authStatus()?.authenticated}>
+          {/* Authenticated */}
+          <div class="card bg-primary/10 border-2 border-primary">
+            <div class="card-body">
+              <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                  {account.account_type === 'bot' ? (
-                    <IconRobot size={24} class="text-primary" />
-                  ) : (
-                    <IconBroadcast size={24} class="text-secondary" />
-                  )}
+                  <div class="avatar">
+                    <Show
+                      when={authStatus().profile_image_url}
+                      fallback={
+                        <div class="placeholder">
+                          <div class="bg-primary text-primary-content rounded-full w-12">
+                            <IconUser size={24} />
+                          </div>
+                        </div>
+                      }
+                    >
+                      <div class="w-12 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2">
+                        <img src={authStatus().profile_image_url} alt={authStatus().username} />
+                      </div>
+                    </Show>
+                  </div>
                   <div>
-                    <div class="font-semibold text-white">
-                      {account.display_name || account.username}
-                      {account.is_active && (
-                        <span class="ml-2 badge badge-success badge-sm gap-1">
-                          <IconCheck size={12} />
-                          Active
-                        </span>
-                      )}
+                    <div class="font-semibold text-lg flex items-center gap-2">
+                      {authStatus().username}
+                      <span class="badge badge-success badge-sm gap-1">
+                        <IconCheck size={12} />
+                        Connected
+                      </span>
                     </div>
-                    <div class="text-sm text-base-content/50">
-                      @{account.username} • {account.account_type}
+                    <div class="text-sm text-base-content/70">
+                      Channel: #{authStatus().username}
                     </div>
                   </div>
                 </div>
 
-                <div class="flex gap-2">
-                  <Show when={!account.is_active}>
-                    <button
-                      onClick={() => handleActivateAccount(account.id)}
-                      class="btn btn-sm btn-ghost"
-                    >
-                      Activate
-                    </button>
-                  </Show>
-                  <button
-                    onClick={() => handleDeleteAccount(account.id, account.username)}
-                    class="btn btn-sm btn-ghost btn-error"
-                  >
-                    <IconTrash size={16} />
-                  </button>
-                </div>
+                <button
+                  onClick={handleRevoke}
+                  class="btn btn-sm btn-ghost btn-error gap-2"
+                >
+                  <IconTrash size={16} />
+                  Disconnect
+                </button>
               </div>
-            )}
-          </For>
+
+              <Show when={authStatus().is_expired}>
+                <div class="alert alert-warning mt-4">
+                  <IconAlertCircle size={20} />
+                  <span>Your access token has expired. Please re-authenticate.</span>
+                </div>
+              </Show>
+            </div>
+          </div>
+
+          <div class="alert alert-info text-sm">
+            <IconAlertCircle size={20} />
+            <div>
+              <strong>Next Steps:</strong>
+              <ul class="list-disc list-inside mt-2 space-y-1">
+                <li>Authenticate your bot account below to send chat messages</li>
+                <li>Make sure the bot account has moderator permissions in your channel</li>
+                <li>Your channel is automatically configured as: <strong>#{authStatus().username}</strong></li>
+              </ul>
+            </div>
+          </div>
+        </Show>
+      </Show>
+
+      {/* Bot Authentication Section */}
+      <div class="divider my-6"></div>
+
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-semibold">Bot Account Authentication (Optional)</h3>
+      </div>
+
+      <Show when={botLoading()}>
+        <div class="text-center py-8">
+          <span class="loading loading-spinner loading-md"></span>
         </div>
       </Show>
 
-      <div class="alert alert-info text-sm">
-        <div>
-          <strong>How it works:</strong>
-          <ul class="list-disc list-inside mt-2 space-y-1">
-            <li><strong>Bot Account:</strong> Used for chat commands and basic bot functions</li>
-            <li><strong>Broadcaster Account:</strong> Required for stream title, category, and channel settings</li>
-            <li>Both accounts use the same Twitch application (Client ID/Secret)</li>
-            <li>Only one account is active at a time - switch as needed</li>
-          </ul>
-        </div>
-      </div>
+      <Show when={!botLoading()}>
+        <Show when={!botAuthStatus()?.authenticated}>
+          {/* Bot Not Authenticated */}
+          <div class="text-center py-8 space-y-4">
+            <div class="text-base-content/50">
+              <IconBrandTwitch size={48} class="mx-auto mb-4 opacity-50" />
+              <p>Connect a separate bot account to send chat messages</p>
+              <p class="text-sm mt-2">If not configured, the broadcaster account will be used</p>
+            </div>
+            <button
+              onClick={handleBotAuthenticate}
+              disabled={botAuthenticating()}
+              class="btn btn-secondary btn-lg gap-2"
+            >
+              <IconBrandTwitch size={24} />
+              {botAuthenticating() ? 'Authenticating...' : 'Authenticate Bot Account'}
+            </button>
+          </div>
+        </Show>
+
+        <Show when={botAuthStatus()?.authenticated}>
+          {/* Bot Authenticated */}
+          <div class="card bg-secondary/10 border-2 border-secondary">
+            <div class="card-body">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="avatar">
+                    <Show
+                      when={botAuthStatus().profile_image_url}
+                      fallback={
+                        <div class="placeholder">
+                          <div class="bg-secondary text-secondary-content rounded-full w-12">
+                            <IconUser size={24} />
+                          </div>
+                        </div>
+                      }
+                    >
+                      <div class="w-12 rounded-full ring ring-secondary ring-offset-base-100 ring-offset-2">
+                        <img src={botAuthStatus().profile_image_url} alt={botAuthStatus().username} />
+                      </div>
+                    </Show>
+                  </div>
+                  <div>
+                    <div class="font-semibold text-lg flex items-center gap-2">
+                      {botAuthStatus().username}
+                      <span class="badge badge-secondary badge-sm gap-1">
+                        <IconCheck size={12} />
+                        Bot Connected
+                      </span>
+                    </div>
+                    <div class="text-sm text-base-content/70">
+                      Bot Account
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleBotRevoke}
+                  class="btn btn-sm btn-ghost btn-error gap-2"
+                >
+                  <IconTrash size={16} />
+                  Disconnect
+                </button>
+              </div>
+
+              <Show when={botAuthStatus().is_expired}>
+                <div class="alert alert-warning mt-4">
+                  <IconAlertCircle size={20} />
+                  <span>Your bot access token has expired. Please re-authenticate.</span>
+                </div>
+              </Show>
+            </div>
+          </div>
+
+          <div class="alert alert-success text-sm">
+            <IconCheck size={20} />
+            <div>
+              All chat messages will be sent from <strong>{botAuthStatus().username}</strong>.
+              Make sure this account has moderator permissions in your channel!
+            </div>
+          </div>
+        </Show>
+      </Show>
     </div>
   );
 }

@@ -1,0 +1,113 @@
+{
+  "plugins": [
+    {
+      "config": {
+        "starting_balance": 1000
+      },
+      "enabled": true,
+      "id": "currency"
+    },
+    {
+      "config": {},
+      "enabled": true,
+      "id": "notes"
+    },
+    {
+      "config": {},
+      "enabled": true,
+      "id": "goals"
+    },
+    {
+      "config": {},
+      "enabled": true,
+      "id": "todos"
+    },
+    {
+      "config": {},
+      "enabled": true,
+      "id": "auction"
+    },
+    {
+      "config": {},
+      "enabled": true,
+      "id": "roulette"
+    },
+    {
+      "config": {
+        "xp_per_message": 5
+      },
+      "enabled": true,
+      "id": "levels"
+    },
+    {
+      "config": {},
+      "enabled": true,
+      "id": "wheel"
+    },
+    {
+      "config": {},
+      "enabled": true,
+      "id": "packs"
+    },
+    {
+      "config": {},
+      "enabled": true,
+      "id": "files"
+    },
+    {
+      "config": {},
+      "enabled": true,
+      "id": "system"
+    },
+    {
+      "config": {},
+      "enabled": true,
+      "id": "ticker"
+    },
+    {
+      "config": {},
+      "enabled": true,
+      "id": "text_commands"
+    },
+    {
+      "config": {},
+      "enabled": true,
+      "id": "user_profiles"
+    },
+    {
+      "config": {},
+      "enabled": true,
+      "id": "tts"
+    },
+    {
+      "config": {},
+      "enabled": true,
+      "id": "confessions"
+    },
+    {
+      "config": {},
+      "enabled": true,
+      "id": "household"
+    },
+    {
+      "config": {},
+      "enabled": true,
+      "id": "song_requests"
+    },
+    {
+      "config": {},
+      "enabled": true,
+      "id": "twitch"
+    },
+    {
+      "config": {},
+      "enabled": false,
+      "id": "hue"
+    },
+    {
+      "config": {},
+      "enabled": false,
+      "id": "withings"
+    }
+  ]
+}

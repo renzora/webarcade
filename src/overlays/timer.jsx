@@ -87,7 +87,7 @@ function TimerOverlay() {
   });
 
   return (
-    <div class="fixed inset-0 pointer-events-none overflow-hidden font-sans">
+    <div class="fixed inset-0 pointer-events-none overflow-hidden font-sans bg-transparent">
       {/* Timer Display */}
       <Show when={isRunning() || isPaused()}>
         <div class="absolute top-0 left-1/2 -translate-x-1/2 pointer-events-none">

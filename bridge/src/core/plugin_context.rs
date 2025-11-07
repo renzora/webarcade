@@ -7,12 +7,15 @@ use serde_json::Value;
 use tokio::sync::broadcast;
 use crate::core::events::{Event, EventBus};
 use crate::core::services::ServiceRegistry;
+use crate::core::plugin_router::{PluginRouter, RouterRegistry};
 
 /// Plugin context - API provided to plugins
+#[derive(Clone)]
 pub struct PluginContext {
     plugin_id: String,
     event_bus: Arc<EventBus>,
     service_registry: Arc<ServiceRegistry>,
+    router_registry: RouterRegistry,
     config: Value,
     db_path: String,
 }
@@ -22,6 +25,7 @@ impl PluginContext {
         plugin_id: String,
         event_bus: Arc<EventBus>,
         service_registry: Arc<ServiceRegistry>,
+        router_registry: RouterRegistry,
         config: Value,
         db_path: String,
     ) -> Self {
@@ -29,6 +33,7 @@ impl PluginContext {
             plugin_id,
             event_bus,
             service_registry,
+            router_registry,
             config,
             db_path,
         }
@@ -133,6 +138,18 @@ impl PluginContext {
     /// List all available services
     pub async fn list_services(&self) -> Vec<String> {
         self.service_registry.list_services().await
+    }
+
+    // ==================== Routing ====================
+
+    /// Register HTTP routes for this plugin
+    pub async fn register_router(&self, plugin_name: &str, router: PluginRouter) {
+        self.router_registry.register(plugin_name.to_string(), router).await;
+    }
+
+    /// Get the router registry
+    pub fn router_registry(&self) -> &RouterRegistry {
+        &self.router_registry
     }
 }
 

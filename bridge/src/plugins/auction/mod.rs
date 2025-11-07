@@ -6,6 +6,7 @@ use anyhow::Result;
 
 mod events;
 mod database;
+mod router;
 
 pub use events::*;
 pub use database::*;
@@ -27,6 +28,9 @@ impl Plugin for AuctionPlugin {
 
     async fn init(&self, ctx: &PluginContext) -> Result<()> {
         log::info!("[Auction] Initializing plugin...");
+
+        // Register HTTP routes
+        router::register_routes(ctx).await?;
 
         // Run database migrations
         ctx.migrate(&[
@@ -74,6 +78,7 @@ impl Plugin for AuctionPlugin {
                     plugin_id,
                     Arc::new(crate::core::EventBus::new()),
                     Arc::new(crate::core::ServiceRegistry::new()),
+                    crate::core::RouterRegistry::new(),
                     serde_json::json!({}),
                     crate::core::database::get_database_path().to_string_lossy().to_string(),
                 );

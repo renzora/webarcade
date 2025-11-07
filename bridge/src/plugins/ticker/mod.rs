@@ -6,8 +6,8 @@ use anyhow::Result;
 
 mod database;
 mod events;
+mod router;
 
-pub use database::*;
 pub use events::*;
 
 pub struct TickerPlugin;
@@ -61,6 +61,9 @@ impl Plugin for TickerPlugin {
             CREATE INDEX IF NOT EXISTS idx_ticker_events_created_at ON ticker_events(created_at DESC);
             "#,
         ])?;
+
+        // Register HTTP routes
+        router::register_routes(ctx).await?;
 
         // Register services
         ctx.provide_service("add_message", |input| async move {

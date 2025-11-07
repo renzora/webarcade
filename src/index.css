@@ -1,2 +1,18 @@
 @import "tailwindcss";
 @plugin "daisyui";
+
+/* Transparent background for overlays (OBS browser sources) */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  background-color: transparent !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+body {
+  overflow: hidden !important;
+  -webkit-font-smoothing: antialiased;
+}

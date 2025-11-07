@@ -1,9 +1,11 @@
 import LeftPanelMenu from './LeftPanelMenu.jsx';
 import PanelResizer from '@/ui/PanelResizer.jsx';
-import { Show, createSignal } from 'solid-js';
+import { Show, createSignal, For } from 'solid-js';
+import { leftPanelMenuItems } from '@/api/plugin';
 
 const LeftPanel = () => {
   const [isOpen, setIsOpen] = createSignal(true);
+  const [isCollapsed, setIsCollapsed] = createSignal(false);
   const [panelWidth, setPanelWidth] = createSignal(280);
   const [isResizing, setIsResizing] = createSignal(false);
   const [dragOffset, setDragOffset] = createSignal(0);
@@ -37,21 +39,32 @@ const LeftPanel = () => {
   };
 
   const handleToggle = () => {
-    setIsOpen(!isOpen());
+    if (isOpen() && !isCollapsed()) {
+      // Currently expanded -> collapse to icons
+      setIsCollapsed(true);
+    } else if (isOpen() && isCollapsed()) {
+      // Currently collapsed -> hide completely
+      setIsOpen(false);
+      setIsCollapsed(false);
+    } else {
+      // Currently hidden -> show expanded
+      setIsOpen(true);
+      setIsCollapsed(false);
+    }
   };
 
   return (
     <div
       className={`relative no-select flex-shrink-0 h-full ${!isResizing() ? 'transition-all duration-300' : ''}`}
       style={{
-        width: isOpen() ? `${panelWidth()}px` : '0px'
+        width: isOpen() ? (isCollapsed() ? '48px' : `${panelWidth()}px`) : '0px'
       }}
     >
       <Show when={isOpen()}>
         <div className="relative h-full flex">
           <div className="flex-1 min-w-0 overflow-hidden">
             <div className="flex flex-col h-full">
-              {/* Close button - positioned inside panel */}
+              {/* Collapse/Expand button - positioned inside panel */}
               <div className="absolute top-2 left-2 z-10">
                 <button
                   onClick={(e) => {
@@ -67,7 +80,7 @@ const LeftPanel = () => {
                     'border-top-right-radius': '6px',
                     'border-bottom-right-radius': '6px'
                   }}
-                  title="Close panel"
+                  title={isCollapsed() ? "Hide panel" : "Collapse panel"}
                 >
                   <div className="w-3 h-3 flex items-center justify-center">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="w-3 h-3">
@@ -77,7 +90,7 @@ const LeftPanel = () => {
 
                   <div className="absolute left-full ml-1 top-1/2 -translate-y-1/2 bg-base-300 backdrop-blur-sm border border-base-300 text-base-content text-xs px-3 py-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-2xl"
                        style={{ 'z-index': 50 }}>
-                    Close panel
+                    {isCollapsed() ? "Hide panel" : "Collapse panel"}
                     <div className="absolute right-full top-1/2 -translate-y-1/2 w-0 h-0 border-r-4 border-r-base-300 border-t-4 border-t-transparent border-b-4 border-b-transparent"></div>
                   </div>
                 </button>
@@ -85,27 +98,60 @@ const LeftPanel = () => {
 
               {/* Panel content */}
               <div className="h-full bg-base-300 border-r border-base-300 shadow-lg overflow-hidden">
-                <LeftPanelMenu />
+                <Show
+                  when={!isCollapsed()}
+                  fallback={
+                    <div className="h-full flex flex-col items-center py-2 overflow-y-auto scrollbar-thin">
+                      <For each={Array.from(leftPanelMenuItems().values()).sort((a, b) => a.order - b.order)}>
+                        {(item) => (
+                          <button
+                            onClick={() => {
+                              if (item.onClick) {
+                                item.onClick();
+                              }
+                              setIsCollapsed(false);
+                            }}
+                            className="w-10 h-10 flex items-center justify-center text-base-content/60 hover:text-primary hover:bg-base-200 rounded-lg transition-colors mb-1 group relative"
+                            title={item.label}
+                          >
+                            <Show when={item.icon}>
+                              <item.icon className="w-5 h-5" />
+                            </Show>
+
+                            <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 bg-base-300/95 backdrop-blur-sm border border-base-300 text-base-content text-xs px-3 py-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-2xl z-50">
+                              {item.label}
+                              <div className="absolute right-full top-1/2 -translate-y-1/2 w-0 h-0 border-r-4 border-r-base-300 border-t-4 border-t-transparent border-b-4 border-b-transparent"></div>
+                            </div>
+                          </button>
+                        )}
+                      </For>
+                    </div>
+                  }
+                >
+                  <LeftPanelMenu />
+                </Show>
               </div>
             </div>
           </div>
 
-          {/* Resize handle */}
-          <PanelResizer
-            type="left"
-            isResizing={isResizing}
-            onResizeStart={handleResizeStart}
-            onResizeEnd={handleResizeEnd}
-            onResize={handleResizeMove}
-            position={{
-              right: '-4px',
-              top: 0,
-              bottom: 0,
-              width: '8px',
-              zIndex: 30
-            }}
-            className="!bg-transparent !opacity-0 hover:!bg-primary/20 hover:!opacity-100"
-          />
+          {/* Resize handle - hide when collapsed */}
+          <Show when={!isCollapsed()}>
+            <PanelResizer
+              type="left"
+              isResizing={isResizing}
+              onResizeStart={handleResizeStart}
+              onResizeEnd={handleResizeEnd}
+              onResize={handleResizeMove}
+              position={{
+                right: '-4px',
+                top: 0,
+                bottom: 0,
+                width: '8px',
+                zIndex: 30
+              }}
+              className="!bg-transparent !opacity-0 hover:!bg-primary/20 hover:!opacity-100"
+            />
+          </Show>
         </div>
       </Show>
 

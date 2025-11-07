@@ -70,20 +70,14 @@ export default function AlertsViewport() {
   const triggerAlert = async (alertType) => {
     setTriggering(alertType);
     try {
-      const response = await fetch(`${BRIDGE_URL}/twitch/alert/test`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ alert_type: alertType })
-      });
+      // Alert test endpoint not yet implemented in backend
+      console.log(`🔔 Testing ${alertType} alert (backend endpoint not yet implemented)`);
 
-      const result = await response.json();
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to trigger alert');
-      }
+      // TODO: Implement alert test endpoint in backend at /twitch/alert/test
+      // For now, just simulate success
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-      console.log(`✅ ${alertType} alert triggered`);
+      console.log(`✅ ${alertType} alert test simulated`);
     } catch (error) {
       console.error(`❌ Failed to trigger ${alertType} alert:`, error);
       alert(`Failed to trigger alert: ${error.message}`);

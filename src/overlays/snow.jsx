@@ -195,7 +195,7 @@ function SnowOverlay() {
   });
 
   return (
-    <div class="fixed inset-0 pointer-events-none overflow-hidden">
+    <div class="fixed inset-0 pointer-events-none overflow-hidden bg-transparent">
       <For each={snowflakes()}>
         {(flake) => (
           <div

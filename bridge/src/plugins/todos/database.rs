@@ -10,6 +10,7 @@ pub struct Todo {
     pub completed: bool,
     pub created_at: i64,
     pub completed_at: Option<i64>,
+    pub rewarded: bool,
 }
 
 pub fn create_todo(
@@ -31,11 +32,11 @@ pub fn create_todo(
 
 pub fn get_todos(conn: &Connection, channel: &str, completed: Option<bool>) -> Result<Vec<Todo>> {
     let query = match completed {
-        Some(true) => "SELECT id, channel, username, task, completed, created_at, completed_at
+        Some(true) => "SELECT id, channel, username, task, completed, created_at, completed_at, rewarded
                        FROM todos WHERE channel = ?1 AND completed = 1 ORDER BY completed_at DESC",
-        Some(false) => "SELECT id, channel, username, task, completed, created_at, completed_at
+        Some(false) => "SELECT id, channel, username, task, completed, created_at, completed_at, rewarded
                         FROM todos WHERE channel = ?1 AND completed = 0 ORDER BY created_at DESC",
-        None => "SELECT id, channel, username, task, completed, created_at, completed_at
+        None => "SELECT id, channel, username, task, completed, created_at, completed_at, rewarded
                  FROM todos WHERE channel = ?1 ORDER BY created_at DESC",
     };
 
@@ -50,6 +51,7 @@ pub fn get_todos(conn: &Connection, channel: &str, completed: Option<bool>) -> R
             completed: row.get::<_, i64>(4)? != 0,
             created_at: row.get(5)?,
             completed_at: row.get(6)?,
+            rewarded: row.get::<_, i64>(7)? != 0,
         })
     })?
     .collect::<Result<Vec<_>>>()?;

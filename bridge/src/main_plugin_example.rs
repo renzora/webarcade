@@ -7,7 +7,7 @@ use std::sync::Arc;
 use log::{info, error};
 use anyhow::Result;
 
-use webarcade_bridge::core::{EventBus, ServiceRegistry, PluginManager};
+use webarcade_bridge::core::{EventBus, ServiceRegistry, PluginManager, RouterRegistry};
 use webarcade_bridge::plugins;
 
 #[tokio::main]
@@ -28,6 +28,7 @@ async fn main() -> Result<()> {
 
     let event_bus = Arc::new(EventBus::new());
     let service_registry = Arc::new(ServiceRegistry::new());
+    let router_registry = RouterRegistry::new();
 
     // Get database path
     let db_path = webarcade_bridge::core::database::get_database_path();
@@ -42,6 +43,7 @@ async fn main() -> Result<()> {
     let mut plugin_manager = PluginManager::new(
         event_bus.clone(),
         service_registry.clone(),
+        router_registry.clone_registry(),
         plugin_config,
         db_path.to_string_lossy().to_string(),
     );

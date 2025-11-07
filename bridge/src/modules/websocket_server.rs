@@ -1,5 +1,4 @@
 use std::net::SocketAddr;
-use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::{accept_async, WebSocketStream};
 use tokio_tungstenite::tungstenite::Message;
@@ -301,15 +300,28 @@ async fn handle_websocket_connection(stream: TcpStream, client_addr: SocketAddr)
         "message": "WebSocket connection established"
     });
 
-    // Try to get channel from Twitch manager config - DISABLED (using plugin system)
-    // if let Some(twitch_manager) = get_twitch_manager().await {
-    //     let config_manager = twitch_manager.get_config_manager();
-    //     if let Ok(config) = config_manager.load() {
-    //         if let Some(first_channel) = config.channels.first() {
-    //             welcome_msg["channel"] = serde_json::json!(first_channel);
-    //         }
-    //     }
-    // }
+    // Get channel from database
+    let db_path = crate::core::database::get_database_path();
+    match rusqlite::Connection::open(&db_path) {
+        Ok(conn) => {
+            match conn.query_row(
+                "SELECT username FROM twitch_auth LIMIT 1",
+                [],
+                |row| row.get::<_, String>(0)
+            ) {
+                Ok(username) => {
+                    welcome_msg["channel"] = serde_json::json!(username);
+                    log::info!("[WebSocket] Sending channel '{}' in welcome message", username);
+                }
+                Err(e) => {
+                    log::error!("[WebSocket] Failed to query username from twitch_auth: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            log::error!("[WebSocket] Failed to open database at {:?}: {}", db_path, e);
+        }
+    }
 
     if let Ok(welcome_text) = serde_json::to_string(&welcome_msg) {
         if let Err(e) = ws_sender.send(Message::Text(welcome_text)).await {

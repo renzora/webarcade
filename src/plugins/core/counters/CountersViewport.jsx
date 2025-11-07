@@ -13,7 +13,7 @@ export default function CountersViewport() {
   onMount(async () => {
     const currentStatus = await twitchStore.fetchStatus();
     if (currentStatus) {
-      setStatus(currentStatus);
+      setStatus({ ...currentStatus, connected_channels: currentStatus.connected_channels || [] });
       if (currentStatus.connected_channels && currentStatus.connected_channels.length > 0) {
         setSelectedChannel(currentStatus.connected_channels[0]);
         await loadCounters(currentStatus.connected_channels[0]);
@@ -27,7 +27,7 @@ export default function CountersViewport() {
 
     try {
       setLoading(true);
-      const response = await bridgeFetch(`/database/counters?channel=${channel}`);
+      const response = await bridgeFetch(`/counters/list?channel=${channel}`);
       const data = await response.json();
       setCounters(data);
     } catch (e) {
@@ -44,7 +44,7 @@ export default function CountersViewport() {
 
   const incrementCounter = async (task) => {
     try {
-      const response = await bridgeFetch('/database/counters/increment', {
+      const response = await bridgeFetch('/counters/increment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ channel: selectedChannel(), task }),
@@ -61,7 +61,7 @@ export default function CountersViewport() {
 
   const decrementCounter = async (task) => {
     try {
-      const response = await bridgeFetch('/database/counters/decrement', {
+      const response = await bridgeFetch('/counters/decrement', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ channel: selectedChannel(), task }),
@@ -80,7 +80,7 @@ export default function CountersViewport() {
     if (!confirm(`Reset "${task}" counter to 0?`)) return;
 
     try {
-      const response = await bridgeFetch('/database/counters/reset', {
+      const response = await bridgeFetch('/counters/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ channel: selectedChannel(), task }),
@@ -111,13 +111,13 @@ export default function CountersViewport() {
           <h2 class="text-lg font-semibold">Stream Counters</h2>
         </div>
 
-        <Show when={status().connected_channels.length > 0}>
+        <Show when={status().connected_channels?.length > 0}>
           <select
             class="select select-bordered select-sm"
             value={selectedChannel()}
             onChange={(e) => handleChannelChange(e.target.value)}
           >
-            {status().connected_channels.map((channel) => (
+            {status().connected_channels?.map((channel) => (
               <option value={channel}>#{channel}</option>
             ))}
           </select>

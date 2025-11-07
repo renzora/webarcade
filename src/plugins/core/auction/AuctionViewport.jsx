@@ -43,7 +43,7 @@ export default function AuctionViewport() {
   const broadcastAuctionState = async (auction = null, ended = false) => {
     try {
       const state = auction || currentAuction();
-      await fetch(`${BRIDGE_URL}/api/auction/broadcast`, {
+      await fetch(`${BRIDGE_URL}/auction/broadcast`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -58,7 +58,7 @@ export default function AuctionViewport() {
 
   const broadcastBid = async (bidder, amount) => {
     try {
-      await fetch(`${BRIDGE_URL}/api/auction/broadcast`, {
+      await fetch(`${BRIDGE_URL}/auction/broadcast`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

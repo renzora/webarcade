@@ -4,6 +4,8 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use anyhow::Result;
 
+mod router;
+
 pub struct NotesPlugin;
 
 #[async_trait]
@@ -35,8 +37,7 @@ impl Plugin for NotesPlugin {
             "#,
         ])?;
 
-        // TODO: Register services for CRUD operations
-        // TODO: See MIGRATION_GUIDE.md for implementation pattern
+        router::register_routes(ctx).await?;
 
         log::info!("[Notes] Plugin initialized successfully");
         Ok(())

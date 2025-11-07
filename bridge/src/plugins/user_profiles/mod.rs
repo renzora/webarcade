@@ -7,8 +7,8 @@ use rusqlite::OptionalExtension;
 
 mod database;
 mod events;
+mod router;
 
-pub use database::*;
 pub use events::*;
 
 pub struct UserProfilesPlugin;
@@ -249,6 +249,9 @@ impl Plugin for UserProfilesPlugin {
 
             Ok(serde_json::json!({ "profiles": profiles }))
         }).await;
+
+        // Register HTTP routes
+        router::register_routes(ctx).await?;
 
         log::info!("[UserProfiles] Plugin initialized successfully");
         Ok(())

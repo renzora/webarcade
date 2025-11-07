@@ -39,6 +39,7 @@ if (fs.existsSync(releaseBinary)) {
     {
       stdio: 'inherit',
       shell: isWindows,
+      env: { ...process.env, RUST_LOG: 'info' },
     }
   );
 } else {
@@ -50,6 +51,7 @@ if (fs.existsSync(releaseBinary)) {
     {
       stdio: 'inherit',
       shell: isWindows,
+      env: { ...process.env, RUST_LOG: 'info' },
     }
   );
 }
@@ -68,7 +70,7 @@ bridgeProcess.on('exit', (code) => {
 
 function checkBridge() {
   return new Promise((resolve) => {
-    const req = http.get(`${BRIDGE_URL}/health`, (res) => {
+    const req = http.get(`${BRIDGE_URL}/api/health`, (res) => {
       resolve(res.statusCode === 200);
     });
 

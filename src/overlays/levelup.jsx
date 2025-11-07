@@ -100,7 +100,7 @@ function LevelUpOverlay() {
   });
 
   return (
-    <div class="fixed inset-0 pointer-events-none overflow-hidden font-sans">
+    <div class="fixed inset-0 pointer-events-none overflow-hidden font-sans bg-transparent">
       {/* Level Up Animation */}
       <Show when={isVisible() && currentLevelUp()}>
         <div

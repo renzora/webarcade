@@ -8,8 +8,8 @@ pub struct RouletteGame {
     pub status: String,
     pub winning_number: Option<i64>,
     pub created_at: i64,
-    pub spun_at: Option<i64>,
-    pub ended_at: Option<i64>,
+    pub spin_started_at: Option<i64>,
+    pub completed_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,7 +40,7 @@ pub fn start_game(conn: &Connection, channel: &str) -> Result<i64> {
 
 pub fn get_active_game(conn: &Connection, channel: &str) -> Result<Option<RouletteGame>> {
     conn.query_row(
-        "SELECT id, channel, status, winning_number, created_at, spun_at, ended_at
+        "SELECT id, channel, status, winning_number, created_at, spin_started_at, completed_at
          FROM roulette_games
          WHERE channel = ?1 AND status IN ('betting', 'spinning')
          ORDER BY created_at DESC
@@ -52,8 +52,8 @@ pub fn get_active_game(conn: &Connection, channel: &str) -> Result<Option<Roulet
             status: row.get(2)?,
             winning_number: row.get(3)?,
             created_at: row.get(4)?,
-            spun_at: row.get(5)?,
-            ended_at: row.get(6)?,
+            spin_started_at: row.get(5)?,
+            completed_at: row.get(6)?,
         }),
     ).optional()
 }
@@ -104,7 +104,7 @@ pub fn spin_wheel(conn: &Connection, channel: &str) -> Result<i64> {
 
     // Update game
     conn.execute(
-        "UPDATE roulette_games SET status = 'ended', winning_number = ?1, spun_at = ?2, ended_at = ?2
+        "UPDATE roulette_games SET status = 'ended', winning_number = ?1, spin_started_at = ?2, completed_at = ?2
          WHERE id = ?3",
         params![winning_number, now, game.id],
     )?;
@@ -142,6 +142,58 @@ fn process_bets(conn: &Connection, game_id: i64, winning_number: i64) -> Result<
     Ok(())
 }
 
+pub fn set_spin_result(conn: &Connection, game_id: i64, winning_number: i64) -> Result<()> {
+    let now = current_timestamp();
+
+    // Update game with result
+    conn.execute(
+        "UPDATE roulette_games SET status = 'ended', winning_number = ?1, completed_at = ?2
+         WHERE id = ?3 AND status = 'spinning'",
+        params![winning_number, now, game_id],
+    )?;
+
+    // Process bets
+    process_bets(conn, game_id, winning_number)?;
+
+    Ok(())
+}
+
+pub fn start_spin(conn: &Connection, game_id: i64) -> Result<()> {
+    let now = current_timestamp();
+
+    conn.execute(
+        "UPDATE roulette_games SET status = 'spinning', spin_started_at = ?1 WHERE id = ?2",
+        params![now, game_id],
+    )?;
+
+    Ok(())
+}
+
+pub fn get_game_bets(conn: &Connection, game_id: i64) -> Result<Vec<RouletteBet>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, game_id, user_id, username, amount, bet_type, bet_value, won, payout, created_at
+         FROM roulette_bets WHERE game_id = ?1"
+    )?;
+
+    let bets = stmt.query_map(params![game_id], |row| {
+        Ok(RouletteBet {
+            id: row.get(0)?,
+            game_id: row.get(1)?,
+            user_id: row.get(2)?,
+            username: row.get(3)?,
+            amount: row.get(4)?,
+            bet_type: row.get(5)?,
+            bet_value: row.get(6)?,
+            won: row.get(7)?,
+            payout: row.get(8)?,
+            created_at: row.get(9)?,
+        })
+    })?
+    .collect::<Result<Vec<_>>>()?;
+
+    Ok(bets)
+}
+
 pub fn cancel_game(conn: &Connection, channel: &str) -> Result<()> {
     let game = get_active_game(conn, channel)?
         .ok_or(rusqlite::Error::QueryReturnedNoRows)?;
@@ -149,7 +201,7 @@ pub fn cancel_game(conn: &Connection, channel: &str) -> Result<()> {
     let now = current_timestamp();
 
     conn.execute(
-        "UPDATE roulette_games SET status = 'cancelled', ended_at = ?1 WHERE id = ?2",
+        "UPDATE roulette_games SET status = 'cancelled', completed_at = ?1 WHERE id = ?2",
         params![now, game.id],
     )?;
 

@@ -37,7 +37,7 @@ function MoodTickerOverlay() {
   const loadMoodData = async () => {
     try {
       console.log('🔄 Loading mood ticker data...');
-      const response = await fetch(`${WEBARCADE_API}/api/mood-ticker/data`);
+      const response = await fetch(`${WEBARCADE_API}/mood-tracker/data`);
       const data = await response.json();
       console.log('💫 Mood data loaded:', data);
       setMoodData(data);
@@ -91,7 +91,7 @@ function MoodTickerOverlay() {
   });
 
   return (
-    <div class="fixed inset-0 pointer-events-none overflow-hidden">
+    <div class="fixed inset-0 pointer-events-none overflow-hidden bg-transparent">
       {/* Mood Ticker Bar */}
       <div class={`mood-ticker-bar absolute bottom-0 left-0 right-0 ${moodData().show_background ? 'bg-gradient-to-r from-indigo-900/95 via-purple-900/95 to-pink-900/95 backdrop-blur-sm border-t-4 border-b-4 border-black/20 shadow-lg' : ''} h-16 flex items-center overflow-hidden`}>
         {/* Stats - Horizontal Layout */}

@@ -7,8 +7,8 @@ use rusqlite::OptionalExtension;
 
 mod database;
 mod events;
+mod router;
 
-pub use database::*;
 pub use events::*;
 
 pub struct WithingsPlugin;
@@ -362,6 +362,9 @@ impl Plugin for WithingsPlugin {
                 "sleep_days": sleep_count
             }))
         }).await;
+
+        // Register HTTP routes
+        router::register_routes(ctx).await?;
 
         log::info!("[Withings] Plugin initialized successfully");
         Ok(())

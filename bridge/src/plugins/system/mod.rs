@@ -5,6 +5,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use sysinfo::System;
 
+mod router;
+
 pub struct SystemPlugin;
 
 #[async_trait]
@@ -22,6 +24,16 @@ impl Plugin for SystemPlugin {
 
     async fn init(&self, ctx: &PluginContext) -> Result<()> {
         log::info!("[System] Initializing plugin...");
+
+        // Create system_settings table
+        ctx.migrate(&[
+            r#"
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+            "#,
+        ])?;
 
         // Register services
         ctx.provide_service("get_stats", |_input| async move {
@@ -69,6 +81,9 @@ impl Plugin for SystemPlugin {
                 "usage_percent": memory_usage,
             }))
         }).await;
+
+        // Register HTTP routes
+        router::register_routes(ctx).await?;
 
         log::info!("[System] Plugin initialized successfully");
         Ok(())

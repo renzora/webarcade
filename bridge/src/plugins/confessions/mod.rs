@@ -7,8 +7,8 @@ use rusqlite::OptionalExtension;
 
 mod database;
 mod events;
+mod router;
 
-pub use database::*;
 pub use events::*;
 
 pub struct ConfessionsPlugin;
@@ -29,6 +29,7 @@ impl Plugin for ConfessionsPlugin {
     async fn init(&self, ctx: &PluginContext) -> Result<()> {
         log::info!("[Confessions] Initializing plugin...");
 
+        // Migration 1: Create tables if not exists
         ctx.migrate(&[
             r#"
             CREATE TABLE IF NOT EXISTS confessions (
@@ -61,11 +62,26 @@ impl Plugin for ConfessionsPlugin {
                 value TEXT NOT NULL,
                 updated_at INTEGER NOT NULL
             );
-
-            CREATE INDEX IF NOT EXISTS idx_confessions_status ON confessions(status, submitted_at DESC);
-            CREATE INDEX IF NOT EXISTS idx_confession_reactions_confession_id ON confession_reactions(confession_id);
             "#,
         ])?;
+
+        // Migration 2: Add indexes (only if schema matches)
+        let conn = crate::core::database::get_database_path();
+        if let Ok(conn) = rusqlite::Connection::open(conn) {
+            // Check if status column exists
+            let has_status = conn.query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('confessions') WHERE name = 'status'",
+                [],
+                |row| row.get::<_, i64>(0)
+            ).unwrap_or(0) > 0;
+
+            if has_status {
+                let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_confessions_status ON confessions(status, submitted_at DESC)", []);
+                let _ = conn.execute("CREATE INDEX IF NOT EXISTS idx_confession_reactions_confession_id ON confession_reactions(confession_id)", []);
+            } else {
+                log::warn!("[Confessions] Skipping index creation - status column not found in existing schema");
+            }
+        }
 
         // Initialize default settings
         let conn = crate::core::database::get_database_path();
@@ -93,6 +109,9 @@ impl Plugin for ConfessionsPlugin {
         );
 
         drop(conn);
+
+        // Register HTTP routes
+        router::register_routes(ctx).await?;
 
         // Service: Submit confession
         ctx.provide_service("submit_confession", |input| async move {

@@ -12,10 +12,10 @@ pub struct CurrencyAccount {
     pub updated_at: i64,
 }
 
-pub fn get_balance(conn: &Connection, user_id: &str) -> Result<i64> {
+pub fn get_balance(conn: &Connection, channel: &str, username: &str) -> Result<i64> {
     conn.query_row(
-        "SELECT balance FROM currency_accounts WHERE user_id = ?1",
-        params![user_id],
+        "SELECT coins FROM users WHERE channel = ?1 AND username = ?2",
+        params![channel, username],
         |row| row.get(0),
     ).or(Ok(0))
 }
@@ -39,78 +39,63 @@ pub fn get_account(conn: &Connection, user_id: &str) -> Result<Option<CurrencyAc
 
 pub fn add_currency(
     conn: &Connection,
-    user_id: &str,
+    channel: &str,
     username: &str,
     amount: i64,
-    reason: Option<&str>,
-) -> Result<()> {
+    _reason: Option<&str>,
+) -> Result<i64> {
     let now = current_timestamp();
 
     // Ensure account exists
-    ensure_account(conn, user_id, username)?;
+    ensure_account(conn, channel, username)?;
 
     // Update balance
     conn.execute(
-        "UPDATE currency_accounts
-         SET balance = balance + ?1, lifetime_earned = lifetime_earned + ?1, updated_at = ?2
-         WHERE user_id = ?3",
-        params![amount, now, user_id],
+        "UPDATE users SET coins = coins + ?1, last_seen = ?2 WHERE channel = ?3 AND username = ?4",
+        params![amount, now, channel, username],
     )?;
 
-    // Record transaction
-    conn.execute(
-        "INSERT INTO currency_transactions (user_id, amount, transaction_type, reason, created_at)
-         VALUES (?1, ?2, 'add', ?3, ?4)",
-        params![user_id, amount, reason, now],
-    )?;
-
-    Ok(())
+    // Get new balance
+    get_balance(conn, channel, username)
 }
 
 pub fn deduct_currency(
     conn: &Connection,
-    user_id: &str,
+    channel: &str,
+    username: &str,
     amount: i64,
-    reason: Option<&str>,
-) -> Result<()> {
+    _reason: Option<&str>,
+) -> Result<i64> {
     let now = current_timestamp();
 
     // Check balance
-    let balance = get_balance(conn, user_id)?;
+    let balance = get_balance(conn, channel, username)?;
     if balance < amount {
         return Err(rusqlite::Error::QueryReturnedNoRows);
     }
 
     // Update balance
     conn.execute(
-        "UPDATE currency_accounts
-         SET balance = balance - ?1, lifetime_spent = lifetime_spent + ?1, updated_at = ?2
-         WHERE user_id = ?3",
-        params![amount, now, user_id],
+        "UPDATE users SET coins = coins - ?1, last_seen = ?2 WHERE channel = ?3 AND username = ?4",
+        params![amount, now, channel, username],
     )?;
 
-    // Record transaction
-    conn.execute(
-        "INSERT INTO currency_transactions (user_id, amount, transaction_type, reason, created_at)
-         VALUES (?1, ?2, 'deduct', ?3, ?4)",
-        params![user_id, -amount, reason, now],
-    )?;
-
-    Ok(())
+    // Get new balance
+    get_balance(conn, channel, username)
 }
 
 pub fn transfer_currency(
     conn: &Connection,
-    from_user: &str,
-    to_user: &str,
+    channel: &str,
+    from_username: &str,
     to_username: &str,
     amount: i64,
 ) -> Result<()> {
     // Deduct from sender
-    deduct_currency(conn, from_user, amount, Some("Transfer"))?;
+    deduct_currency(conn, channel, from_username, amount, Some("Transfer"))?;
 
     // Add to receiver
-    add_currency(conn, to_user, to_username, amount, Some("Transfer received"))?;
+    add_currency(conn, channel, to_username, amount, Some("Transfer received"))?;
 
     Ok(())
 }
@@ -139,13 +124,13 @@ pub fn get_leaderboard(conn: &Connection, limit: usize) -> Result<Vec<CurrencyAc
     Ok(accounts)
 }
 
-fn ensure_account(conn: &Connection, user_id: &str, username: &str) -> Result<()> {
+fn ensure_account(conn: &Connection, channel: &str, username: &str) -> Result<()> {
     let now = current_timestamp();
 
     conn.execute(
-        "INSERT OR IGNORE INTO currency_accounts (user_id, username, balance, lifetime_earned, lifetime_spent, created_at, updated_at)
-         VALUES (?1, ?2, 0, 0, 0, ?3, ?3)",
-        params![user_id, username, now],
+        "INSERT OR IGNORE INTO users (channel, username, coins, spin_tokens, last_daily_spin, total_minutes, xp, level, total_messages, last_xp_gain, last_seen, created_at)
+         VALUES (?1, ?2, 0, 0, 0, 0, 0, 1, 0, 0, ?3, ?3)",
+        params![channel, username, now],
     )?;
 
     Ok(())

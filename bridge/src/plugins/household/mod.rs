@@ -3,12 +3,11 @@ use crate::core::plugin_context::PluginContext;
 use async_trait::async_trait;
 use std::sync::Arc;
 use anyhow::Result;
-use rusqlite::OptionalExtension;
 
 mod database;
 mod events;
+mod router;
 
-pub use database::*;
 pub use events::*;
 
 pub struct HouseholdPlugin;
@@ -28,6 +27,8 @@ impl Plugin for HouseholdPlugin {
 
     async fn init(&self, ctx: &PluginContext) -> Result<()> {
         log::info!("[Household] Initializing plugin...");
+
+        router::register_routes(ctx).await?;
 
         ctx.migrate(&[
             r#"

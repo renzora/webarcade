@@ -85,7 +85,7 @@ export default function OverlayManagerViewport() {
   const fetchOverlayFiles = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${BRIDGE_URL}/api/overlay-files`);
+      const response = await fetch(`${BRIDGE_URL}/overlay-manager/files`);
       const data = await response.json();
       setOverlayFiles(data);
     } catch (error) {
@@ -166,7 +166,7 @@ export default function OverlayManagerViewport() {
     setSelectedFile(null);
 
     try {
-      const url = `${BRIDGE_URL}/api/overlay-files/${file.name}.jsx`;
+      const url = `${BRIDGE_URL}/overlay-manager/files/${file.name}.jsx`;
       console.log('🔵 Fetching from URL:', url);
 
       const response = await fetch(url);
@@ -222,7 +222,7 @@ export default function OverlayManagerViewport() {
     try {
       setSaving(true);
 
-      const response = await fetch(`${BRIDGE_URL}/api/overlay-files/${finalFileName}`, {
+      const response = await fetch(`${BRIDGE_URL}/overlay-manager/files/${finalFileName}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: fileContent() })
@@ -231,7 +231,7 @@ export default function OverlayManagerViewport() {
       if (response.ok) {
         // Trigger rebuild
         setBuilding(true);
-        const rebuildResponse = await fetch(`${BRIDGE_URL}/api/rebuild-overlays`, {
+        const rebuildResponse = await fetch(`${BRIDGE_URL}/overlay-manager/rebuild`, {
           method: 'POST'
         });
 

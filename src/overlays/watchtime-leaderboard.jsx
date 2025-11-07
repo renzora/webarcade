@@ -147,7 +147,7 @@ export default function WatchtimeLeaderboard() {
         animation: sparkle 2s ease-in-out infinite;
       }
     `}</style>
-    <div class="min-h-screen font-sans w-full">
+    <div class="min-h-screen font-sans w-full bg-transparent">
       <div class="w-full">
         {/* Leaderboard */}
         <div>

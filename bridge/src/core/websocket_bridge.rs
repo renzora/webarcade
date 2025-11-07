@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use anyhow::Result;
 
-use super::{EventBus, Event};
+use super::EventBus;
 
 /// WebSocket bridge that forwards plugin events to connected WebSocket clients
 pub struct WebSocketBridge {
@@ -69,14 +69,31 @@ async fn handle_websocket_client(
     let ws_stream = accept_async(stream).await?;
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
 
-    // Send welcome message
-    ws_sender.send(Message::Text(
-        serde_json::json!({
-            "type": "connected",
-            "system": "plugin-based",
-            "message": "WebArcade Bridge - Plugin Event Stream"
-        }).to_string()
-    )).await?;
+    // Send welcome message with channel info
+    let mut welcome_msg = serde_json::json!({
+        "type": "connected",
+        "system": "plugin-based",
+        "message": "WebArcade Bridge - Plugin Event Stream"
+    });
+
+    // Get channel from database
+    let db_path = crate::core::database::get_database_path();
+    if let Ok(conn) = rusqlite::Connection::open(&db_path) {
+        if let Ok(username) = conn.query_row(
+            "SELECT username FROM twitch_auth LIMIT 1",
+            [],
+            |row| row.get::<_, String>(0)
+        ) {
+            welcome_msg["channel"] = serde_json::json!(username);
+            log::info!("[WebSocket] Sending channel '{}' in welcome message", username);
+        } else {
+            log::warn!("[WebSocket] No username found in twitch_auth table");
+        }
+    } else {
+        log::error!("[WebSocket] Failed to open database at {:?}", db_path);
+    }
+
+    ws_sender.send(Message::Text(welcome_msg.to_string())).await?;
 
     loop {
         tokio::select! {

@@ -3,12 +3,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserLevel {
-    pub user_id: String,
+    pub id: i64,
+    pub channel: String,
     pub username: String,
-    pub total_xp: i64,
+    pub xp: i64,
     pub level: i64,
-    pub last_xp_at: i64,
-    pub created_at: i64,
+    pub total_messages: i64,
+    pub last_xp_gain: i64,
 }
 
 pub fn calculate_level(xp: i64) -> i64 {
@@ -23,7 +24,7 @@ pub fn xp_for_level(level: i64) -> i64 {
 
 pub fn add_xp(
     conn: &Connection,
-    user_id: &str,
+    channel: &str,
     username: &str,
     amount: i64,
     reason: Option<&str>,
@@ -31,25 +32,26 @@ pub fn add_xp(
     let now = current_timestamp();
 
     // Get current level or create user
-    let old_level = if let Some(user_level) = get_user_level(conn, user_id)? {
+    let old_level = if let Some(user_level) = get_user_level(conn, channel, username)? {
         user_level.level
     } else {
         // Create new user
         conn.execute(
-            "INSERT INTO user_levels (user_id, username, total_xp, level, last_xp_at, created_at)
-             VALUES (?1, ?2, 0, 1, ?3, ?3)",
-            params![user_id, username, now],
+            "INSERT INTO user_levels (channel, username, xp, level, total_messages, last_xp_gain)
+             VALUES (?1, ?2, 0, 1, 0, ?3)",
+            params![channel, username, now],
         )?;
         1
     };
 
     // Add XP
     conn.execute(
-        "UPDATE user_levels SET total_xp = total_xp + ?1, last_xp_at = ?2 WHERE user_id = ?3",
-        params![amount, now, user_id],
+        "UPDATE user_levels SET xp = xp + ?1, last_xp_gain = ?2 WHERE channel = ?3 AND username = ?4",
+        params![amount, now, channel, username],
     )?;
 
-    // Record transaction
+    // Record transaction (using channel:username as user_id for compatibility)
+    let user_id = format!("{}:{}", channel, username);
     conn.execute(
         "INSERT INTO xp_transactions (user_id, amount, reason, created_at)
          VALUES (?1, ?2, ?3, ?4)",
@@ -58,8 +60,8 @@ pub fn add_xp(
 
     // Get new total XP and calculate level
     let total_xp: i64 = conn.query_row(
-        "SELECT total_xp FROM user_levels WHERE user_id = ?1",
-        params![user_id],
+        "SELECT xp FROM user_levels WHERE channel = ?1 AND username = ?2",
+        params![channel, username],
         |row| row.get(0),
     )?;
 
@@ -68,46 +70,49 @@ pub fn add_xp(
     // Update level if changed
     if new_level != old_level {
         conn.execute(
-            "UPDATE user_levels SET level = ?1 WHERE user_id = ?2",
-            params![new_level, user_id],
+            "UPDATE user_levels SET level = ?1 WHERE channel = ?2 AND username = ?3",
+            params![new_level, channel, username],
         )?;
     }
 
     Ok((old_level, new_level))
 }
 
-pub fn get_user_level(conn: &Connection, user_id: &str) -> Result<Option<UserLevel>> {
+pub fn get_user_level(conn: &Connection, channel: &str, username: &str) -> Result<Option<UserLevel>> {
     conn.query_row(
-        "SELECT user_id, username, total_xp, level, last_xp_at, created_at
-         FROM user_levels WHERE user_id = ?1",
-        params![user_id],
+        "SELECT id, channel, username, xp, level, total_messages, last_xp_gain
+         FROM user_levels WHERE channel = ?1 AND username = ?2",
+        params![channel, username],
         |row| Ok(UserLevel {
-            user_id: row.get(0)?,
-            username: row.get(1)?,
-            total_xp: row.get(2)?,
-            level: row.get(3)?,
-            last_xp_at: row.get(4)?,
-            created_at: row.get(5)?,
+            id: row.get(0)?,
+            channel: row.get(1)?,
+            username: row.get(2)?,
+            xp: row.get(3)?,
+            level: row.get(4)?,
+            total_messages: row.get(5)?,
+            last_xp_gain: row.get(6)?,
         }),
     ).optional()
 }
 
-pub fn get_leaderboard(conn: &Connection, limit: usize) -> Result<Vec<UserLevel>> {
+pub fn get_leaderboard(conn: &Connection, channel: &str, limit: usize) -> Result<Vec<UserLevel>> {
     let mut stmt = conn.prepare(
-        "SELECT user_id, username, total_xp, level, last_xp_at, created_at
+        "SELECT id, channel, username, xp, level, total_messages, last_xp_gain
          FROM user_levels
-         ORDER BY total_xp DESC
-         LIMIT ?1"
+         WHERE channel = ?1
+         ORDER BY xp DESC
+         LIMIT ?2"
     )?;
 
-    let users = stmt.query_map(params![limit], |row| {
+    let users = stmt.query_map(params![channel, limit], |row| {
         Ok(UserLevel {
-            user_id: row.get(0)?,
-            username: row.get(1)?,
-            total_xp: row.get(2)?,
-            level: row.get(3)?,
-            last_xp_at: row.get(4)?,
-            created_at: row.get(5)?,
+            id: row.get(0)?,
+            channel: row.get(1)?,
+            username: row.get(2)?,
+            xp: row.get(3)?,
+            level: row.get(4)?,
+            total_messages: row.get(5)?,
+            last_xp_gain: row.get(6)?,
         })
     })?
     .collect::<Result<Vec<_>>>()?;
