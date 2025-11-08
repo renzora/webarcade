@@ -5,17 +5,25 @@ import fs from 'fs';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
-// Dynamically find all overlay .jsx files (excluding overlay.html)
-const overlaysDir = resolve(import.meta.dirname, 'src/overlays');
+// Dynamically find all overlay .jsx files from plugins directory
+const pluginsDir = resolve(import.meta.dirname, 'plugins');
 const overlayEntries = {};
 
-if (fs.existsSync(overlaysDir)) {
-  const files = fs.readdirSync(overlaysDir);
-  files.forEach(file => {
-    // Only process .jsx/.tsx files (not .html templates)
-    if ((file.endsWith('.jsx') || file.endsWith('.tsx')) && !file.includes('overlay.html')) {
-      const name = file.replace('.jsx', '').replace('.tsx', '');
-      overlayEntries[name] = `./src/overlays/${file}`;
+if (fs.existsSync(pluginsDir)) {
+  const plugins = fs.readdirSync(pluginsDir, { withFileTypes: true });
+
+  plugins.forEach(plugin => {
+    if (plugin.isDirectory()) {
+      const pluginPath = resolve(pluginsDir, plugin.name);
+      const files = fs.readdirSync(pluginPath);
+
+      files.forEach(file => {
+        // Look for overlay.jsx or overlay.tsx files in each plugin
+        if (file === 'overlay.jsx' || file === 'overlay.tsx') {
+          // Use plugin name as overlay name
+          overlayEntries[plugin.name] = `./plugins/${plugin.name}/${file}`;
+        }
+      });
     }
   });
 }

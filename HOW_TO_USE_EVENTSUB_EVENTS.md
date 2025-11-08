@@ -237,7 +237,7 @@ async fn handle_channel_points(ctx: &PluginContext, payload: serde_json::Value) 
 Your alerts overlay can listen to WebSocket events from the backend:
 
 ```jsx
-// src/overlays/my-alerts.jsx
+// plugins/my-alerts/overlay.jsx
 import { createSignal, onMount, Show } from 'solid-js';
 
 export default function MyAlertsOverlay() {
@@ -336,7 +336,7 @@ export default function MyAlertsOverlay() {
 ### CSS for Alerts
 
 ```css
-/* src/overlays/my-alerts.css */
+/* plugins/my-alerts/styles.css */
 .alerts-container {
   position: fixed;
   top: 20%;
@@ -526,11 +526,11 @@ tokio::spawn(async move {
 
 ## Next Steps
 
-1. Create your plugin in `bridge/src/plugins/your_plugin/`
-2. Register it in `bridge/src/plugins/mod.rs`
-3. Subscribe to events in the `start()` method
+1. Create your plugin directory in `plugins/your_plugin/`
+2. Add backend code (`mod.rs`, `router.rs`) in the plugin directory
+3. Subscribe to events in the plugin's `start()` method
 4. Emit events to your overlay
-5. Create overlay component in `src/overlays/`
+5. Create overlay component (`overlay.jsx`) in the same plugin directory
 6. Style and animate!
 
 You now have access to **every Twitch event** in real-time! 🚀

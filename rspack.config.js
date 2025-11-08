@@ -215,18 +215,23 @@ if (!isProduction) {
     allowedHosts: 'all',
     proxy: [
       {
-        context: [
-          '/system', '/health', '/twitch', '/database', '/hue', '/withings', '/discord', '/song_requests', '/alexa',
-          '/ticker', '/status', '/goals', '/counters', '/wheel', '/auction', '/roulette', '/notes', '/packs',
-          '/confessions', '/todos', '/watchtime', '/viewer-stats', '/tts', '/levels', '/text_commands',
-          '/user_profiles', '/files', '/household', '/currency', '/layouts', '/overlay-manager'
-        ],
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-        secure: false,
-      },
-      {
-        context: ['/overlay/layout'],
+        // Proxy all API routes to the bridge server
+        // This catches any plugin routes automatically
+        context: (pathname) => {
+          // Proxy all paths starting with plugin-like names (lowercase with dashes/underscores)
+          // Skip HMR, webpack, and static assets
+          if (pathname.match(/^\/(hot|__webpack|assets|overlay\/[^l]|favicon)/)) {
+            return false;
+          }
+          // Proxy if it looks like an API endpoint (not a file extension)
+          if (pathname.startsWith('/') && !pathname.match(/\.[a-z0-9]+$/i)) {
+            // Check if it's not an HTML page request (has file extension or is root)
+            const isStaticFile = pathname.match(/\.(html|css|js|jsx|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/i);
+            const isRoot = pathname === '/' || pathname === '';
+            return !isStaticFile && !isRoot;
+          }
+          return false;
+        },
         target: 'http://localhost:3001',
         changeOrigin: true,
         secure: false,

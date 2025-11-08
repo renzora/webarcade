@@ -1,5 +1,5 @@
 import { createSignal, createContext, useContext, onMount, onCleanup, createRoot } from 'solid-js';
-import pluginStore, { PLUGIN_STATES as STORE_PLUGIN_STATES } from '@/plugins/core/plugins/PluginStore.jsx';
+import pluginStore, { PLUGIN_STATES as STORE_PLUGIN_STATES } from '../../../plugins/plugins/PluginStore.jsx';
 
 const PLUGIN_STATES = STORE_PLUGIN_STATES;
 
@@ -26,13 +26,15 @@ class PluginLoader {
     this.PluginAPI = PluginAPI;
     this.updateInterval = null;
     this.pluginDirectories = [
-      '/src/plugins/core',
       '/plugins'
     ];
   }
 
   isCorePlugin(pluginPath) {
-    return pluginPath.includes('/src/plugins/core/');
+    // Core plugins are bridge, default, and plugins manager
+    const corePluginIds = ['bridge', 'default', 'plugins'];
+    const pluginId = pluginPath.split('/').filter(Boolean).pop();
+    return corePluginIds.includes(pluginId);
   }
 
   async discoverPlugins() {
@@ -100,34 +102,41 @@ class PluginLoader {
   }
 
   async loadPluginDynamic(id, path, mainFile) {
-    
+
     try {
-      // Use require.context to create a webpack context that includes all plugin files
-      const pluginContext = require.context('@/plugins', true, /\.(jsx|js)$/);
-      
-      // Convert the full path to a relative path for webpack context
-      // Remove /src/plugins from the beginning and create relative path
-      const relativePath = path.replace('/src/plugins', '');
-      const mainPath = `.${relativePath}/${mainFile}`;
-      
-      
+      // Use require.context to create a webpack context for all plugins
+      // This scans the plugins directory at build time
+      // Path from src/api/plugin/index.jsx to root plugins/ directory
+      const pluginContext = require.context('../../../plugins', true, /\.(jsx|js)$/);
+
+      // Path format: /plugins/plugin_name -> ./plugin_name/index.jsx
+      const relativePath = path.replace('/plugins', '.');
+      const mainPath = `${relativePath}/${mainFile}`;
+
+      // Check if this exact path exists
       if (pluginContext.keys().includes(mainPath)) {
         const pluginModule = pluginContext(mainPath);
         return pluginModule;
       }
-      
-      // Try fallback with index.jsx
-      const fallbackPath = `.${relativePath}/index.jsx`;
-      
-      if (pluginContext.keys().includes(fallbackPath)) {
-        const pluginModule = pluginContext(fallbackPath);
-        return pluginModule;
+
+      // Try without extension
+      const pathWithoutExt = mainPath.replace(/\.(jsx|js)$/, '');
+      const tryPaths = [
+        `${pathWithoutExt}.jsx`,
+        `${pathWithoutExt}.js`,
+        `${pathWithoutExt}/index.jsx`,
+        `${pathWithoutExt}/index.js`
+      ];
+
+      for (const tryPath of tryPaths) {
+        if (pluginContext.keys().includes(tryPath)) {
+          const pluginModule = pluginContext(tryPath);
+          return pluginModule;
+        }
       }
-      
-      // Log available paths for debugging
-      
-      throw new Error(`Plugin file not found: ${mainPath}`);
-      
+
+      throw new Error(`Plugin file not found: ${mainPath}. Available: ${pluginContext.keys().join(', ')}`);
+
     } catch (error) {
       throw error;
     }
@@ -434,18 +443,11 @@ class PluginLoader {
 
   async loadPluginWithDynamicImport(pluginId, pluginPath, mainFile) {
     try {
-      
-      // Convert the full path to import path
-      // Remove /src from the beginning to create import path
-      const relativePath = pluginPath.replace('/src', '');
-      // Remove file extension from mainFile for import path
-      const mainFileWithoutExt = mainFile.replace(/\.[^/.]+$/, "");
-      const importPath = `@${relativePath}/${mainFileWithoutExt}`;
-      
-      
-      // Use dynamic import to load the plugin
-      const pluginModule = await import(/* webpackIgnore: true */ importPath);
-      
+
+      // Use the sync context-based loader to get the module
+      // Dynamic imports with variable paths don't work well with rspack
+      const pluginModule = await this.loadPluginDynamic(pluginId, pluginPath, mainFile);
+
       if (!pluginModule.default && !pluginModule.Plugin) {
         throw new Error(`Plugin ${pluginId} must export a default plugin function`);
       }

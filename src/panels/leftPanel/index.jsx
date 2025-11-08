@@ -6,7 +6,7 @@ import { leftPanelMenuItems } from '@/api/plugin';
 const LeftPanel = () => {
   const [isOpen, setIsOpen] = createSignal(true);
   const [isCollapsed, setIsCollapsed] = createSignal(false);
-  const [panelWidth, setPanelWidth] = createSignal(280);
+  const [panelWidth, setPanelWidth] = createSignal(270);
   const [isResizing, setIsResizing] = createSignal(false);
   const [dragOffset, setDragOffset] = createSignal(0);
 

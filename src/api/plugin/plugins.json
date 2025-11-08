@@ -1,235 +1,244 @@
 {
   "plugins": [
     {
+      "id": "bridge",
+      "path": "/plugins/bridge",
+      "main": "index.jsx",
       "enabled": true,
-      "id": "core-bridge-plugin",
-      "main": "BridgePluginClass.jsx",
-      "path": "/src/plugins/core/bridge",
       "priority": -2
     },
     {
-      "enabled": true,
-      "id": "default-plugin",
+      "id": "default",
+      "path": "/plugins/default",
       "main": "index.jsx",
-      "path": "/src/plugins/core/default",
+      "enabled": true,
       "priority": -1
     },
     {
+      "id": "alerts",
+      "path": "/plugins/alerts",
+      "main": "index.jsx",
       "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "alexa",
+      "path": "/plugins/alexa",
+      "main": "index.jsx",
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "auction",
+      "path": "/plugins/auction",
+      "main": "index.jsx",
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "chat",
+      "path": "/plugins/chat",
+      "main": "index.jsx",
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "chat_highlight",
+      "path": "/plugins/chat_highlight",
+      "main": "index.jsx",
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "code",
+      "path": "/plugins/code",
+      "main": "index.jsx",
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "confessions",
+      "path": "/plugins/confessions",
+      "main": "index.jsx",
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "counters",
+      "path": "/plugins/counters",
+      "main": "index.jsx",
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "database",
+      "path": "/plugins/database",
+      "main": "index.jsx",
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "discord",
+      "path": "/plugins/discord",
+      "main": "index.jsx",
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "emoji_wall",
+      "path": "/plugins/emoji_wall",
+      "main": "index.jsx",
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "goals",
+      "path": "/plugins/goals",
+      "main": "index.jsx",
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "hue",
+      "path": "/plugins/hue",
+      "main": "index.jsx",
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "layout_manager",
+      "path": "/plugins/layout_manager",
+      "main": "index.jsx",
+      "enabled": true,
+      "priority": 1
+    },
+    {
       "id": "menu",
+      "path": "/plugins/menu",
       "main": "index.jsx",
-      "path": "/src/plugins/core/menu",
+      "enabled": true,
       "priority": 1
     },
     {
-      "enabled": true,
-      "id": "twitch-plugin",
+      "id": "mood_tracker",
+      "path": "/plugins/mood_tracker",
       "main": "index.jsx",
-      "path": "/src/plugins/core/twitch",
+      "enabled": true,
       "priority": 1
     },
     {
-      "enabled": true,
-      "id": "ticker-plugin",
+      "id": "notes",
+      "path": "/plugins/notes",
       "main": "index.jsx",
-      "path": "/src/plugins/core/ticker",
+      "enabled": true,
       "priority": 1
     },
     {
-      "enabled": true,
-      "id": "mood-tracker-plugin",
+      "id": "overlay_manager",
+      "path": "/plugins/overlay_manager",
       "main": "index.jsx",
-      "path": "/src/plugins/core/mood-tracker",
+      "enabled": true,
       "priority": 1
     },
     {
-      "enabled": true,
-      "id": "hue-plugin",
+      "id": "packs",
+      "path": "/plugins/packs",
       "main": "index.jsx",
-      "path": "/src/plugins/core/hue",
-      "priority": 2
+      "enabled": true,
+      "priority": 1
     },
     {
-      "enabled": true,
-      "id": "overlay-manager-plugin",
+      "id": "roulette",
+      "path": "/plugins/roulette",
       "main": "index.jsx",
-      "path": "/src/plugins/core/overlay-manager",
-      "priority": 2
+      "enabled": true,
+      "priority": 1
     },
     {
-      "enabled": true,
-      "id": "layout-manager-plugin",
+      "id": "snow",
+      "path": "/plugins/snow",
       "main": "index.jsx",
-      "path": "/src/plugins/core/layout-manager",
-      "priority": 2
+      "enabled": true,
+      "priority": 1
     },
     {
-      "enabled": true,
-      "id": "song_requests-plugin",
+      "id": "song_requests",
+      "path": "/plugins/song_requests",
       "main": "index.jsx",
-      "path": "/src/plugins/core/song_requests",
-      "priority": 2
+      "enabled": true,
+      "priority": 1
     },
     {
-      "enabled": true,
-      "id": "database-plugin",
+      "id": "tasks",
+      "path": "/plugins/tasks",
       "main": "index.jsx",
-      "path": "/src/plugins/core/database",
-      "priority": 2
+      "enabled": true,
+      "priority": 1
     },
     {
-      "enabled": true,
-      "id": "alerts-plugin",
+      "id": "text_commands",
+      "path": "/plugins/text_commands",
       "main": "index.jsx",
-      "path": "/src/plugins/core/alerts",
-      "priority": 2
+      "enabled": true,
+      "priority": 1
     },
     {
-      "enabled": true,
-      "id": "counters-plugin",
+      "id": "ticker",
+      "path": "/plugins/ticker",
       "main": "index.jsx",
-      "path": "/src/plugins/core/counters",
-      "priority": 2
+      "enabled": true,
+      "priority": 1
     },
     {
-      "enabled": true,
-      "id": "goals-plugin",
+      "id": "timer",
+      "path": "/plugins/timer",
       "main": "index.jsx",
-      "path": "/src/plugins/core/goals",
-      "priority": 2
+      "enabled": true,
+      "priority": 1
     },
     {
-      "enabled": true,
-      "id": "wheel-plugin",
+      "id": "tts",
+      "path": "/plugins/tts",
       "main": "index.jsx",
-      "path": "/src/plugins/core/wheel",
-      "priority": 2
+      "enabled": true,
+      "priority": 1
     },
     {
-      "enabled": true,
-      "id": "tasks-plugin",
+      "id": "twitch",
+      "path": "/plugins/twitch",
       "main": "index.jsx",
-      "path": "/src/plugins/core/tasks",
-      "priority": 2
+      "enabled": true,
+      "priority": 1
     },
     {
-      "enabled": true,
-      "id": "tts-plugin",
+      "id": "watchtime",
+      "path": "/plugins/watchtime",
       "main": "index.jsx",
-      "path": "/src/plugins/core/tts",
-      "priority": 2
+      "enabled": true,
+      "priority": 1
     },
     {
-      "enabled": true,
-      "id": "text-commands-plugin",
+      "id": "wheel",
+      "path": "/plugins/wheel",
       "main": "index.jsx",
-      "path": "/src/plugins/core/text-commands",
-      "priority": 2
+      "enabled": true,
+      "priority": 1
     },
     {
-      "enabled": true,
-      "id": "timer-plugin",
+      "id": "withings",
+      "path": "/plugins/withings",
       "main": "index.jsx",
-      "path": "/src/plugins/core/timer",
-      "priority": 2
+      "enabled": true,
+      "priority": 1
     },
     {
-      "enabled": true,
-      "id": "watchtime-plugin",
+      "id": "youtube",
+      "path": "/plugins/youtube",
       "main": "index.jsx",
-      "path": "/src/plugins/core/watchtime",
-      "priority": 2
-    },
-    {
       "enabled": true,
-      "id": "viewer-stats-plugin",
-      "main": "index.jsx",
-      "path": "/src/plugins/core/viewer-stats",
-      "priority": 2
-    },
-    {
-      "enabled": true,
-      "id": "withings-plugin",
-      "main": "index.jsx",
-      "path": "/src/plugins/core/withings",
-      "priority": 2
-    },
-    {
-      "enabled": true,
-      "id": "discord-plugin",
-      "main": "index.jsx",
-      "path": "/src/plugins/core/discord",
-      "priority": 2
-    },
-    {
-      "enabled": true,
-      "id": "confessions-plugin",
-      "main": "index.jsx",
-      "path": "/src/plugins/core/confessions",
-      "priority": 2
-    },
-    {
-      "enabled": true,
-      "id": "alexa-plugin",
-      "main": "index.jsx",
-      "path": "/src/plugins/core/alexa",
-      "priority": 2
-    },
-    {
-      "enabled": true,
-      "id": "stream-viewport-plugin",
-      "main": "index.jsx",
-      "path": "/src/plugins/core/stream-viewport",
-      "priority": 2
-    },
-    {
-      "enabled": true,
-      "id": "emoji-wall-plugin",
-      "main": "index.jsx",
-      "path": "/src/plugins/core/emoji-wall",
-      "priority": 2
-    },
-    {
-      "enabled": true,
-      "id": "snow-plugin",
-      "main": "index.jsx",
-      "path": "/src/plugins/core/snow",
-      "priority": 2
-    },
-    {
-      "enabled": true,
-      "id": "chat-highlight-plugin",
-      "main": "index.jsx",
-      "path": "/src/plugins/core/chat-highlight",
-      "priority": 2
-    },
-    {
-      "enabled": true,
-      "id": "notes-plugin",
-      "main": "index.jsx",
-      "path": "/src/plugins/core/notes",
-      "priority": 2
-    },
-    {
-      "enabled": true,
-      "id": "packs-plugin",
-      "main": "index.jsx",
-      "path": "/src/plugins/core/packs",
-      "priority": 2
-    },
-    {
-      "enabled": true,
-      "id": "roulette-plugin",
-      "main": "index.jsx",
-      "path": "/src/plugins/core/roulette",
-      "priority": 2
-    },
-    {
-      "enabled": true,
-      "id": "auction-plugin",
-      "main": "index.jsx",
-      "path": "/src/plugins/core/auction",
-      "priority": 2
+      "priority": 1
     }
-  ]
+  ],
+  "generatedAt": "2025-11-08T12:03:32.334Z",
+  "generator": "discover-plugins.js"
 }

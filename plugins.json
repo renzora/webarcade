@@ -92,11 +92,6 @@
     {
       "config": {},
       "enabled": true,
-      "id": "song_requests"
-    },
-    {
-      "config": {},
-      "enabled": true,
       "id": "twitch"
     },
     {

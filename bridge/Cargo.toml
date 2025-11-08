@@ -58,6 +58,9 @@ dirs = "5.0"
 rusqlite = { version = "0.32", features = ["bundled"] }
 # Audio playback
 rodio = "0.17"
+# File upload and zip extraction
+multer = "3.0"
+zip = "0.6"
 # Discord integration
 serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "rustls_backend", "model", "cache"] }
 # Note: Voice support disabled on Windows due to build requirements (CMake + Visual Studio Build Tools)

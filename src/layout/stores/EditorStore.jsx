@@ -10,7 +10,7 @@ const [editorStore, setEditorStore] = createStore({
   },
   
   ui: {
-    rightPanelWidth: 450,
+    rightPanelWidth: 300,
     bottomPanelHeight: 300,
     scenePropertiesHeight: Math.floor(window.innerHeight * 0.7),
     selectedTool: 'scene',
