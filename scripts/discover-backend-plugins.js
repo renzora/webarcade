@@ -7,7 +7,7 @@ const path = require('path');
  */
 
 const PLUGINS_DIR = path.join(__dirname, '../plugins');
-const OUTPUT_FILE = path.join(__dirname, '../bridge/src/plugins/generated.rs');
+const OUTPUT_FILE = path.join(__dirname, '../src-tauri/src/bridge/plugins/generated.rs');
 
 function toPascalCase(str) {
   return str.split('_').map(word =>
@@ -55,14 +55,14 @@ function generatePluginsCode() {
   code += '// DO NOT EDIT MANUALLY\n\n';
 
   for (const plugin of plugins) {
-    code += `#[path = "../../../plugins/${plugin}/mod.rs"]\n`;
+    code += `#[path = "../../../../plugins/${plugin}/mod.rs"]\n`;
     code += `pub mod ${plugin};\n`;
   }
 
   code += '\n';
 
   // Generate registration function
-  code += 'use crate::core::plugin_manager::PluginManager;\n\n';
+  code += 'use crate::bridge::core::plugin_manager::PluginManager;\n\n';
   code += '/// Auto-generated plugin registration function\n';
   code += 'pub fn register_all_plugins(manager: &mut PluginManager) {\n';
   code += `    log::info!("📦 Registering ${plugins.length} auto-discovered plugins...");\n\n`;
@@ -119,7 +119,7 @@ function generatePluginsCode() {
   // Write the generated code
   fs.writeFileSync(OUTPUT_FILE, code, 'utf-8');
 
-  console.log(`✅ Generated bridge/src/plugins/generated.rs with ${plugins.length} plugins`);
+  console.log(`✅ Generated src-tauri/src/bridge/plugins/generated.rs with ${plugins.length} plugins`);
   plugins.forEach(plugin => {
     console.log(`   - ${plugin}`);
   });

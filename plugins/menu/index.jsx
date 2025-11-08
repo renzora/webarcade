@@ -2,12 +2,15 @@ import { createPlugin } from '@/api/plugin';
 import { createSignal, createEffect, onCleanup } from 'solid-js';
 import { IconRefresh, IconVideo, IconEdit, IconArrowLeft, IconArrowRight, IconPlus, IconFolder, IconFile, IconArrowDown, IconScissors, IconCopy, IconClipboard, IconTrash, IconCube, IconWorld, IconBox, IconCircle, IconCylinder, IconSquare, IconChairDirector, IconLink, IconHelp, IconHeadphones, IconBrandYoutube, IconBrandDiscord, IconBook, IconInfoCircle, IconDeviceFloppy, IconMountain, IconSun, IconBulb, IconSphere, IconPackage, IconSettings, IconEye, IconRobot, IconBrain, IconMessage, IconX
 } from '@tabler/icons-solidjs';
-import AboutOverlay from './AboutOverlay.jsx';
+import AboutOverlay from '../system/AboutOverlay.jsx';
 import { editorActions } from '@/layout/stores/EditorStore';
 import { viewportTypes } from '@/api/plugin';
 
 const [showAbout, setShowAbout] = createSignal(false);
 const [showOpenProject, setShowOpenProject] = createSignal(false);
+
+// Export setShowAbout for use in footer
+export { setShowAbout };
 
 
 
@@ -65,7 +68,7 @@ export default createPlugin({
           label: viewportType.label || viewportType.name || typeId,
           icon: viewportType.icon || IconVideo,
           description: viewportType.description || `Create a new ${viewportType.label || typeId} viewport`,
-          category: 'Viewports',
+          category: 'Plugins',
           order: 10,
           onClick: () => {
             api.createViewportTab(typeId, {
@@ -90,26 +93,5 @@ export default createPlugin({
       }
     });
 
-    api.registerLeftPanelMenuItem('help', {
-      label: 'Help',
-      icon: IconHelp,
-      description: 'View help documentation',
-      category: 'Help',
-      order: 200,
-      onClick: () => {
-        console.log('Help clicked');
-      }
-    });
-
-    api.registerLeftPanelMenuItem('about', {
-      label: 'About',
-      icon: IconInfoCircle,
-      description: 'About this application',
-      category: 'Help',
-      order: 201,
-      onClick: () => {
-        setShowAbout(true);
-      }
-    });
   }
 });

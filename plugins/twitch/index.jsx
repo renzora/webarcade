@@ -35,7 +35,8 @@ export default createPlugin({
       title: 'Stream Info',
       component: StreamInfoPanel,
       icon: IconInfoCircle,
-      order: 4
+      order: 4,
+      viewport: 'twitch-settings'
     });
 
     // Register Settings as a viewport

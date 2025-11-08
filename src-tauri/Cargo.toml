@@ -12,6 +12,7 @@ rust-version = "1.60"
 tauri-build = { version = "2.0", features = [] }
 
 [dependencies]
+# Tauri dependencies
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 tauri = { version = "2.0", features = [] }
@@ -21,6 +22,84 @@ rayon = "1.8"
 screenshots = "0.8"
 base64 = "0.22"
 
+# Bridge dependencies - Async runtime
+tokio = { version = "1", features = ["rt-multi-thread", "net", "fs", "sync", "time", "macros", "io-util", "process"] }
+tokio-stream = { version = "0.1", features = ["time"] }
+
+# Bridge dependencies - HTTP/WebSocket
+hyper = { version = "1.0", features = ["server", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+bytes = "1.0"
+futures-util = "0.3"
+tokio-tungstenite = "0.24"
+
+# Bridge dependencies - Serialization
+simd-json = "0.13"
+
+# Bridge dependencies - Cryptography
+sha1 = "0.10"
+sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+aes-gcm = "0.10"
+
+# Bridge dependencies - File system
+notify = "6.1"
+filetime = "0.2"
+
+# Bridge dependencies - Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Bridge dependencies - Utilities
+lazy_static = "1.4"
+once_cell = "1.19"
+log = "0.4"
+env_logger = "0.10"
+percent-encoding = "2.3"
+regex = "1.0"
+dashmap = "6.0"
+
+# Bridge dependencies - System
+sysinfo = "0.30"
+nvml-wrapper = { version = "0.10", optional = true }
+
+# Bridge dependencies - Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+async-trait = "0.1"
+
+# Bridge dependencies - Twitch integration
+twitch-irc = "5.0"
+reqwest = { version = "0.12", features = ["json"] }
+toml = "0.8"
+url = "2.5"
+urlencoding = "2.1"
+
+# Bridge dependencies - Random
+rand = "0.8"
+fastrand = "2.0"
+
+# Bridge dependencies - System utilities
+dirs = "5.0"
+
+# Bridge dependencies - Database
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Bridge dependencies - Audio playback
+rodio = "0.17"
+
+# Bridge dependencies - File upload and zip extraction
+multer = "3.0"
+zip = "0.6"
+
+# Bridge dependencies - Discord integration
+serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "rustls_backend", "model", "cache"] }
+
+# Bridge dependencies - OBS WebSocket integration
+obws = "0.11"
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+nvidia = ["nvml-wrapper"]

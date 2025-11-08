@@ -26,7 +26,8 @@ export default createPlugin({
       title: 'Database',
       component: DatabaseMenu,
       icon: IconDatabase,
-      order: 100
+      order: 100,
+      viewport: 'twitch-database'
     });
 
     console.log('[Twitch Database Plugin] Started successfully');

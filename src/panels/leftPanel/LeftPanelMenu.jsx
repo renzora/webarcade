@@ -1,7 +1,7 @@
 import { createSignal, createMemo, For, Show } from 'solid-js';
 import { leftPanelMenuItems, registeredPlugins, viewportTypes } from '@/api/plugin';
 import pluginStore from '../../../plugins/plugins/PluginStore.jsx';
-import { IconSearch } from '@tabler/icons-solidjs';
+import { IconSearch, IconStar } from '@tabler/icons-solidjs';
 
 const LeftPanelMenu = () => {
   const [searchQuery, setSearchQuery] = createSignal('');
@@ -10,12 +10,28 @@ const LeftPanelMenu = () => {
   );
   const [uploading, setUploading] = createSignal(false);
   const [isDragging, setIsDragging] = createSignal(false);
+  const [isRearrangeMode, setIsRearrangeMode] = createSignal(false);
+  const [draggedItem, setDraggedItem] = createSignal(null);
+  const [activeItem, setActiveItem] = createSignal(null);
+  const [customOrder, setCustomOrder] = createSignal(
+    JSON.parse(localStorage.getItem('leftPanelCustomOrder') || '{}')
+  );
+  const [favourites, setFavourites] = createSignal(
+    new Set(JSON.parse(localStorage.getItem('leftPanelFavourites') || '[]'))
+  );
   let fileInputRef;
 
   // Get all menu items and organize by category
   const menuItems = createMemo(() => {
-    const items = Array.from(leftPanelMenuItems().values())
-      .sort((a, b) => a.order - b.order);
+    const items = Array.from(leftPanelMenuItems().values());
+    const order = customOrder();
+
+    // Sort items: first by custom order if exists, then by original order
+    items.sort((a, b) => {
+      const orderA = order[a.id] !== undefined ? order[a.id] : a.order;
+      const orderB = order[b.id] !== undefined ? order[b.id] : b.order;
+      return orderA - orderB;
+    });
 
     return items;
   });
@@ -41,8 +57,21 @@ const LeftPanelMenu = () => {
   const groupedMenuItems = createMemo(() => {
     const items = filteredMenuItems();
     const groups = new Map();
+    const favs = favourites();
 
+    // Add favourites category if there are favourites
+    const favouriteItems = items.filter(item => favs.has(item.id));
+    if (favouriteItems.length > 0) {
+      groups.set('Favourites', favouriteItems);
+    }
+
+    // Group remaining items by category
     items.forEach(item => {
+      // Skip if already in favourites (unless we're searching or in rearrange mode)
+      if (favs.has(item.id) && !searchQuery() && !isRearrangeMode()) {
+        return;
+      }
+
       const category = item.category || 'General';
       if (!groups.has(category)) {
         groups.set(category, []);
@@ -54,6 +83,7 @@ const LeftPanelMenu = () => {
   });
 
   const handleItemClick = (item) => {
+    setActiveItem(item.id);
     if (item.onClick) {
       item.onClick();
     }
@@ -217,9 +247,85 @@ const LeftPanelMenu = () => {
     await uploadPlugin(zipFile);
   };
 
+  const toggleRearrangeMode = () => {
+    setIsRearrangeMode(!isRearrangeMode());
+  };
+
+  const handleItemDragStart = (item, e) => {
+    if (!isRearrangeMode()) return;
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggedItem(item);
+  };
+
+  const handleItemDragOver = (e) => {
+    if (!isRearrangeMode()) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleItemDrop = (targetItem, e) => {
+    if (!isRearrangeMode()) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const dragged = draggedItem();
+    if (!dragged || dragged.id === targetItem.id) {
+      setDraggedItem(null);
+      return;
+    }
+
+    // Get all items in order
+    const items = menuItems();
+    const draggedIndex = items.findIndex(item => item.id === dragged.id);
+    const targetIndex = items.findIndex(item => item.id === targetItem.id);
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      setDraggedItem(null);
+      return;
+    }
+
+    // Create new order mapping
+    const newOrder = { ...customOrder() };
+
+    // Reorder items
+    const reorderedItems = [...items];
+    reorderedItems.splice(draggedIndex, 1);
+    reorderedItems.splice(targetIndex, 0, dragged);
+
+    // Update order mapping
+    reorderedItems.forEach((item, index) => {
+      newOrder[item.id] = index;
+    });
+
+    setCustomOrder(newOrder);
+    localStorage.setItem('leftPanelCustomOrder', JSON.stringify(newOrder));
+    setDraggedItem(null);
+  };
+
+  const toggleFavourite = (itemId, e) => {
+    e.stopPropagation();
+    const favs = new Set(favourites());
+
+    if (favs.has(itemId)) {
+      favs.delete(itemId);
+    } else {
+      favs.add(itemId);
+    }
+
+    setFavourites(favs);
+    localStorage.setItem('leftPanelFavourites', JSON.stringify([...favs]));
+  };
+
+  const resetOrder = () => {
+    if (confirm('Reset menu item order to default?')) {
+      setCustomOrder({});
+      localStorage.removeItem('leftPanelCustomOrder');
+    }
+  };
+
   return (
     <div
-      className="flex flex-col h-full bg-base-200 relative"
+      className="flex flex-col h-full bg-base-200 relative border-r border-black/15"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -303,6 +409,39 @@ const LeftPanelMenu = () => {
                   </h3>
                   <Show when={index() === 0}>
                     <div className="flex items-center gap-1">
+                      {/* Rearrange mode toggle */}
+                      <button
+                        onClick={toggleRearrangeMode}
+                        classList={{
+                          "flex items-center justify-center w-5 h-5 hover:bg-base-300 rounded transition-colors": true,
+                          "text-primary": isRearrangeMode(),
+                          "text-base-content/40 hover:text-base-content": !isRearrangeMode()
+                        }}
+                        title={isRearrangeMode() ? "Exit rearrange mode" : "Rearrange menu items"}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="w-3 h-3">
+                          <path d="M3 9h18M3 15h18"/>
+                          <circle cx="9" cy="9" r="1" fill="currentColor"/>
+                          <circle cx="9" cy="15" r="1" fill="currentColor"/>
+                          <circle cx="15" cy="9" r="1" fill="currentColor"/>
+                          <circle cx="15" cy="15" r="1" fill="currentColor"/>
+                        </svg>
+                      </button>
+
+                      {/* Reset order button (only show in rearrange mode) */}
+                      <Show when={isRearrangeMode()}>
+                        <button
+                          onClick={resetOrder}
+                          className="flex items-center justify-center w-5 h-5 text-base-content/40 hover:text-base-content hover:bg-base-300 rounded transition-colors"
+                          title="Reset to default order"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="w-3 h-3">
+                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                            <path d="M3 3v5h5"/>
+                          </svg>
+                        </button>
+                      </Show>
+
                       {/* Add Plugin button */}
                       <button
                         onClick={handleAddPlugin}
@@ -350,20 +489,40 @@ const LeftPanelMenu = () => {
                     {(item, itemIndex) => {
                       // Check if this is a deletable plugin (not a core plugin)
                       const isDeletable = item.id && !item.id.startsWith('core-');
+                      const isFavourite = favourites().has(item.id);
 
                       return (
-                        <div className="relative group/item">
+                        <div
+                          className="relative group/item"
+                          draggable={isRearrangeMode()}
+                          onDragStart={(e) => handleItemDragStart(item, e)}
+                          onDragOver={handleItemDragOver}
+                          onDrop={(e) => handleItemDrop(item, e)}
+                        >
                           <button
-                            onClick={() => handleItemClick(item)}
+                            onClick={() => !isRearrangeMode() && handleItemClick(item)}
                             classList={{
-                              "w-full flex items-start gap-2 px-2 py-1.5 text-sm text-base-content transition-all group cursor-pointer border-b border-base-300": true,
-                              "bg-base-200 hover:bg-primary/20": itemIndex() % 2 === 0,
-                              "bg-base-content/[0.02] hover:bg-primary/20": itemIndex() % 2 === 1,
+                              "w-full flex items-center gap-2 px-2 py-1 text-sm transition-all group": true,
+                              "cursor-pointer": !isRearrangeMode(),
+                              "cursor-move": isRearrangeMode(),
+                              "bg-primary/20 text-primary": activeItem() === item.id,
+                              "text-base-content hover:bg-base-300": activeItem() !== item.id && !isRearrangeMode(),
+                              "text-base-content": activeItem() !== item.id && isRearrangeMode(),
+                              "opacity-50": draggedItem()?.id === item.id,
                             }}
-                            title={item.description}
+                            title={isRearrangeMode() ? "Drag to reorder" : item.description}
                           >
+                            {/* Drag handle (only in rearrange mode) */}
+                            <Show when={isRearrangeMode()}>
+                              <div className="w-4 h-4 mt-0.5 text-base-content/40 flex-shrink-0">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="w-4 h-4">
+                                  <path d="M9 5h2M9 12h2M9 19h2M15 5h2M15 12h2M15 19h2"/>
+                                </svg>
+                              </div>
+                            </Show>
+
                             {/* Icon */}
-                            <Show when={item.icon}>
+                            <Show when={item.icon && !isRearrangeMode()}>
                               <div className="w-4 h-4 mt-0.5 text-base-content/60 group-hover:text-base-content flex-shrink-0">
                                 <item.icon className="w-4 h-4" />
                               </div>
@@ -381,8 +540,28 @@ const LeftPanelMenu = () => {
                               </Show>
                             </div>
 
+                            {/* Favourite star button */}
+                            <Show when={!isRearrangeMode()}>
+                              <div className="opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                <button
+                                  onClick={(e) => toggleFavourite(item.id, e)}
+                                  classList={{
+                                    "w-6 h-6 flex items-center justify-center hover:bg-warning/10 rounded transition-colors": true,
+                                    "text-warning": isFavourite,
+                                    "text-base-content/30 hover:text-warning": !isFavourite
+                                  }}
+                                  title={isFavourite ? "Remove from favourites" : "Add to favourites"}
+                                >
+                                  <IconStar
+                                    className="w-3.5 h-3.5"
+                                    fill={isFavourite ? "currentColor" : "none"}
+                                  />
+                                </button>
+                              </div>
+                            </Show>
+
                             {/* Delete button - only for non-core plugins */}
-                            <Show when={isDeletable}>
+                            <Show when={isDeletable && !isRearrangeMode()}>
                               <div className="opacity-0 group-hover/item:opacity-100 transition-opacity">
                                 <button
                                   onClick={(e) => deletePlugin(item.id, e)}
@@ -406,16 +585,6 @@ const LeftPanelMenu = () => {
             )}
           </For>
         </Show>
-      </div>
-
-      {/* Footer with item count */}
-      <div className="flex-shrink-0 px-4 py-2 border-t border-base-300 bg-base-300/30">
-        <p className="text-xs text-base-content/40 text-center">
-          {filteredMenuItems().length} {filteredMenuItems().length === 1 ? 'item' : 'items'}
-          {searchQuery() && menuItems().length !== filteredMenuItems().length &&
-            ` (of ${menuItems().length} total)`
-          }
-        </p>
       </div>
     </div>
   );

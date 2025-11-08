@@ -1,8 +1,7 @@
 import { createSignal, createEffect, onCleanup, createMemo, For, Show } from 'solid-js';
-import { IconChevronRight, IconMinus, IconSquare, IconCopy, IconX } from '@tabler/icons-solidjs';
+import { IconChevronRight, IconMinus, IconSquare, IconCopy, IconX, IconBell } from '@tabler/icons-solidjs';
 import { editorStore, editorActions } from '@/layout/stores/EditorStore';
 import { topMenuItems, horizontalMenuButtonsEnabled } from '@/api/plugin';
-import ThemeSwitcher from '@/ui/ThemeSwitcher';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import ViewportTabs from '@/panels/viewport/ViewportTabs.jsx';
 
@@ -16,6 +15,8 @@ function TopMenu() {
   const [showProjectManager, setShowProjectManager] = createSignal(false);
   const [menuPosition, setMenuPosition] = createSignal(null);
   const [isMaximized, setIsMaximized] = createSignal(false);
+  const [showNotifications, setShowNotifications] = createSignal(false);
+  const [notificationCount, setNotificationCount] = createSignal(3);
 
   // Check initial maximize state and listen for window changes
   createEffect(() => {
@@ -260,7 +261,7 @@ function TopMenu() {
   return (
     <>
       <div
-        class="relative w-full h-8 bg-base-300/60 backdrop-blur-md shadow-sm border-b border-black/30 flex items-center px-2"
+        class="relative w-full h-8 bg-base-200 backdrop-blur-md shadow-sm border-b border-black/30 flex items-center px-2"
         data-tauri-drag-region
       >
         {/* Viewport Tabs */}
@@ -308,21 +309,36 @@ function TopMenu() {
             </For>
           </div>
         </Show>
-        
-        {/* Theme Switcher */}
-        <div class="flex items-center mr-2" style={{ '-webkit-app-region': 'no-drag' }}>
-          <ThemeSwitcher />
+
+        {/* Notifications Button */}
+        <div
+          class="flex items-center"
+          style={{
+            '-webkit-app-region': 'no-drag'
+          }}
+        >
+          <button
+            onClick={() => setShowNotifications(!showNotifications())}
+            class="relative w-8 h-8 flex items-center justify-center text-base-content/60 hover:text-base-content hover:bg-base-300 rounded transition-colors cursor-pointer"
+            title="Notifications"
+            style={{ '-webkit-app-region': 'no-drag' }}
+          >
+            <IconBell class="w-4 h-4" />
+            <Show when={notificationCount() > 0}>
+              <span class="absolute top-1 right-1 w-2 h-2 bg-error rounded-full"></span>
+            </Show>
+          </button>
         </div>
-        
+
         {/* Tauri Window Controls - Only show in desktop app */}
         {typeof window !== 'undefined' && window.__TAURI_INTERNALS__ && (
-          <div 
+          <div
             class="flex items-center gap-3 text-xs text-gray-500"
             style={{
               '-webkit-app-region': 'no-drag'
             }}
           >
-            <div class="flex items-center ml-4">
+            <div class="flex items-center">
               <button
                 onClick={(e) => {
                   e.preventDefault();

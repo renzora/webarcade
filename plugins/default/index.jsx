@@ -1,7 +1,6 @@
 import { createPlugin } from '@/api/plugin';
-import { IconSettings, IconChartLine } from '@tabler/icons-solidjs';
+import { IconChartLine } from '@tabler/icons-solidjs';
 import DashboardViewport from './DashboardViewport.jsx';
-import PropertiesPanel from './PropertiesPanel.jsx';
 
 export default createPlugin({
   id: 'default-plugin',
@@ -21,14 +20,6 @@ export default createPlugin({
       component: DashboardViewport,
       icon: IconChartLine,
       description: 'System performance dashboard'
-    });
-
-    // Register default properties panel tab
-    api.tab('properties', {
-      title: 'Properties',
-      component: PropertiesPanel,
-      icon: IconSettings,
-      order: 1
     });
 
     // Show the right panel by default

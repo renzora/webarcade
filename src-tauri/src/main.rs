@@ -1,72 +1,101 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Listener, Manager};
+use std::collections::VecDeque;
 
 mod renderer;
 mod screen_capture;
+mod bridge;
 
-fn start_bridge_server(app: &tauri::AppHandle) {
-    if cfg!(debug_assertions) {
-        // Development mode - bridge is already started by beforeDevCommand
-        println!("Dev mode: bridge server should already be running");
-        return;
+// Re-export bridge modules at crate root for plugin compatibility
+pub use bridge::core;
+pub use bridge::modules;
+pub use bridge::plugins;
+
+// Global log buffer for capturing bridge logs
+static LOG_BUFFER: Mutex<Option<VecDeque<String>>> = Mutex::new(None);
+static LOG_CAPACITY: usize = 500; // Keep last 500 log lines
+
+fn init_log_buffer() {
+    let mut buffer = LOG_BUFFER.lock().unwrap();
+    *buffer = Some(VecDeque::with_capacity(LOG_CAPACITY));
+}
+
+pub fn add_log(message: String) {
+    if let Ok(mut buffer) = LOG_BUFFER.lock() {
+        if let Some(ref mut buf) = *buffer {
+            if buf.len() >= LOG_CAPACITY {
+                buf.pop_front();
+            }
+            buf.push_back(message);
+        }
     }
+}
 
-    // Production mode - locate and start the sidecar binary
-    let resource_path = app
-        .path()
-        .resource_dir()
-        .expect("failed to resolve resource directory");
+#[tauri::command]
+fn get_bridge_logs() -> Vec<String> {
+    if let Ok(buffer) = LOG_BUFFER.lock() {
+        if let Some(ref buf) = *buffer {
+            return buf.iter().cloned().collect();
+        }
+    }
+    vec![]
+}
 
-    #[cfg(windows)]
-    let bridge_path = resource_path.join("webarcade-bridge-x86_64-pc-windows-msvc.exe");
-    #[cfg(not(windows))]
-    let bridge_path = resource_path.join("webarcade-bridge");
-
-    println!("Starting bridge server from: {:?}", bridge_path);
-
-    std::thread::spawn(move || {
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-            match Command::new(&bridge_path)
-                .creation_flags(CREATE_NO_WINDOW)
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .stdin(Stdio::null())
-                .spawn()
-            {
-                Ok(_) => println!("Bridge server started successfully"),
-                Err(e) => eprintln!("Failed to start bridge server: {}", e),
+#[tauri::command]
+async fn check_bridge_health() -> Result<String, String> {
+    match reqwest::get("http://127.0.0.1:3001/health").await {
+        Ok(response) => {
+            if response.status().is_success() {
+                match response.text().await {
+                    Ok(body) => Ok(body),
+                    Err(e) => Err(format!("Failed to read response: {}", e))
+                }
+            } else {
+                Err(format!("Bridge returned status: {}", response.status()))
             }
         }
+        Err(e) => Err(format!("Bridge not responding: {}", e))
+    }
+}
 
-        #[cfg(not(windows))]
-        {
-            match Command::new(&bridge_path)
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .stdin(Stdio::null())
-                .spawn()
-            {
-                Ok(_) => println!("Bridge server started successfully"),
-                Err(e) => eprintln!("Failed to start bridge server: {}", e),
+
+fn start_bridge_server() {
+    let start_msg = "Starting integrated bridge server...";
+    println!("{}", start_msg);
+    add_log(format!("[BRIDGE] {}", start_msg));
+
+    // Start the bridge server in a separate tokio runtime
+    std::thread::spawn(|| {
+        let runtime = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+        runtime.block_on(async {
+            add_log("[BRIDGE] Tokio runtime created".to_string());
+            match bridge::run_server().await {
+                Ok(_) => {
+                    add_log("[BRIDGE] Server started successfully".to_string());
+                }
+                Err(e) => {
+                    let error_msg = format!("Bridge server error: {}", e);
+                    eprintln!("{}", error_msg);
+                    add_log(format!("[BRIDGE ERROR] {}", error_msg));
+                }
             }
-        }
+        });
     });
 }
 
 
 fn main() {
+    // Initialize log buffer
+    init_log_buffer();
+    add_log("[MAIN] WebArcade starting...".to_string());
+
     // Shared state to track if close is approved
     let close_approved = Arc::new(Mutex::new(false));
     let close_approved_clone = close_approved.clone();
-    
+
     tauri::Builder::default()
         .manage(Mutex::new(None::<renderer::RendererState>))
         .manage(screen_capture::CaptureState::new())
@@ -74,8 +103,12 @@ fn main() {
             let handle = app.handle().clone();
             let close_approved = close_approved.clone();
 
-            // Start bridge server as sidecar
-            start_bridge_server(&handle);
+            add_log("[SETUP] Tauri app setup starting...".to_string());
+
+            // Start integrated bridge server
+            start_bridge_server();
+
+            add_log("[SETUP] Bridge server started".to_string());
             
             // Listen for graceful close approval from frontend
             app.listen("proceed-with-close", move |_event| {
@@ -129,7 +162,9 @@ fn main() {
             screen_capture::list_displays,
             screen_capture::start_display_capture,
             screen_capture::get_display_frame,
-            screen_capture::stop_display_capture
+            screen_capture::stop_display_capture,
+            get_bridge_logs,
+            check_bridge_health
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

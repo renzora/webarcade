@@ -1,5 +1,5 @@
-import { createSignal, createMemo, For, Show } from 'solid-js';
-import { IconFileText, IconX, IconStar, IconCopy, IconPlayerPlay, IconPlayerPause, IconChairDirector } from '@tabler/icons-solidjs';
+import { createSignal, createMemo, For, Show, onMount, onCleanup, createEffect } from 'solid-js';
+import { IconFileText, IconX, IconStar, IconCopy, IconPlayerPlay, IconPlayerPause, IconChairDirector, IconChevronDown } from '@tabler/icons-solidjs';
 import { viewportStore, viewportActions } from "./store";
 import { viewportTypes } from "@/api/plugin";
 
@@ -7,6 +7,12 @@ const ViewportTabs = () => {
   const [contextMenu, setContextMenu] = createSignal(null);
   const [editingTab, setEditingTab] = createSignal(null);
   const [editingName, setEditingName] = createSignal('');
+  const [overflowDropdown, setOverflowDropdown] = createSignal(false);
+  const [dropdownPosition, setDropdownPosition] = createSignal({ top: 0, left: 0 });
+  const [visibleTabCount, setVisibleTabCount] = createSignal(99);
+  let containerRef;
+  let tabsContainerRef;
+  let dropdownButtonRef;
   const tabs = () => viewportStore.tabs;
   const activeTabId = () => viewportStore.activeTabId;
   const suspendedTabs = () => viewportStore.suspendedTabs;
@@ -154,21 +160,87 @@ const ViewportTabs = () => {
     }
   };
 
+  // Calculate how many tabs can fit in the available space
+  const calculateVisibleTabs = () => {
+    if (!tabsContainerRef || !containerRef) return;
+
+    const children = Array.from(tabsContainerRef.children);
+    if (children.length === 0) return;
+
+    const containerWidth = containerRef.offsetWidth;
+    const dropdownButtonWidth = 40;
+    const maxVisibleTabs = 5; // Maximum tabs to show before dropdown
+
+    let totalWidth = 0;
+    let count = 0;
+
+    // Calculate total width of all tabs
+    for (const child of children) {
+      totalWidth += child.offsetWidth;
+    }
+
+    // If all tabs fit and under the limit, show them all
+    if (totalWidth <= containerWidth && tabs().length <= maxVisibleTabs) {
+      setVisibleTabCount(tabs().length);
+      return;
+    }
+
+    // Otherwise, calculate with dropdown button space and max limit
+    const availableWidth = containerWidth - dropdownButtonWidth;
+    totalWidth = 0;
+
+    for (let i = 0; i < children.length && i < maxVisibleTabs; i++) {
+      totalWidth += children[i].offsetWidth;
+      if (totalWidth <= availableWidth) {
+        count = i + 1;
+      } else {
+        break;
+      }
+    }
+
+    setVisibleTabCount(Math.max(1, count));
+  };
+
+  // Set up resize listener
+  onMount(() => {
+    const handleResize = () => {
+      calculateVisibleTabs();
+      // Close dropdown on resize to avoid positioning issues
+      if (overflowDropdown()) {
+        setOverflowDropdown(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    onCleanup(() => window.removeEventListener('resize', handleResize));
+  });
+
+  // Recalculate when tabs change
+  createEffect(() => {
+    tabs();
+    calculateVisibleTabs();
+  });
+
+  const visibleTabs = () => tabs().slice(0, visibleTabCount());
+  const overflowTabs = () => tabs().slice(visibleTabCount());
+
   return (
     <>
-      <div className="flex items-stretch h-8 overflow-hidden relative bg-base-300">
-        <div className="flex items-center min-w-0 flex-1 overflow-x-hidden">
+      <div ref={containerRef} className="flex items-stretch h-8 overflow-hidden relative bg-base-200">
+        <div ref={tabsContainerRef} className="flex items-center min-w-0 flex-1 overflow-x-hidden">
           <For each={tabs()}>
-            {(tab) => {
+            {(tab, index) => {
               const Icon = getViewportIcon(tab.type);
               const isActive = () => tab.id === activeTabId();
+              const isVisible = () => index() < visibleTabCount();
 
               return (
                 <div
                   classList={{
                     'group flex items-center gap-2 px-3 py-1 border-r border-neutral cursor-pointer transition-all select-none min-w-0 max-w-48 flex-shrink-0 h-full relative border-t border-b border-neutral': true,
                     'bg-primary/15 text-primary': isActive(),
-                    'text-base-content/60 hover:text-base-content': !isActive()
+                    'text-base-content/60 hover:text-base-content': !isActive(),
+                    'hidden': !isVisible()
                   }}
                   onClick={() => handleTabClick(tab.id)}
                   onContextMenu={(e) => handleTabContextMenu(e, tab)}
@@ -225,8 +297,115 @@ const ViewportTabs = () => {
           </For>
         </div>
 
+        {/* Dropdown button for overflow tabs */}
+        <Show when={overflowTabs().length > 0}>
+          <div className="relative flex items-center">
+            <button
+              ref={dropdownButtonRef}
+              onClick={() => {
+                if (dropdownButtonRef) {
+                  const rect = dropdownButtonRef.getBoundingClientRect();
+                  setDropdownPosition({ top: rect.bottom + 4, left: rect.left });
+                }
+                setOverflowDropdown(!overflowDropdown());
+              }}
+              className="flex items-center justify-center px-2 h-full border-r border-t border-b border-neutral bg-base-300 hover:bg-base-200 text-base-content/60 hover:text-base-content transition-colors"
+              title={`${overflowTabs().length} more tab${overflowTabs().length > 1 ? 's' : ''}`}
+            >
+              <IconChevronDown className="w-4 h-4" />
+              <span className="text-xs ml-1">{overflowTabs().length}</span>
+            </button>
+          </div>
+        </Show>
 
       </div>
+
+      {/* Overflow dropdown menu - rendered outside to avoid z-index issues */}
+      <Show when={overflowDropdown()}>
+        <>
+          <div
+            className="fixed inset-0 bg-black/10"
+            onClick={() => setOverflowDropdown(false)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setOverflowDropdown(false);
+            }}
+            style={{ 'z-index': 9999 }}
+          />
+
+          <div
+            className="fixed bg-base-200 backdrop-blur-sm border-l border-r border-b border-base-300 shadow-xl min-w-48 max-h-96 overflow-y-auto"
+            style={{
+              top: `${dropdownPosition().top - 1}px`,
+              right: `${window.innerWidth - dropdownPosition().left - (dropdownButtonRef?.offsetWidth || 40)}px`,
+              'z-index': 10000,
+              'border-top-left-radius': '0',
+              'border-top-right-radius': '0',
+              'border-bottom-left-radius': '0.5rem',
+              'border-bottom-right-radius': '0.5rem'
+            }}
+          >
+                  <div className="p-2">
+                    <For each={overflowTabs()}>
+                      {(tab) => {
+                        const Icon = getViewportIcon(tab.type);
+                        const isActive = () => tab.id === activeTabId();
+
+                        return (
+                          <button
+                            onClick={() => {
+                              handleTabClick(tab.id);
+                              setOverflowDropdown(false);
+                            }}
+                            onContextMenu={(e) => {
+                              handleTabContextMenu(e, tab);
+                              setOverflowDropdown(false);
+                            }}
+                            classList={{
+                              'w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors cursor-pointer': true,
+                              'bg-primary/15 text-primary': isActive(),
+                              'text-base-content hover:bg-base-300': !isActive()
+                            }}
+                          >
+                            <Icon className="w-4 h-4 flex-shrink-0" />
+                            <span className="truncate flex-1 text-left">
+                              {tab.name}{tab.hasUnsavedChanges ? ' •' : ''}
+                            </span>
+
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <Show when={(suspendedTabs() || []).includes(tab.id)}>
+                                <IconPlayerPause className="w-3 h-3 text-gray-500" title="Tab Suspended" />
+                              </Show>
+
+                              <Show when={tab.isPinned}>
+                                <IconStar className="w-3 h-3 text-yellow-500" />
+                              </Show>
+
+                              <Show when={tab.hasUnsavedChanges}>
+                                <div className="w-2 h-2 bg-orange-500 rounded-full" />
+                              </Show>
+                            </div>
+
+                            <Show when={tabs().length > 1}>
+                              <button
+                                onClick={(e) => {
+                                  handleTabClose(e, tab.id);
+                                  setOverflowDropdown(false);
+                                }}
+                                className="w-4 h-4 flex items-center justify-center rounded hover:bg-base-300 transition-colors"
+                                title="Close Tab"
+                              >
+                                <IconX className="w-3 h-3" />
+                              </button>
+                            </Show>
+                          </button>
+                        );
+                      }}
+                    </For>
+                  </div>
+                </div>
+              </>
+            </Show>
 
       <Show when={contextMenu()}>
         <>

@@ -13,7 +13,7 @@ impl Plugin for DatabasePlugin {
     fn metadata(&self) -> PluginMetadata {
         PluginMetadata {
             id: "database".to_string(),
-            name: "Database Manager".to_string(),
+            name: "Database".to_string(),
             version: "1.0.0".to_string(),
             description: "SQL query interface for the database".to_string(),
             author: "WebArcade Team".to_string(),

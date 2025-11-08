@@ -812,6 +812,7 @@ export class PluginAPI {
       icon: config.icon,
       order: config.order || 100,
       condition: config.condition || (() => true),
+      viewport: config.viewport || null, // Optional: associated viewport type ID
       plugin: config.plugin || this.getCurrentPluginId() || 'unknown'
     };
 

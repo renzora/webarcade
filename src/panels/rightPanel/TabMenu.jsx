@@ -1,7 +1,7 @@
 import { createSignal, createEffect, createMemo, For } from 'solid-js';
 import { editorStore, editorActions } from '@/layout/stores/EditorStore';
 import { viewportStore } from '@/panels/viewport/store';
-import { propertyTabs } from '@/api/plugin';
+import { propertyTabs, viewportTypes } from '@/api/plugin';
 
 const defaultTools = [];
 
@@ -265,15 +265,102 @@ function TabMenu(props) {
     });
   };
 
-  const handleToolClick = (tool) => {
+  const findAssociatedViewport = async (tabId) => {
+    // Get the tab configuration
+    const tab = propertyTabs().get(tabId);
+    if (!tab) {
+      return null;
+    }
+
+    const allViewportTypes = viewportTypes();
+    let viewportTypeId = null;
+
+    // Strategy 0: Check if tab explicitly defines a viewport association
+    if (tab.viewport) {
+      if (allViewportTypes.has(tab.viewport)) {
+        viewportTypeId = tab.viewport;
+      }
+    }
+
+    // If no explicit viewport and no plugin info, can't auto-detect
+    if (!viewportTypeId && !tab.plugin) {
+      return null;
+    }
+
+    // Find all viewports from the same plugin (for auto-detection)
+    if (!viewportTypeId) {
+      const pluginViewports = Array.from(allViewportTypes.entries())
+        .filter(([_, viewport]) => viewport.plugin === tab.plugin)
+        .map(([id, _]) => id);
+
+      if (pluginViewports.length === 0) {
+        return null;
+      }
+
+      // Strategy 1: If plugin only has one viewport, use that
+      if (pluginViewports.length === 1) {
+        viewportTypeId = pluginViewports[0];
+      }
+    }
+
+    if (!viewportTypeId) {
+      return null;
+    }
+
+    // Check if this viewport type actually exists
+    const viewportType = viewportTypes().get(viewportTypeId);
+    if (!viewportType) {
+      return null;
+    }
+
+    try {
+      const { viewportActions } = await import('@/panels/viewport/store');
+
+      // Check if a tab with this type already exists
+      const existingTab = viewportStore.tabs.find(tab => tab.type === viewportTypeId);
+
+      if (existingTab) {
+        // Tab already exists, just activate it
+        viewportActions.setActiveViewportTab(existingTab.id);
+        return true;
+      }
+
+      // No existing tab found, create a new one
+      const newTabId = `${viewportTypeId}_${Date.now()}`;
+      const newTab = {
+        id: newTabId,
+        name: viewportType.label,
+        label: viewportType.label,
+        type: viewportTypeId,
+        icon: viewportType.icon,
+        component: viewportType.component,
+        isPinned: false,
+        hasUnsavedChanges: false
+      };
+
+      viewportActions.addViewportTab(newTab);
+      viewportActions.setActiveViewportTab(newTabId);
+      return true;
+    } catch (error) {
+      console.error('[TabMenu] Error opening viewport:', error);
+      return null;
+    }
+  };
+
+  const handleToolClick = async (tool) => {
     if (!dragState().isDragging) {
       if (tool.isPluginButton && tool.onClick) {
         tool.onClick();
         return;
       }
-      
+
       const _currentWorkflow = getCurrentWorkflow();
-      
+
+      // Try to open associated viewport (if any)
+      const viewportOpened = await findAssociatedViewport(tool.id);
+
+      // If viewport was opened/focused, we might still want to show the tab
+      // This allows the property panel to be shown alongside the viewport
       if (!props.scenePanelOpen) {
         props.onScenePanelToggle();
       }
@@ -283,7 +370,7 @@ function TabMenu(props) {
 
 
   return (
-    <div class="relative w-8 h-full bg-base-200 border-r border-base-300/50 flex flex-col pointer-events-auto no-select">
+    <div class="relative w-10 h-full bg-base-300 border-l border-r border-black/15 flex flex-col pointer-events-auto no-select">
       <div class="flex-1 overflow-hidden h-full flex flex-col gap-0.5 py-1">
         <For each={tools()}>
           {(tool) => {
@@ -299,12 +386,12 @@ function TabMenu(props) {
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, tool, false)}
                 onDragEnd={handleDragEnd}
-                class={`btn btn-ghost btn-xs h-7 w-7 min-h-0 p-0 transition-all duration-200 group relative select-none flex items-center justify-center ${
+                class={`btn btn-ghost h-7 w-full min-h-0 p-0 rounded-none transition-all duration-200 group relative select-none flex items-center justify-center border-none ${
                   isDragged()
                     ? 'opacity-50 cursor-grabbing scale-95'
                     : props.selectedTool === tool.id
-                      ? 'btn-primary bg-primary/20'
-                      : 'text-base-content/60 hover:text-base-content'
+                      ? 'bg-primary/20 text-primary'
+                      : 'text-base-content/60 hover:bg-base-300 hover:text-base-content'
                 }`}
                 title={tool.title}
               >

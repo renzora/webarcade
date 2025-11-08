@@ -1,8 +1,10 @@
 import { createSignal, createEffect, onCleanup, For } from 'solid-js';
 import { editorStore } from '@/layout/stores/EditorStore';
-import { IconAlertTriangle } from '@tabler/icons-solidjs';
+import { IconAlertTriangle, IconBrandGithub, IconBrandDiscord, IconBrandTwitch } from '@tabler/icons-solidjs';
 import { footerButtons } from '@/api/plugin';
 import BuildProgress from './BuildProgress';
+import DebugConsole from './DebugConsole';
+import { setShowAbout } from '../../../plugins/menu/index.jsx';
 
 const Footer = () => {
   const [engineInfo] = createSignal('Engine Ready');
@@ -37,7 +39,7 @@ const Footer = () => {
     if (selectedEntity()) {
       return `Selected: ${selectedEntity()}`;
     }
-    return 'No selection';
+    return null; // Return null instead of "No selection"
   };
   
   const getTransformModeInfo = () => {
@@ -143,12 +145,55 @@ const Footer = () => {
   };
   
   return (
-    <div class="fixed bottom-0 left-0 right-0 h-6 bg-base-200/90 backdrop-blur-md border-t border-base-content/10 text-xs flex items-center justify-between px-3 pointer-events-auto z-50 rounded-t-none">
-      {/* Left side - Selection and tool info */}
-      <div class="flex items-center gap-4">
-        <span class="text-base-content/90">
-          {getSelectionInfo()}{getTransformModeInfo()}
-        </span>
+    <div class="fixed bottom-0 left-0 right-0 h-6 bg-base-200 backdrop-blur-md border-t border-base-content/10 text-xs flex items-center justify-between px-3 pointer-events-auto z-50 rounded-t-none">
+      {/* Left side - WebArcade branding and links */}
+      <div class="flex items-center gap-3">
+        {getSelectionInfo() ? (
+          <span class="text-base-content/90">
+            {getSelectionInfo()}{getTransformModeInfo()}
+          </span>
+        ) : (
+          <>
+            <button
+              onClick={() => setShowAbout(true)}
+              class="text-base-content/70 hover:text-primary font-medium transition-colors cursor-pointer"
+              title="About WebArcade"
+            >
+              WebArcade v1.0.0
+            </button>
+            <span class="text-base-content/30">|</span>
+            <a
+              href="https://github.com/pianoplayerjames/webarcade"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex items-center gap-1 text-base-content/60 hover:text-primary transition-colors"
+              title="GitHub Repository"
+            >
+              <IconBrandGithub class="w-3.5 h-3.5" />
+              <span>GitHub</span>
+            </a>
+            <a
+              href="https://discord.gg/G9WBkSu6Ta"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex items-center gap-1 text-base-content/60 hover:text-primary transition-colors"
+              title="Join Discord"
+            >
+              <IconBrandDiscord class="w-3.5 h-3.5" />
+              <span>Discord</span>
+            </a>
+            <a
+              href="https://twitch.tv/pianojames"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="flex items-center gap-1 text-base-content/60 hover:text-primary transition-colors"
+              title="Follow on Twitch"
+            >
+              <IconBrandTwitch class="w-3.5 h-3.5" />
+              <span>Twitch</span>
+            </a>
+          </>
+        )}
       </div>
       
       {/* Right side - Status info */}
@@ -163,6 +208,10 @@ const Footer = () => {
         <span class="text-base-content/90">
           {engineInfo()}
         </span>
+
+        {/* Debug Console */}
+        <span class="text-base-content/30">|</span>
+        <DebugConsole />
 
         {/* Plugin footer buttons */}
         <For each={Array.from(footerButtons().entries())}>

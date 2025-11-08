@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "identifier": "com.webarcade.framework",
   "build": {
-    "beforeBuildCommand": "cargo build --release --manifest-path bridge/Cargo.toml --bin webarcade-bridge && bunx rspack build --mode production",
+    "beforeBuildCommand": "bunx rspack build --mode production",
     "beforeDevCommand": "bun x rspack serve",
     "frontendDist": "../dist",
     "devUrl": "https://localhost:3000"
@@ -200,12 +200,6 @@
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.ico"
-    ],
-    "resources": [
-      "../bridge/target/release/webarcade-bridge.exe"
-    ],
-    "externalBin": [
-      "../bridge/target/release/webarcade-bridge"
     ]
   }
 }
