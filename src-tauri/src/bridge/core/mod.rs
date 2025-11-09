@@ -7,6 +7,8 @@ pub mod database;
 pub mod types;
 pub mod websocket_bridge;
 pub mod plugin_router;
+pub mod router_utils;
+pub mod plugin_macros;
 
 pub use events::{Event, EventBus};
 pub use services::ServiceRegistry;
@@ -15,3 +17,4 @@ pub use plugin_context::PluginContext;
 pub use plugin_manager::PluginManager;
 pub use websocket_bridge::WebSocketBridge;
 pub use plugin_router::{PluginRouter, RouterRegistry};
+pub use router_utils::*;

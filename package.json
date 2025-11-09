@@ -5,6 +5,7 @@
   "type": "module",
   "description": "🚀 High-speed development framework for web and desktop applications",
   "scripts": {
+    "create-plugin": "node scripts/create-plugin.js",
     "discover": "bun run scripts/discover-plugins.js && bun run scripts/discover-backend-plugins.js",
     "web": "bun run kill && bun run discover && node scripts/start-with-bridge.js \"npx rspack serve\"",
     "web:watch": "bun run kill && bun run discover && concurrently \"bun run bridge:watch\" \"npx rspack serve\"",

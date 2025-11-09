@@ -1,9 +1,11 @@
 use crate::core::plugin_context::PluginContext;
 use crate::core::plugin_router::PluginRouter;
+use crate::core::router_utils::*;
+use crate::route;
 use anyhow::Result;
-use hyper::{Method, Request, Response, StatusCode, body::Incoming};
+use hyper::{Request, Response, StatusCode, body::Incoming};
 use hyper::body::Bytes;
-use http_body_util::{Full, combinators::BoxBody};
+use http_body_util::combinators::BoxBody;
 use std::convert::Infallible;
 use sysinfo::System;
 use std::sync::{Arc, Mutex};
@@ -35,74 +37,34 @@ pub async fn register_routes(ctx: &PluginContext) -> Result<()> {
     let mut router = PluginRouter::new();
 
     // GET /system/stats - Get all system statistics (CPU cores + memory)
-    router.route(Method::GET, "/stats", |_path, _query, _req| {
-        Box::pin(async move {
-            handle_get_stats().await
-        })
-    });
+    route!(router, GET "/stats" => handle_get_stats);
 
     // GET /system/cpu - Get CPU information
-    router.route(Method::GET, "/cpu", |_path, _query, _req| {
-        Box::pin(async move {
-            handle_get_cpu().await
-        })
-    });
+    route!(router, GET "/cpu" => handle_get_cpu);
 
     // GET /system/memory - Get memory information
-    router.route(Method::GET, "/memory", |_path, _query, _req| {
-        Box::pin(async move {
-            handle_get_memory().await
-        })
-    });
+    route!(router, GET "/memory" => handle_get_memory);
 
     // GET /system/settings?key=xxx - Get a specific setting by key
-    router.route(Method::GET, "/settings", |_path, query, _req| {
-        Box::pin(async move {
-            handle_get_settings(query).await
-        })
-    });
+    route!(router, GET "/settings", query => handle_get_settings);
 
     // GET /system/build-progress - Get current build progress
-    router.route(Method::GET, "/build-progress", |_path, _query, _req| {
-        Box::pin(async move {
-            handle_get_build_progress().await
-        })
-    });
+    route!(router, GET "/build-progress" => handle_get_build_progress);
 
     // POST /system/build-progress - Update build progress (from rspack plugin)
-    router.route(Method::POST, "/build-progress", |_path, _query, req| {
-        Box::pin(async move {
-            handle_post_build_progress(req).await
-        })
-    });
+    route!(router, POST "/build-progress" => handle_post_build_progress);
 
     // POST /system/trigger-rebuild - Trigger frontend rebuild by touching entry file
-    router.route(Method::POST, "/trigger-rebuild", |_path, _query, req| {
-        Box::pin(async move {
-            handle_trigger_rebuild(req).await
-        })
-    });
+    route!(router, POST "/trigger-rebuild" => handle_trigger_rebuild);
 
     // POST /system/plugins/upload - Upload and install a plugin from a zip file
-    router.route(Method::POST, "/plugins/upload", |_path, _query, req| {
-        Box::pin(async move {
-            handle_plugin_upload(req).await
-        })
-    });
+    route!(router, POST "/plugins/upload" => handle_plugin_upload);
 
     // DELETE /system/plugins/:plugin_name - Remove an installed plugin
-    router.route(Method::DELETE, "/plugins/:plugin_name", |path, _query, _req| {
-        Box::pin(async move {
-            handle_plugin_delete(path).await
-        })
-    });
+    route!(router, DELETE "/plugins/:plugin_name", path => handle_plugin_delete);
 
     // OPTIONS /system/plugins/:plugin_name - CORS preflight
-    router.route(Method::OPTIONS, "/plugins/:plugin_name", |_path, _query, _req| {
-        Box::pin(async move {
-            handle_cors_preflight().await
-        })
-    });
+    route!(router, OPTIONS "/plugins/:plugin_name" => cors_preflight);
 
     ctx.register_router("system", router).await;
     Ok(())
@@ -592,61 +554,4 @@ fn copy_dir_all(src: &PathBuf, dst: &PathBuf) -> std::io::Result<()> {
     Ok(())
 }
 
-// Helper functions
-async fn read_json_body(req: Request<Incoming>) -> std::result::Result<serde_json::Value, String> {
-    use http_body_util::BodyExt;
-    let whole_body = req.collect().await
-        .map_err(|e| format!("Failed to read body: {}", e))?
-        .to_bytes();
-
-    serde_json::from_slice(&whole_body)
-        .map_err(|e| format!("Invalid JSON: {}", e))
-}
-
-fn parse_query_param(query: &str, key: &str) -> Option<String> {
-    query.split('&')
-        .find_map(|pair| {
-            let mut parts = pair.split('=');
-            if parts.next()? == key {
-                Some(urlencoding::decode(parts.next()?).ok()?.into_owned())
-            } else {
-                None
-            }
-        })
-}
-fn json_response<T: serde::Serialize>(data: &T) -> Response<BoxBody<Bytes, Infallible>> {
-    let json = serde_json::to_string(data).unwrap_or_else(|_| "{}".to_string());
-    Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        .header("Access-Control-Allow-Origin", "*")
-        .body(full_body(&json))
-        .unwrap()
-}
-
-fn error_response(status: StatusCode, message: &str) -> Response<BoxBody<Bytes, Infallible>> {
-    let json = serde_json::json!({"error": message}).to_string();
-    Response::builder()
-        .status(status)
-        .header("Content-Type", "application/json")
-        .header("Access-Control-Allow-Origin", "*")
-        .body(full_body(&json))
-        .unwrap()
-}
-
-fn full_body(s: &str) -> BoxBody<Bytes, Infallible> {
-    use http_body_util::combinators::BoxBody;
-    use http_body_util::BodyExt;
-    BoxBody::new(Full::new(Bytes::from(s.to_string())).map_err(|err: Infallible| match err {}))
-}
-
-async fn handle_cors_preflight() -> Response<BoxBody<Bytes, Infallible>> {
-    Response::builder()
-        .status(StatusCode::OK)
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-        .header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-        .header("Access-Control-Max-Age", "86400")
-        .body(full_body(""))
-        .unwrap()
-}
+// Helper functions are now imported from router_utils

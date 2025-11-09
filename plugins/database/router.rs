@@ -1,85 +1,26 @@
 use crate::core::plugin_context::PluginContext;
 use crate::core::plugin_router::PluginRouter;
+use crate::core::router_utils::*;
+use crate::route;
 use anyhow::Result;
-use hyper::{Method, Request, Response, StatusCode, body::Incoming};
+use hyper::{Request, Response, StatusCode, body::Incoming};
 use hyper::body::Bytes;
-use http_body_util::{Full, combinators::BoxBody};
+use http_body_util::combinators::BoxBody;
 use std::convert::Infallible;
 use std::fs;
 
 pub async fn register_routes(ctx: &PluginContext) -> Result<()> {
     let mut router = PluginRouter::new();
-
-    // GET /database/tables - List all tables
-    router.route(Method::GET, "/tables", |_path, _query, _req| {
-        Box::pin(async move {
-            handle_get_tables().await
-        })
-    });
-
-    // GET /database/schema?table=tablename - Get table schema
-    router.route(Method::GET, "/schema", |_path, query, _req| {
-        Box::pin(async move {
-            handle_get_schema(query).await
-        })
-    });
-
-    // POST /database/query - Execute SQL query
-    router.route(Method::POST, "/query", |_path, _query, req| {
-        Box::pin(async move {
-            handle_execute_query(req).await
-        })
-    });
-
-    // GET /database/todos/toggle - Get community tasks overlay enabled state
-    router.route(Method::GET, "/todos/toggle", |_path, _query, _req| {
-        Box::pin(async move {
-            handle_get_community_tasks_state().await
-        })
-    });
-
-    // POST /database/todos/toggle - Set community tasks overlay enabled state
-    router.route(Method::POST, "/todos/toggle", |_path, _query, req| {
-        Box::pin(async move {
-            handle_set_community_tasks_state(req).await
-        })
-    });
-
-    // GET /database/export - Export entire database
-    router.route(Method::GET, "/export", |_path, _query, _req| {
-        Box::pin(async move {
-            handle_export_database().await
-        })
-    });
-
-    // POST /database/import - Import database from file
-    router.route(Method::POST, "/import", |_path, _query, req| {
-        Box::pin(async move {
-            handle_import_database(req).await
-        })
-    });
-
-    // GET /database/config - Get all config values or specific key
-    router.route(Method::GET, "/config", |_path, query, _req| {
-        Box::pin(async move {
-            handle_get_config(query).await
-        })
-    });
-
-    // POST /database/config - Save config values
-    router.route(Method::POST, "/config", |_path, _query, req| {
-        Box::pin(async move {
-            handle_post_config(req).await
-        })
-    });
-
-    // OPTIONS /database/config - CORS preflight for config
-    router.route(Method::OPTIONS, "/config", |_path, _query, _req| {
-        Box::pin(async move {
-            handle_cors_preflight().await
-        })
-    });
-
+    route!(router, GET "/tables" => handle_get_tables);
+    route!(router, GET "/schema", query => handle_get_schema);
+    route!(router, POST "/query" => handle_execute_query);
+    route!(router, GET "/todos/toggle" => handle_get_community_tasks_state);
+    route!(router, POST "/todos/toggle" => handle_set_community_tasks_state);
+    route!(router, GET "/export" => handle_export_database);
+    route!(router, POST "/import" => handle_import_database);
+    route!(router, GET "/config", query => handle_get_config);
+    route!(router, POST "/config" => handle_post_config);
+    route!(router, OPTIONS "/config" => cors_preflight);
     ctx.register_router("database", router).await;
     Ok(())
 }
@@ -272,60 +213,7 @@ async fn handle_set_community_tasks_state(req: Request<Incoming>) -> Response<Bo
     }
 }
 
-// Helper functions
-async fn read_json_body(req: Request<Incoming>) -> std::result::Result<serde_json::Value, String> {
-    use http_body_util::BodyExt;
-    let whole_body = req.collect().await
-        .map_err(|e| format!("Failed to read body: {}", e))?
-        .to_bytes();
-
-    serde_json::from_slice(&whole_body)
-        .map_err(|e| format!("Invalid JSON: {}", e))
-}
-
-fn parse_query_param(query: &str, key: &str) -> Option<String> {
-    query.split('&')
-        .find_map(|pair| {
-            let mut parts = pair.split('=');
-            if parts.next()? == key {
-                Some(urlencoding::decode(parts.next()?).ok()?.into_owned())
-            } else {
-                None
-            }
-        })
-}
-
-fn json_response<T: serde::Serialize>(data: &T) -> Response<BoxBody<Bytes, Infallible>> {
-    let json = serde_json::to_string(data).unwrap_or_else(|_| "{}".to_string());
-    Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        .header("Access-Control-Allow-Origin", "*")
-        .body(full_body(&json))
-        .unwrap()
-}
-
-fn error_response(status: StatusCode, message: &str) -> Response<BoxBody<Bytes, Infallible>> {
-    let json = serde_json::json!({"error": message}).to_string();
-    Response::builder()
-        .status(status)
-        .header("Content-Type", "application/json")
-        .header("Access-Control-Allow-Origin", "*")
-        .body(full_body(&json))
-        .unwrap()
-}
-
-fn full_body(s: &str) -> BoxBody<Bytes, Infallible> {
-    use http_body_util::combinators::BoxBody;
-    use http_body_util::BodyExt;
-    BoxBody::new(Full::new(Bytes::from(s.to_string())).map_err(|err: Infallible| match err {}))
-}
-
-fn bytes_body(bytes: Vec<u8>) -> BoxBody<Bytes, Infallible> {
-    use http_body_util::combinators::BoxBody;
-    use http_body_util::BodyExt;
-    BoxBody::new(Full::new(Bytes::from(bytes)).map_err(|err: Infallible| match err {}))
-}
+// Helper functions are now imported from router_utils
 
 async fn handle_export_database() -> Response<BoxBody<Bytes, Infallible>> {
     let db_path = crate::core::database::get_database_path();
@@ -522,15 +410,4 @@ async fn handle_post_config(req: Request<Incoming>) -> Response<BoxBody<Bytes, I
         }
         Err(e) => error_response(StatusCode::BAD_REQUEST, &e),
     }
-}
-
-async fn handle_cors_preflight() -> Response<BoxBody<Bytes, Infallible>> {
-    Response::builder()
-        .status(StatusCode::OK)
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-        .header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-        .header("Access-Control-Max-Age", "86400")
-        .body(full_body(""))
-        .unwrap()
 }

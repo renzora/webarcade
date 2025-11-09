@@ -1,7 +1,8 @@
 mod router;
 
-use crate::core::plugin::{Plugin, PluginMetadata};
+use crate::core::plugin::Plugin;
 use crate::core::plugin_context::PluginContext;
+use crate::plugin_metadata;
 use async_trait::async_trait;
 use std::sync::Arc;
 use anyhow::Result;
@@ -10,16 +11,7 @@ pub struct DatabasePlugin;
 
 #[async_trait]
 impl Plugin for DatabasePlugin {
-    fn metadata(&self) -> PluginMetadata {
-        PluginMetadata {
-            id: "database".to_string(),
-            name: "Database".to_string(),
-            version: "1.0.0".to_string(),
-            description: "SQL query interface for the database".to_string(),
-            author: "WebArcade Team".to_string(),
-            dependencies: vec![],
-        }
-    }
+    plugin_metadata!("database", "Database", "1.0.0", "SQL query interface for the database");
 
     async fn init(&self, ctx: &PluginContext) -> Result<()> {
         log::info!("[Database] Initializing plugin...");

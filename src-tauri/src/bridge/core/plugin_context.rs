@@ -94,6 +94,44 @@ impl PluginContext {
         Ok(())
     }
 
+    /// Execute a query and return multiple rows
+    pub fn query<P, F, T>(&self, query: &str, params: P, mapper: F) -> Result<Vec<T>>
+    where
+        P: rusqlite::Params,
+        F: FnMut(&rusqlite::Row) -> rusqlite::Result<T>,
+    {
+        let conn = self.db()?;
+        let mut stmt = conn.prepare(query)?;
+        let rows = stmt.query_map(params, mapper)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    /// Execute a query and return a single row
+    pub fn query_row<P, T, F>(&self, query: &str, params: P, mapper: F) -> Result<T>
+    where
+        P: rusqlite::Params,
+        F: FnOnce(&rusqlite::Row) -> rusqlite::Result<T>,
+    {
+        let conn = self.db()?;
+        Ok(conn.query_row(query, params, mapper)?)
+    }
+
+    /// Execute a write query (INSERT, UPDATE, DELETE)
+    pub fn execute<P>(&self, query: &str, params: P) -> Result<usize>
+    where
+        P: rusqlite::Params,
+    {
+        let conn = self.db()?;
+        Ok(conn.execute(query, params)?)
+    }
+
+    /// Execute a batch of SQL statements
+    pub fn execute_batch(&self, sql: &str) -> Result<()> {
+        let conn = self.db()?;
+        Ok(conn.execute_batch(sql)?)
+    }
+
     // ==================== Events ====================
 
     /// Publish event

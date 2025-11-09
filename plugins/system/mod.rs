@@ -1,5 +1,6 @@
-use crate::core::plugin::{Plugin, PluginMetadata};
+use crate::core::plugin::Plugin;
 use crate::core::plugin_context::PluginContext;
+use crate::plugin_metadata;
 use async_trait::async_trait;
 use std::sync::Arc;
 use anyhow::Result;
@@ -11,16 +12,7 @@ pub struct SystemPlugin;
 
 #[async_trait]
 impl Plugin for SystemPlugin {
-    fn metadata(&self) -> PluginMetadata {
-        PluginMetadata {
-            id: "system".to_string(),
-            name: "System Monitor".to_string(),
-            version: "1.0.0".to_string(),
-            description: "System resource monitoring (CPU, RAM, GPU)".to_string(),
-            author: "WebArcade Team".to_string(),
-            dependencies: vec![],
-        }
-    }
+    plugin_metadata!("system", "System Monitor", "1.0.0", "System resource monitoring (CPU, RAM, GPU)");
 
     async fn init(&self, ctx: &PluginContext) -> Result<()> {
         log::info!("[System] Initializing plugin...");
