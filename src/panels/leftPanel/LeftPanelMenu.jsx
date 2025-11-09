@@ -1,7 +1,8 @@
 import { createSignal, createMemo, For, Show } from 'solid-js';
-import { leftPanelMenuItems, registeredPlugins, viewportTypes } from '@/api/plugin';
+import { leftPanelMenuItems, registeredPlugins, viewportTypes, propertyTabs } from '@/api/plugin';
 import pluginStore from '../../../plugins/plugins/PluginStore.jsx';
 import { IconSearch, IconStar } from '@tabler/icons-solidjs';
+import { editorActions } from '@/layout/stores/EditorStore';
 
 const LeftPanelMenu = () => {
   const [searchQuery, setSearchQuery] = createSignal('');
@@ -82,8 +83,47 @@ const LeftPanelMenu = () => {
     return Array.from(groups.entries());
   });
 
-  const handleItemClick = (item) => {
+  const findAssociatedPropertyTab = async (menuItemId) => {
+    // Extract viewport typeId from menu item ID (e.g., "viewport-webarcade-database" -> "webarcade-database")
+    let viewportId = menuItemId;
+    if (menuItemId.startsWith('viewport-')) {
+      viewportId = menuItemId.substring('viewport-'.length);
+    }
+
+    // Find all property tabs from the same viewport
+    const allPropertyTabs = Array.from(propertyTabs().values());
+
+    // Strategy 1: Find tabs that explicitly reference this viewport
+    const matchingTab = allPropertyTabs.find(tab => tab.viewport === viewportId);
+
+    if (matchingTab) {
+      console.log('[LeftPanelMenu] Found associated property tab:', matchingTab.id, 'for viewport:', viewportId);
+      // Set the selected tool in the editor store to open the right panel tab
+      editorActions.setSelectedTool(matchingTab.id);
+      return true;
+    }
+
+    // Strategy 2: Find tabs from the same plugin as the viewport
+    const viewportType = viewportTypes().get(viewportId);
+    if (viewportType && viewportType.plugin) {
+      const pluginTab = allPropertyTabs.find(tab => tab.plugin === viewportType.plugin);
+      if (pluginTab) {
+        console.log('[LeftPanelMenu] Found plugin property tab:', pluginTab.id, 'for viewport:', viewportId);
+        editorActions.setSelectedTool(pluginTab.id);
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  const handleItemClick = async (item) => {
     setActiveItem(item.id);
+
+    // Try to open associated property tab first
+    await findAssociatedPropertyTab(item.id);
+
+    // Then execute the original onClick handler (which typically opens the viewport)
     if (item.onClick) {
       item.onClick();
     }
