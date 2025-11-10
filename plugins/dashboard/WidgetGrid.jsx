@@ -1,139 +1,150 @@
 import { createSignal, For, Show, onMount, createEffect, onCleanup, untrack } from 'solid-js';
 import { usePluginAPI } from '@/api/plugin';
-import { IconGripVertical, IconX, IconColumns1, IconColumns2 } from '@tabler/icons-solidjs';
+import { IconX, IconColumns1, IconColumns2, IconPlus, IconLayoutGrid, IconLayoutGridAdd } from '@tabler/icons-solidjs';
 import Packery from 'packery';
 import Draggabilly from 'draggabilly';
+import { dashboardAPI } from './api.js';
 
-export default function WidgetGrid() {
+export default function WidgetGrid(props) {
   const api = usePluginAPI();
-  const [widgetLayout, setWidgetLayout] = createSignal([]);
+  const [currentDashboardId, setCurrentDashboardId] = createSignal('default');
+  const [widgetInstances, setWidgetInstances] = createSignal([]);
   const [availableWidgets, setAvailableWidgets] = createSignal([]);
-  const [draggedIndex, setDraggedIndex] = createSignal(null);
-  const [dropTargetIndex, setDropTargetIndex] = createSignal(null);
+  const [showAddWidget, setShowAddWidget] = createSignal(false);
+  const [widgetSearchQuery, setWidgetSearchQuery] = createSignal('');
+  const [gridSize, setGridSize] = createSignal('normal'); // 'small' or 'large'
+
   let containerRef;
   let packeryInstance = null;
   let isDragging = false;
   let isInitialized = false;
 
-  onMount(() => {
-    // Small delay to ensure plugins are loaded
-    setTimeout(() => {
-      // Get all available widgets
+  // Load widgets on mount and when dashboard changes
+  onMount(async () => {
+    try {
+      // Load available widgets from plugin API
       const allWidgets = api.getWidgets();
-      console.log('[WidgetGrid] All widgets:', allWidgets);
       setAvailableWidgets(allWidgets);
+      console.log('[WidgetGrid] Available widgets:', allWidgets);
 
-      // Load widget layout from localStorage
-      const savedLayout = localStorage.getItem('dashboard-widget-layout');
-      let layout = null;
+      // Load widgets for current dashboard
+      await loadWidgets(currentDashboardId());
 
-      if (savedLayout) {
-        try {
-          layout = JSON.parse(savedLayout);
-          console.log('[WidgetGrid] Loaded layout from storage:', layout);
-        } catch (e) {
-          layout = null;
-        }
-      }
+      // Listen for dashboard changes
+      api.on('dashboard:changed', async (data) => {
+        console.log('[WidgetGrid] Dashboard changed to:', data.dashboardId);
+        setCurrentDashboardId(data.dashboardId);
+        await loadWidgets(data.dashboardId);
 
-      // Always ensure all widgets are in the layout
-      if (allWidgets.length > 0) {
-        if (!layout || layout.length === 0) {
-          // No saved layout, add all widgets
-          layout = allWidgets.map((widget, index) => ({
-            id: widget.id,
-            order: index,
-            columns: 1
-          }));
-          console.log('[WidgetGrid] Created new layout:', layout);
-        } else {
-          // Merge saved layout with new widgets
-          const existingIds = new Set(layout.map(item => item.id));
-          const newWidgets = allWidgets
-            .filter(widget => !existingIds.has(widget.id))
-            .map((widget, index) => ({
-              id: widget.id,
-              order: layout.length + index,
-              columns: 1
-            }));
-
-          if (newWidgets.length > 0) {
-            layout = [...layout, ...newWidgets];
-            console.log('[WidgetGrid] Added new widgets:', newWidgets);
+        // Reinitialize Packery after loading new widgets
+        setTimeout(() => {
+          isInitialized = false;
+          if (containerRef) {
+            initPackery();
           }
-        }
-
-        setWidgetLayout(layout);
-        saveLayout(layout);
-        console.log('[WidgetGrid] Final layout:', layout);
-        console.log('[WidgetGrid] Widget layout count:', widgetLayout().length);
-      } else {
-        console.warn('[WidgetGrid] No widgets available from API!');
-      }
-    }, 200);
+        }, 200);
+      });
+    } catch (error) {
+      console.error('[WidgetGrid] Failed to initialize:', error);
+    }
   });
 
-  const saveLayout = (layout) => {
-    localStorage.setItem('dashboard-widget-layout', JSON.stringify(layout));
+  const loadWidgets = async (dashboardId) => {
+    try {
+      const data = await dashboardAPI.getWidgets(dashboardId);
+      setWidgetInstances(data);
+      console.log('[WidgetGrid] Loaded widgets:', data);
+
+      // Reinitialize Packery after loading
+      setTimeout(() => {
+        isInitialized = false;
+        if (containerRef) {
+          initPackery();
+        }
+      }, 100);
+    } catch (error) {
+      console.error('[WidgetGrid] Failed to load widgets:', error);
+    }
   };
 
-  const removeWidget = (widgetId) => {
-    const newLayout = widgetLayout().filter(item => item.id !== widgetId);
-    const updatedLayout = newLayout.map((item, index) => ({
-      ...item,
-      order: index
-    }));
-    setWidgetLayout(updatedLayout);
-    saveLayout(updatedLayout);
 
-    // Reinitialize Packery to rebind draggable handlers
-    setTimeout(() => {
-      isInitialized = false;
-      initPackery();
-    }, 50);
+  const addWidget = async (widgetId) => {
+    try {
+      const maxOrder = widgetInstances().reduce((max, w) => Math.max(max, w.order_index), -1);
+      await dashboardAPI.createWidget(currentDashboardId(), widgetId, maxOrder + 1, 1);
+      await loadWidgets(currentDashboardId());
+      setShowAddWidget(false);
+    } catch (error) {
+      console.error('[WidgetGrid] Failed to add widget:', error);
+      alert('Failed to add widget: ' + error.message);
+    }
   };
 
-  const toggleWidgetColumns = (widgetId) => {
-    const newLayout = widgetLayout().map(item => {
-      if (item.id === widgetId) {
-        return {
-          ...item,
-          columns: item.columns === 2 ? 1 : 2
-        };
-      }
-      return item;
-    });
-    setWidgetLayout(newLayout);
-    saveLayout(newLayout);
+  const removeWidget = async (widgetInstanceId) => {
+    try {
+      await dashboardAPI.deleteWidget(widgetInstanceId);
+      await loadWidgets(currentDashboardId());
+    } catch (error) {
+      console.error('[WidgetGrid] Failed to remove widget:', error);
+      alert('Failed to remove widget: ' + error.message);
+    }
+  };
 
-    // Reinitialize Packery to update widths and rebind draggable handlers
-    setTimeout(() => {
-      isInitialized = false;
-      initPackery();
-    }, 100);
+  const toggleWidgetColumns = async (widgetInstance) => {
+    try {
+      const newColumns = widgetInstance.columns === 2 ? 1 : 2;
+      await dashboardAPI.updateWidget(widgetInstance.id, { columns: newColumns });
+      await loadWidgets(currentDashboardId());
+    } catch (error) {
+      console.error('[WidgetGrid] Failed to toggle columns:', error);
+      alert('Failed to update widget: ' + error.message);
+    }
   };
 
   const getWidgetById = (widgetId) => {
     return availableWidgets().find(w => w.id === widgetId);
   };
 
+  const filteredWidgets = () => {
+    const query = widgetSearchQuery().toLowerCase();
+    if (!query) return availableWidgets();
+
+    return availableWidgets().filter(widget =>
+      widget.name?.toLowerCase().includes(query) ||
+      widget.id.toLowerCase().includes(query) ||
+      widget.description?.toLowerCase().includes(query)
+    );
+  };
+
+  const toggleGridSize = (size) => {
+    setGridSize(size);
+
+    // Force reinitialize Packery with new column size
+    isInitialized = false;
+    setTimeout(() => {
+      if (containerRef) {
+        initPackery();
+      }
+    }, 50);
+  };
+
   const calculateColumns = () => {
     if (!containerRef) return 6;
-    const horizontalPadding = 32; // 16px left + 16px right
+    const horizontalPadding = 32;
     const containerWidth = containerRef.offsetWidth - horizontalPadding;
-    const minColumnWidth = 180; // Reduced from 200 to allow more columns
+
+    // Adjust minimum column width based on grid size
+    const minColumnWidth = gridSize() === 'small' ? 150 : gridSize() === 'large' ? 250 : 180;
     const gutter = 16;
 
     const maxColumns = Math.floor((containerWidth + gutter) / (minColumnWidth + gutter));
-    return Math.max(1, Math.min(maxColumns, 8)); // Increased max from 6 to 8 columns
+    return Math.max(1, Math.min(maxColumns, 8));
   };
 
   const initPackery = () => {
     if (!containerRef) return;
 
-    // Destroy existing instance
     if (packeryInstance) {
-      // Clean up ResizeObservers
       const itemElems = containerRef.querySelectorAll('.widget-item');
       itemElems.forEach((itemElem) => {
         if (itemElem._resizeObserver) {
@@ -145,14 +156,24 @@ export default function WidgetGrid() {
       packeryInstance.destroy();
     }
 
-    // Calculate column width based on container (accounting for horizontal padding)
-    const horizontalPadding = 32; // 16px left + 16px right
+    const horizontalPadding = 32;
     const containerWidth = containerRef.offsetWidth - horizontalPadding;
     const gutter = 16;
     const columns = calculateColumns();
     const columnWidth = (containerWidth - (gutter * (columns - 1))) / columns;
 
-    // Initialize Packery
+    // Update all widget widths before initializing Packery
+    const widgetElements = containerRef.querySelectorAll('.widget-item');
+    widgetElements.forEach((elem) => {
+      const widgetInstanceId = elem.getAttribute('data-widget-instance-id');
+      const widgetInstance = widgetInstances().find(item => item.id === widgetInstanceId);
+      if (widgetInstance) {
+        const cols = widgetInstance.columns || 1;
+        const width = getWidgetWidth(cols, columnWidth);
+        elem.style.width = `${width}px`;
+      }
+    });
+
     packeryInstance = new Packery(containerRef, {
       itemSelector: '.widget-item',
       columnWidth: columnWidth,
@@ -162,64 +183,39 @@ export default function WidgetGrid() {
       isInitLayout: true
     });
 
-    // Force Packery to reload and recognize all items
     packeryInstance.reloadItems();
     packeryInstance.layout();
 
-    // Make all widget items draggable using Draggabilly
     const itemElems = containerRef.querySelectorAll('.widget-item');
 
     itemElems.forEach((itemElem) => {
       const draggie = new Draggabilly(itemElem, {
-        // Entire widget is draggable, but ignore interactive elements
         ignore: 'button, input, textarea, select, a, .no-drag',
-        grid: [1, 1] // Smoother dragging with finer grid
+        grid: [1, 1]
       });
 
-      // Store draggabilly instance
       packeryInstance.bindDraggabillyEvents(draggie);
 
-      // Track drag state
       draggie.on('dragStart', () => {
         isDragging = true;
-        // Elevate dragged widget above all others
         itemElem.style.zIndex = '1000';
       });
 
-      // Save new order after drag
-      draggie.on('dragEnd', () => {
+      draggie.on('dragEnd', async () => {
         isDragging = false;
-        // Reset z-index after drag
         itemElem.style.zIndex = '';
 
         const items = packeryInstance.getItemElements();
-        const newLayout = items.map((elem, index) => {
-          const widgetId = elem.getAttribute('data-widget-id');
-          const layoutItem = widgetLayout().find(item => item.id === widgetId);
-          return {
-            ...layoutItem,
-            order: index
-          };
-        });
+        const widgetIds = items.map((elem) => elem.getAttribute('data-widget-instance-id'));
 
-        // Only update if order actually changed
-        const currentOrder = widgetLayout().map(item => item.id).join(',');
-        const newOrder = newLayout.map(item => item.id).join(',');
-
-        if (currentOrder !== newOrder) {
-          // Save to localStorage only - don't update state to avoid re-render
-          localStorage.setItem('dashboard-widget-layout', JSON.stringify(newLayout));
-
-          // Update the data attributes to keep DOM in sync without re-rendering
-          items.forEach((elem, index) => {
-            elem.setAttribute('data-order', index);
-          });
+        try {
+          await dashboardAPI.reorderWidgets(currentDashboardId(), widgetIds);
+        } catch (error) {
+          console.error('[WidgetGrid] Failed to save order:', error);
         }
       });
 
-      // Add ResizeObserver to detect height changes in widgets
       const resizeObserver = new ResizeObserver(() => {
-        // Debounce layout calls to avoid excessive relayouts
         if (!isDragging && packeryInstance) {
           requestAnimationFrame(() => {
             packeryInstance.layout();
@@ -228,7 +224,6 @@ export default function WidgetGrid() {
       });
       resizeObserver.observe(itemElem);
 
-      // Store observer for cleanup
       itemElem._resizeObserver = resizeObserver;
     });
 
@@ -244,10 +239,9 @@ export default function WidgetGrid() {
     }
   };
 
-  // Initialize packery when widgets are loaded
   createEffect(() => {
-    const layout = widgetLayout();
-    if (layout.length > 0 && containerRef && !isInitialized) {
+    const instances = widgetInstances();
+    if (instances.length > 0 && containerRef && !isInitialized) {
       setTimeout(() => {
         initPackery();
         setTimeout(() => layoutPackery(), 100);
@@ -255,40 +249,45 @@ export default function WidgetGrid() {
     }
   });
 
-  // Relayout on window resize and panel resize
+  // Watch for grid size changes and reinitialize
+  createEffect(() => {
+    const size = gridSize();
+    if (widgetInstances().length > 0 && containerRef && isInitialized) {
+      isInitialized = false;
+      setTimeout(() => {
+        initPackery();
+      }, 50);
+    }
+  });
+
   onMount(() => {
     let resizeTimeout;
     let lastColumns = calculateColumns();
 
     const handleResize = () => {
-      // Debounce to prevent resize loop
       clearTimeout(resizeTimeout);
       resizeTimeout = setTimeout(() => {
-        if (widgetLayout().length > 0 && containerRef) {
+        if (widgetInstances().length > 0 && containerRef) {
           const newColumns = calculateColumns();
 
-          // If column count changed, reinitialize to recalculate everything
           if (newColumns !== lastColumns) {
             lastColumns = newColumns;
             isInitialized = false;
             initPackery();
           } else if (packeryInstance) {
-            // Just update width and relayout
-            const horizontalPadding = 32; // 16px left + 16px right
+            const horizontalPadding = 32;
             const containerWidth = containerRef.offsetWidth - horizontalPadding;
             const gutter = 16;
             const columnWidth = (containerWidth - (gutter * (newColumns - 1))) / newColumns;
 
-            // Update packery column width and force relayout
             packeryInstance.options.columnWidth = columnWidth;
 
-            // Update widget widths
             const widgetElements = containerRef.querySelectorAll('.widget-item');
             widgetElements.forEach((elem) => {
-              const widgetId = elem.getAttribute('data-widget-id');
-              const layoutItem = widgetLayout().find(item => item.id === widgetId);
-              if (layoutItem) {
-                const columns = layoutItem.columns || 1;
+              const widgetInstanceId = elem.getAttribute('data-widget-instance-id');
+              const widgetInstance = widgetInstances().find(item => item.id === widgetInstanceId);
+              if (widgetInstance) {
+                const columns = widgetInstance.columns || 1;
                 const width = getWidgetWidth(columns);
                 elem.style.width = `${width}px`;
               }
@@ -300,7 +299,6 @@ export default function WidgetGrid() {
       }, 150);
     };
 
-    // Use ResizeObserver to detect panel resize
     const resizeObserver = new ResizeObserver(() => {
       handleResize();
     });
@@ -315,7 +313,6 @@ export default function WidgetGrid() {
       window.removeEventListener('resize', handleResize);
       resizeObserver.disconnect();
 
-      // Clean up widget ResizeObservers
       if (containerRef) {
         const itemElems = containerRef.querySelectorAll('.widget-item');
         itemElems.forEach((itemElem) => {
@@ -332,15 +329,14 @@ export default function WidgetGrid() {
     });
   });
 
-  const getWidgetWidth = (requestedColumns) => {
+  const getWidgetWidth = (requestedColumns, columnWidthOverride = null) => {
     if (!containerRef) return 300;
-    const horizontalPadding = 32; // 16px left + 16px right
+    const horizontalPadding = 32;
     const containerWidth = containerRef.offsetWidth - horizontalPadding;
     const gutter = 16;
     const numColumns = calculateColumns();
-    const columnWidth = (containerWidth - (gutter * (numColumns - 1))) / numColumns;
+    const columnWidth = columnWidthOverride !== null ? columnWidthOverride : (containerWidth - (gutter * (numColumns - 1))) / numColumns;
 
-    // If requesting 2 columns but there's not enough space, use 1 column
     if (requestedColumns === 2) {
       const twoColWidth = columnWidth * 2 + gutter;
       const minTwoColWidth = 400;
@@ -357,39 +353,64 @@ export default function WidgetGrid() {
   return (
     <div class="h-full overflow-y-auto bg-gradient-to-br from-base-300 to-base-200 p-4">
       <div class="max-w-7xl mx-auto">
-        {/* Masonry Layout Container */}
-        <div ref={containerRef} style={{ padding: '0 16px' }}>
-          <For each={widgetLayout()}>
-            {(layoutItem, index) => {
-              const widget = getWidgetById(layoutItem.id);
+        {/* Header with Controls */}
+        <div class="mb-4 flex items-center justify-between gap-2">
+          <div class="flex items-center gap-1">
+            <button
+              class={`btn btn-sm btn-square ${gridSize() === 'normal' ? 'btn-active' : 'btn-ghost'}`}
+              onClick={() => toggleGridSize('normal')}
+              title="Normal size"
+            >
+              <IconLayoutGrid size={18} />
+            </button>
+            <button
+              class={`btn btn-sm btn-square ${gridSize() === 'large' ? 'btn-active' : 'btn-ghost'}`}
+              onClick={() => toggleGridSize('large')}
+              title="Large size"
+            >
+              <IconLayoutGridAdd size={18} />
+            </button>
+          </div>
+
+          <button
+            class="btn btn-primary gap-2"
+            onClick={() => setShowAddWidget(true)}
+          >
+            <IconPlus size={18} />
+            Add Widget
+          </button>
+        </div>
+
+        {/* Widget Grid */}
+        <div
+          ref={containerRef}
+          style={{
+            padding: '0 16px'
+          }}
+        >
+          <For each={widgetInstances()}>
+            {(widgetInstance) => {
+              const widget = getWidgetById(widgetInstance.widget_id);
               if (!widget) return null;
 
               const WidgetComponent = widget.component;
-              const columns = layoutItem.columns || 1;
+              const columns = widgetInstance.columns || 1;
               const width = untrack(() => getWidgetWidth(columns));
-              const isDragged = () => draggedIndex() === index();
-              const isDropTarget = () => dropTargetIndex() === index() && draggedIndex() !== null && draggedIndex() !== index();
 
               return (
-                  <div
-                    class="widget-item relative group cursor-grab active:cursor-grabbing"
-                    classList={{
-                      'ring-4 ring-primary ring-offset-2': isDropTarget(),
-                      'opacity-30': isDragged()
-                    }}
-                    data-widget-id={layoutItem.id}
-                    data-order={layoutItem.order}
-                    style={{
-                      width: `${width}px`
-                    }}
-                  >
-                  {/* Widget Controls - Small buttons in top-left corner */}
+                <div
+                  class="widget-item relative group cursor-grab active:cursor-grabbing"
+                  data-widget-instance-id={widgetInstance.id}
+                  data-order={widgetInstance.order_index}
+                  style={{ width: `${width}px` }}
+                >
+                  {/* Widget Controls */}
                   <div class="absolute top-1 left-1 z-20 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm hover:bg-base-200/90 shadow-sm h-6 w-6 min-h-0"
                       onClick={(e) => {
                         e.stopPropagation();
-                        toggleWidgetColumns(widget.id);
+                        toggleWidgetColumns(widgetInstance);
                       }}
                     >
                       {columns === 1 ? <IconColumns2 size={12} /> : <IconColumns1 size={12} />}
@@ -398,7 +419,7 @@ export default function WidgetGrid() {
                       class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm hover:bg-error/90 hover:text-error-content shadow-sm h-6 w-6 min-h-0"
                       onClick={(e) => {
                         e.stopPropagation();
-                        removeWidget(widget.id);
+                        removeWidget(widgetInstance.id);
                       }}
                     >
                       <IconX size={12} />
@@ -407,14 +428,7 @@ export default function WidgetGrid() {
 
                   {/* Widget Content */}
                   <div class="relative">
-                    <Show when={isDropTarget()}>
-                      <div class="absolute inset-0 flex items-center justify-center bg-primary/20 rounded-lg z-10 pointer-events-none">
-                        <span class="text-primary font-semibold text-lg bg-base-100 px-4 py-2 rounded-lg shadow-lg">
-                          Drop here
-                        </span>
-                      </div>
-                    </Show>
-                    <WidgetComponent />
+                    <WidgetComponent instanceId={widgetInstance.id} config={widgetInstance.config} />
                   </div>
                 </div>
               );
@@ -422,14 +436,134 @@ export default function WidgetGrid() {
           </For>
         </div>
 
-        {/* Instructions when empty */}
-        <Show when={widgetLayout().length === 0}>
+        {/* Empty State */}
+        <Show when={widgetInstances().length === 0}>
           <div class="text-center py-20 opacity-50">
-            <p class="text-lg">No widgets on dashboard</p>
-            <p class="text-sm mt-2">Widgets will appear here automatically</p>
+            <p class="text-lg">No widgets on this dashboard</p>
+            <p class="text-sm mt-2">Click "Add Widget" to get started</p>
           </div>
         </Show>
       </div>
+
+      {/* Add Widget Modal */}
+      <Show when={showAddWidget()}>
+        <div class="modal modal-open">
+          <div class="modal-box max-w-5xl max-h-[90vh] flex flex-col p-0">
+            {/* Header */}
+            <div class="p-6 pb-4 border-b border-base-300">
+              <h3 class="font-bold text-2xl mb-4">Add Widget</h3>
+
+              {/* Search Bar */}
+              <div class="relative">
+                <input
+                  type="text"
+                  placeholder="Search widgets..."
+                  class="input input-bordered w-full pr-10"
+                  value={widgetSearchQuery()}
+                  onInput={(e) => setWidgetSearchQuery(e.target.value)}
+                  autofocus
+                />
+                <svg
+                  class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 opacity-50"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+
+              <Show when={widgetSearchQuery()}>
+                <div class="mt-2 text-sm opacity-70">
+                  Found {filteredWidgets().length} widget{filteredWidgets().length !== 1 ? 's' : ''}
+                </div>
+              </Show>
+            </div>
+
+            {/* Widget Grid */}
+            <div class="flex-1 overflow-y-auto p-6">
+              <Show when={filteredWidgets().length > 0} fallback={
+                <div class="text-center py-12 opacity-50">
+                  <svg class="w-16 h-16 mx-auto mb-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                  </svg>
+                  <p class="text-lg">No widgets found</p>
+                  <p class="text-sm mt-2">Try a different search term</p>
+                </div>
+              }>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <For each={filteredWidgets()}>
+                    {(widget) => (
+                      <button
+                        class="card bg-base-200 hover:bg-base-300 transition-all duration-200 hover:shadow-lg group text-left"
+                        onClick={() => addWidget(widget.id)}
+                      >
+                        <div class="card-body p-4">
+                          {/* Widget Icon/Preview */}
+                          <div class="flex items-center gap-3 mb-3">
+                            <div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                              <Show when={widget.icon} fallback={
+                                <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1v-3z" />
+                                </svg>
+                              }>
+                                {widget.icon && <widget.icon size={24} class="text-primary" />}
+                              </Show>
+                            </div>
+
+                            <div class="flex-1 min-w-0">
+                              <h4 class="font-semibold text-base truncate group-hover:text-primary transition-colors">
+                                {widget.name || widget.id}
+                              </h4>
+                              <Show when={widget.plugin}>
+                                <p class="text-xs opacity-50 truncate">{widget.plugin}</p>
+                              </Show>
+                            </div>
+
+                            <div class="w-8 h-8 rounded-full bg-primary text-primary-content flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                              <IconPlus size={18} />
+                            </div>
+                          </div>
+
+                          {/* Widget Description */}
+                          <Show when={widget.description}>
+                            <p class="text-sm opacity-70 line-clamp-2">
+                              {widget.description}
+                            </p>
+                          </Show>
+
+                          {/* Widget Info */}
+                          <div class="flex items-center gap-2 mt-2 text-xs opacity-50">
+                            <Show when={widget.defaultSize}>
+                              <span class="badge badge-sm badge-ghost">
+                                {widget.defaultSize.w}×{widget.defaultSize.h}
+                              </span>
+                            </Show>
+                          </div>
+                        </div>
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </div>
+
+            {/* Footer */}
+            <div class="p-4 border-t border-base-300 flex justify-end">
+              <button class="btn btn-ghost" onClick={() => {
+                setShowAddWidget(false);
+                setWidgetSearchQuery('');
+              }}>
+                Close
+              </button>
+            </div>
+          </div>
+          <div class="modal-backdrop bg-black/50" onClick={() => {
+            setShowAddWidget(false);
+            setWidgetSearchQuery('');
+          }}></div>
+        </div>
+      </Show>
     </div>
   );
 }

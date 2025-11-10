@@ -67,6 +67,15 @@
       "priority": 1
     },
     {
+      "id": "plugin_ide",
+      "path": "/plugins/plugin_ide",
+      "main": "index.jsx",
+      "widget": null,
+      "widgets": null,
+      "enabled": true,
+      "priority": 1
+    },
+    {
       "id": "snake-game",
       "path": "/plugins/snake-game",
       "main": "index.jsx",
@@ -134,8 +143,21 @@
       "widgets": null,
       "enabled": true,
       "priority": 1
+    },
+    {
+      "id": "withings",
+      "path": "/plugins/withings",
+      "main": "index.jsx",
+      "widget": null,
+      "widgets": [
+        "BodyWater.jsx",
+        "MuscleMass.jsx",
+        "Weight.jsx"
+      ],
+      "enabled": true,
+      "priority": 1
     }
   ],
-  "generatedAt": "2025-11-10T10:33:57.583Z",
+  "generatedAt": "2025-11-10T17:59:34.983Z",
   "generator": "discover-plugins.js"
 }
