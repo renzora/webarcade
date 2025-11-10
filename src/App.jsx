@@ -6,11 +6,17 @@ import Layout from './layout'
 import DevNotice from './components/DevNotice'
 import KeyboardShortcuts from './components/KeyboardShortcuts'
 import { usePluginAPI } from '@/api/plugin'
-import { 
+import { editorStore } from '@/layout/stores/EditorStore.jsx'
+import {
   IconSettings as SettingsIcon, IconMaximize
 } from '@tabler/icons-solidjs'
 export default function App() {
   onMount(async () => {
+    // Apply theme on startup
+    const theme = editorStore.theme || 'dark';
+    document.documentElement.setAttribute('data-theme', theme);
+
+
     // Wait for plugin API to be initialized
     setTimeout(() => {
       try {

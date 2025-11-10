@@ -127,4 +127,14 @@ macro_rules! route {
             Box::pin(async move { $handler(path, query, req).await })
         });
     };
+    ($router:expr, POST $path:expr, path => $handler:expr) => {
+        $router.route(hyper::Method::POST, $path, |path, _query, req| {
+            Box::pin(async move { $handler(path, req).await })
+        });
+    };
+    ($router:expr, PUT $path:expr, path => $handler:expr) => {
+        $router.route(hyper::Method::PUT, $path, |path, _query, req| {
+            Box::pin(async move { $handler(path, req).await })
+        });
+    };
 }

@@ -15,11 +15,6 @@ const ThemeSwitcher = () => {
     return grouped;
   };
 
-  onMount(() => {
-    // Apply current theme from editor store to DOM
-    const theme = editorStore.theme || 'dark';
-    document.documentElement.setAttribute('data-theme', theme);
-  });
 
   const handleThemeChange = (themeName) => {
     // Use editor store to manage theme

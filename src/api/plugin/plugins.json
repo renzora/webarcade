@@ -54,26 +54,88 @@
       "priority": 1
     },
     {
+      "id": "philips_hue",
+      "path": "/plugins/philips_hue",
+      "main": "index.jsx",
+      "widget": null,
+      "widgets": [
+        "HueBridgeSetup.jsx",
+        "LightControl.jsx",
+        "RoomControl.jsx"
+      ],
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "snake-game",
+      "path": "/plugins/snake-game",
+      "main": "index.jsx",
+      "widget": null,
+      "widgets": null,
+      "enabled": true,
+      "priority": 1
+    },
+    {
       "id": "system-settings",
       "path": "/plugins/system/settings",
       "main": "index.jsx",
       "widget": null,
       "widgets": [
+        "Base64Widget.jsx",
         "CalculatorWidget.jsx",
         "ClockWidget.jsx",
         "ColorPickerWidget.jsx",
         "CpuWidget.jsx",
+        "CurrencyConverterWidget.jsx",
         "GoalTrackerWidget.jsx",
+        "JokeGeneratorWidget.jsx",
         "MemoryWidget.jsx",
         "NotesWidget.jsx",
+        "PasswordGeneratorWidget.jsx",
         "PomodoroWidget.jsx",
+        "QRGeneratorWidget.jsx",
+        "TranslateWidget.jsx",
+        "UnitConverterWidget.jsx",
         "WaterTrackerWidget.jsx",
         "WeatherWidget.jsx"
       ],
       "enabled": true,
       "priority": 1
+    },
+    {
+      "id": "twitch",
+      "path": "/plugins/twitch",
+      "main": "index.jsx",
+      "widget": null,
+      "widgets": [
+        "TwitchChat.jsx",
+        "TwitchEvents.jsx",
+        "TwitchTest.jsx"
+      ],
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "twitch-chat",
+      "path": "/plugins/twitch-chat",
+      "main": "index.jsx",
+      "widget": null,
+      "widgets": [
+        "TwitchChatWidget.jsx"
+      ],
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "twitch-setup",
+      "path": "/plugins/twitch-setup",
+      "main": "index.jsx",
+      "widget": null,
+      "widgets": null,
+      "enabled": true,
+      "priority": 1
     }
   ],
-  "generatedAt": "2025-11-09T23:22:16.168Z",
+  "generatedAt": "2025-11-10T10:33:57.583Z",
   "generator": "discover-plugins.js"
 }

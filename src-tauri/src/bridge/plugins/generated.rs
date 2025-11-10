@@ -3,20 +3,26 @@
 
 #[path = "../../../../plugins/database/mod.rs"]
 pub mod database;
+#[path = "../../../../plugins/philips_hue/mod.rs"]
+pub mod philips_hue;
 #[path = "../../../../plugins/system/mod.rs"]
 pub mod system;
+#[path = "../../../../plugins/twitch/mod.rs"]
+pub mod twitch;
 
 use crate::bridge::core::plugin_manager::PluginManager;
 
 /// Auto-generated plugin registration function
 pub fn register_all_plugins(manager: &mut PluginManager) {
-    log::info!("📦 Registering 2 auto-discovered plugins...");
+    log::info!("📦 Registering 4 auto-discovered plugins...");
 
     // Tier 0: Core plugins
     manager.register(database::DatabasePlugin);
 
     // Tier 3+: Other plugins
+    manager.register(philips_hue::PhilipsHuePlugin);
     manager.register(system::SystemPlugin);
+    manager.register(twitch::TwitchPlugin);
 
-    log::info!("✅ Plugin registration complete (2 plugins)");
+    log::info!("✅ Plugin registration complete (4 plugins)");
 }

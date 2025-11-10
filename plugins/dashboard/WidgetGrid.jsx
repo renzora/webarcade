@@ -85,6 +85,12 @@ export default function WidgetGrid() {
     }));
     setWidgetLayout(updatedLayout);
     saveLayout(updatedLayout);
+
+    // Reinitialize Packery to rebind draggable handlers
+    setTimeout(() => {
+      isInitialized = false;
+      initPackery();
+    }, 50);
   };
 
   const toggleWidgetColumns = (widgetId) => {
@@ -99,6 +105,12 @@ export default function WidgetGrid() {
     });
     setWidgetLayout(newLayout);
     saveLayout(newLayout);
+
+    // Reinitialize Packery to update widths and rebind draggable handlers
+    setTimeout(() => {
+      isInitialized = false;
+      initPackery();
+    }, 100);
   };
 
   const getWidgetById = (widgetId) => {
@@ -121,6 +133,15 @@ export default function WidgetGrid() {
 
     // Destroy existing instance
     if (packeryInstance) {
+      // Clean up ResizeObservers
+      const itemElems = containerRef.querySelectorAll('.widget-item');
+      itemElems.forEach((itemElem) => {
+        if (itemElem._resizeObserver) {
+          itemElem._resizeObserver.disconnect();
+          delete itemElem._resizeObserver;
+        }
+      });
+
       packeryInstance.destroy();
     }
 
@@ -150,7 +171,8 @@ export default function WidgetGrid() {
 
     itemElems.forEach((itemElem) => {
       const draggie = new Draggabilly(itemElem, {
-        handle: '.drag-handle',
+        // Entire widget is draggable, but ignore interactive elements
+        ignore: 'button, input, textarea, select, a, .no-drag',
         grid: [1, 1] // Smoother dragging with finer grid
       });
 
@@ -160,11 +182,15 @@ export default function WidgetGrid() {
       // Track drag state
       draggie.on('dragStart', () => {
         isDragging = true;
+        // Elevate dragged widget above all others
+        itemElem.style.zIndex = '1000';
       });
 
       // Save new order after drag
       draggie.on('dragEnd', () => {
         isDragging = false;
+        // Reset z-index after drag
+        itemElem.style.zIndex = '';
 
         const items = packeryInstance.getItemElements();
         const newLayout = items.map((elem, index) => {
@@ -190,13 +216,30 @@ export default function WidgetGrid() {
           });
         }
       });
+
+      // Add ResizeObserver to detect height changes in widgets
+      const resizeObserver = new ResizeObserver(() => {
+        // Debounce layout calls to avoid excessive relayouts
+        if (!isDragging && packeryInstance) {
+          requestAnimationFrame(() => {
+            packeryInstance.layout();
+          });
+        }
+      });
+      resizeObserver.observe(itemElem);
+
+      // Store observer for cleanup
+      itemElem._resizeObserver = resizeObserver;
     });
 
     isInitialized = true;
   };
 
-  const layoutPackery = () => {
+  const layoutPackery = (reloadItems = false) => {
     if (packeryInstance) {
+      if (reloadItems) {
+        packeryInstance.reloadItems();
+      }
       packeryInstance.layout();
     }
   };
@@ -271,6 +314,18 @@ export default function WidgetGrid() {
       clearTimeout(resizeTimeout);
       window.removeEventListener('resize', handleResize);
       resizeObserver.disconnect();
+
+      // Clean up widget ResizeObservers
+      if (containerRef) {
+        const itemElems = containerRef.querySelectorAll('.widget-item');
+        itemElems.forEach((itemElem) => {
+          if (itemElem._resizeObserver) {
+            itemElem._resizeObserver.disconnect();
+            delete itemElem._resizeObserver;
+          }
+        });
+      }
+
       if (packeryInstance) {
         packeryInstance.destroy();
       }
@@ -317,7 +372,7 @@ export default function WidgetGrid() {
 
               return (
                   <div
-                    class="widget-item relative group mb-4"
+                    class="widget-item relative group cursor-grab active:cursor-grabbing"
                     classList={{
                       'ring-4 ring-primary ring-offset-2': isDropTarget(),
                       'opacity-30': isDragged()
@@ -328,35 +383,26 @@ export default function WidgetGrid() {
                       width: `${width}px`
                     }}
                   >
-                  {/* Floating Control Bar with Drag Handle */}
-                  <div class="absolute -top-2 -right-2 z-30 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div class="flex items-center gap-1 bg-base-100 shadow-lg rounded-lg p-1 border border-base-300">
-                      <div
-                        class="drag-handle cursor-grab active:cursor-grabbing px-1 hover:bg-base-200 rounded"
-                      >
-                        <IconGripVertical size={14} class="text-base-content/50" />
-                      </div>
-                      <div class="w-px h-4 bg-base-300"></div>
-                      <button
-                        class="btn btn-ghost btn-xs btn-square hover:bg-base-300"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleWidgetColumns(widget.id);
-                          setTimeout(() => layoutPackery(), 100);
-                        }}
-                      >
-                        {columns === 1 ? <IconColumns2 size={14} /> : <IconColumns1 size={14} />}
-                      </button>
-                      <button
-                        class="btn btn-ghost btn-xs btn-square hover:bg-error hover:text-error-content"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeWidget(widget.id);
-                        }}
-                      >
-                        <IconX size={14} />
-                      </button>
-                    </div>
+                  {/* Widget Controls - Small buttons in top-left corner */}
+                  <div class="absolute top-1 left-1 z-20 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm hover:bg-base-200/90 shadow-sm h-6 w-6 min-h-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleWidgetColumns(widget.id);
+                      }}
+                    >
+                      {columns === 1 ? <IconColumns2 size={12} /> : <IconColumns1 size={12} />}
+                    </button>
+                    <button
+                      class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm hover:bg-error/90 hover:text-error-content shadow-sm h-6 w-6 min-h-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeWidget(widget.id);
+                      }}
+                    >
+                      <IconX size={12} />
+                    </button>
                   </div>
 
                   {/* Widget Content */}
