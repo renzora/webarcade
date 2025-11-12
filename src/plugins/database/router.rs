@@ -20,7 +20,6 @@ pub async fn register_routes(ctx: &PluginContext) -> Result<()> {
     route!(router, POST "/import" => handle_import_database);
     route!(router, GET "/config", query => handle_get_config);
     route!(router, POST "/config" => handle_post_config);
-    route!(router, OPTIONS "/config" => cors_preflight);
     ctx.register_router("database", router).await;
     Ok(())
 }

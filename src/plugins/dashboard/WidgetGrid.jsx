@@ -174,13 +174,20 @@ export default function WidgetGrid(props) {
       }
     });
 
+    // Set width for stamped add-widget tile
+    const stampElem = containerRef.querySelector('.add-widget-stamp');
+    if (stampElem) {
+      stampElem.style.width = `${columnWidth}px`;
+    }
+
     packeryInstance = new Packery(containerRef, {
       itemSelector: '.widget-item',
       columnWidth: columnWidth,
       gutter: gutter,
       transitionDuration: '0.2s',
       stagger: 0,
-      isInitLayout: true
+      isInitLayout: true,
+      stamp: '.add-widget-stamp'
     });
 
     packeryInstance.reloadItems();
@@ -204,6 +211,11 @@ export default function WidgetGrid(props) {
       draggie.on('dragEnd', async () => {
         isDragging = false;
         itemElem.style.zIndex = '';
+
+        // Force layout update to avoid overlapping with stamped element
+        if (packeryInstance) {
+          packeryInstance.layout();
+        }
 
         const items = packeryInstance.getItemElements();
         const widgetIds = items.map((elem) => elem.getAttribute('data-widget-instance-id'));
@@ -354,7 +366,7 @@ export default function WidgetGrid(props) {
     <div class="h-full overflow-y-auto bg-gradient-to-br from-base-300 to-base-200 p-4">
       <div class="max-w-7xl mx-auto">
         {/* Header with Controls */}
-        <div class="mb-4 flex items-center justify-between gap-2">
+        <div class="mb-4 flex items-center justify-end gap-2">
           <div class="flex items-center gap-1">
             <button
               class={`btn btn-sm btn-square ${gridSize() === 'normal' ? 'btn-active' : 'btn-ghost'}`}
@@ -371,14 +383,6 @@ export default function WidgetGrid(props) {
               <IconLayoutGridAdd size={18} />
             </button>
           </div>
-
-          <button
-            class="btn btn-primary gap-2"
-            onClick={() => setShowAddWidget(true)}
-          >
-            <IconPlus size={18} />
-            Add Widget
-          </button>
         </div>
 
         {/* Widget Grid */}
@@ -388,6 +392,29 @@ export default function WidgetGrid(props) {
             padding: '0 16px'
           }}
         >
+          {/* Stamped Add Widget Tile */}
+          <div
+            class="add-widget-stamp relative"
+            style={{
+              position: 'absolute',
+              left: '16px',
+              top: '0px',
+              'min-height': '200px'
+            }}
+          >
+            <button
+              class="card bg-gradient-to-br from-primary/20 to-primary/10 hover:from-primary/30 hover:to-primary/20 border-2 border-dashed border-primary/40 hover:border-primary transition-all duration-200 cursor-pointer h-full w-full"
+              onClick={() => setShowAddWidget(true)}
+            >
+              <div class="card-body items-center justify-center text-center p-8 h-full">
+                <div class="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mb-4">
+                  <IconPlus size={32} class="text-primary" />
+                </div>
+                <h3 class="text-lg font-semibold text-primary mb-2">Add Widget</h3>
+              </div>
+            </button>
+          </div>
+
           <For each={widgetInstances()}>
             {(widgetInstance) => {
               const widget = getWidgetById(widgetInstance.widget_id);

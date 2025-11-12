@@ -125,9 +125,11 @@ export function createPlugin(config) {
 }
 
 // Base Plugin class for class-based plugins
+// Provides minimal structure - use engineAPI directly for most functionality
 export class Plugin {
   constructor(engineAPI) {
     this.engineAPI = engineAPI;
+    this.api = engineAPI; // Alias for convenience
     this.id = null;
     this.name = null;
     this.version = null;
@@ -136,46 +138,6 @@ export class Plugin {
 
   async initialize() {
     // Override in subclasses
-  }
-
-  registerViewportType(id, config) {
-    return this.engineAPI.registerViewportType(id, { ...config, plugin: this.id });
-  }
-
-  registerToolbarButton(id, config) {
-    return this.engineAPI.registerToolbarButton(id, { ...config, plugin: this.id });
-  }
-
-  registerFooterButton(id, config) {
-    return this.engineAPI.registerFooterButton(id, { ...config, plugin: this.id });
-  }
-
-  registerTopMenuItem(id, config) {
-    return this.engineAPI.registerTopMenuItem(id, { ...config, plugin: this.id });
-  }
-
-  registerPropertyTab(id, config) {
-    return this.engineAPI.registerPropertyTab(id, { ...config, plugin: this.id });
-  }
-
-  registerBottomPanelTab(id, config) {
-    return this.engineAPI.registerBottomPanelTab(id, { ...config, plugin: this.id });
-  }
-
-  registerLeftPanelMenuItem(id, config) {
-    return this.engineAPI.registerLeftPanelMenuItem(id, { ...config, plugin: this.id });
-  }
-
-  createViewportTab(typeId, options = {}) {
-    return this.engineAPI.createViewportTab(typeId, options);
-  }
-
-  emit(eventType, data) {
-    return this.engineAPI.emit(`${this.id}:${eventType}`, data);
-  }
-
-  on(eventType, callback) {
-    return this.engineAPI.on(eventType, callback);
   }
 }
 

@@ -8,7 +8,6 @@ import { IconBox } from '@tabler/icons-solidjs';
 
 const RightPanel = () => {
   const { showContextMenu } = useViewportContextMenu();
-  const [_contextMenu, _setContextMenu] = createSignal(null);
   const [isCollapsed, setIsCollapsed] = createSignal(false);
 
   // Get reactive store values
@@ -18,7 +17,6 @@ const RightPanel = () => {
   const selectedObjectId = () => selection().entity;
   const selectedRightTool = () => ui().selectedTool;
   const rightPanelWidth = () => editorStore.ui.rightPanelWidth;
-  const bottomPanelHeight = () => editorStore.ui.bottomPanelHeight;
   
   const isScenePanelOpen = () => {
     return propertiesPanelVisible() && editorStore.panels.isScenePanelOpen;
@@ -35,8 +33,6 @@ const RightPanel = () => {
   // Panel resize functionality
   const [isResizingRight, setIsResizingRight] = createSignal(false);
   const [rightDragOffset, setRightDragOffset] = createSignal(0);
-  const [isResizingTabs, setIsResizingTabs] = createSignal(false);
-  const [tabContainerHeight, setTabContainerHeight] = createSignal(680);
   
   const handleRightResizeStart = (e) => {
     setIsResizingRight(true);
@@ -53,7 +49,7 @@ const RightPanel = () => {
   const handleRightResizeMove = (e) => {
     if (!isResizingRight()) return;
     
-    const minPanelWidth = 250;
+    const minPanelWidth = 220;
     const maxPanelWidth = 800;
     
     let newWidth;
@@ -86,50 +82,6 @@ const RightPanel = () => {
     }
   };
 
-  const handleTabResizeStart = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsResizingTabs(true);
-    const startY = e.clientY;
-    const startHeight = tabContainerHeight();
-    
-    const handleMouseMove = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const deltaY = startY - e.clientY;
-      
-      // Calculate available space dynamically
-      const rightPanelElement = document.querySelector(`[style*="width: ${rightPanelWidth()}px"]`);
-      const sceneElement = rightPanelElement?.querySelector('.flex-1.min-h-0');
-      
-      let maxHeight = window.innerHeight - 200; // Default fallback
-      
-      if (rightPanelElement && sceneElement) {
-        const panelRect = rightPanelElement.getBoundingClientRect();
-        const _sceneRect = sceneElement.getBoundingClientRect();
-        
-        // Reserve minimum 150px for Scene.jsx (header + some content + bottom panel)
-        const minSceneHeight = 150;
-        const availableSpace = panelRect.height - minSceneHeight - 24; // 24px for resize bar + padding
-        maxHeight = Math.max(200, availableSpace);
-      }
-      
-      const newHeight = Math.max(200, Math.min(maxHeight, startHeight + deltaY));
-      setTabContainerHeight(newHeight);
-    };
-    
-    const handleMouseUp = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsResizingTabs(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-    
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  };
-
   const handleContextMenu = (e, item, context = 'scene') => {
     if (!e) return;
     
@@ -160,9 +112,6 @@ const RightPanel = () => {
       setIsCollapsed(!isCollapsed());
     }
   };
-  
-  // Always show tabs
-  const shouldShowTabs = createMemo(() => true);
 
   // Effect to ensure first tab is selected when panel opens and no tab is selected
   createEffect(() => {
@@ -172,22 +121,11 @@ const RightPanel = () => {
         const availableTabs = Array.from(propertyTabs().values())
           .filter(tab => !tab.condition || tab.condition())
           .sort((a, b) => (a.order || 0) - (b.order || 0));
-        
+
         if (availableTabs.length > 0) {
           setSelectedRightTool(availableTabs[0].id);
         }
       }
-    }
-  });
-
-  const _getTabTitle = createMemo(() => {
-    const pluginTab = propertyTabs().get(selectedRightTool());
-    if (pluginTab) {
-      return pluginTab.title;
-    }
-    
-    switch (selectedRightTool()) {
-      default: return 'Properties';
     }
   });
 

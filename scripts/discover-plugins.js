@@ -6,15 +6,11 @@ const path = require('path');
  * and generate plugins.json configuration
  */
 
-const PLUGINS_DIR = path.join(__dirname, '../plugins');
+const PLUGINS_DIR = path.join(__dirname, '../src/plugins');
 const OUTPUT_FILE = path.join(__dirname, '../src/api/plugin/plugins.json');
 
 // Core plugins have higher priority (negative numbers load first)
-const CORE_PLUGINS = [
-  'bridge',
-  'default',
-  'plugins' // The plugin manager itself
-];
+const CORE_PLUGINS = [];
 
 function scanWidgetsInPlugin(pluginPath) {
   const widgetsDir = path.join(pluginPath, 'widgets');
@@ -59,10 +55,15 @@ function scanPluginsDirectory(baseDir, relativePath = '') {
     const indexPath = path.join(itemFullPath, 'index.jsx');
     const indexJsPath = path.join(itemFullPath, 'index.js');
     const widgetPath = path.join(itemFullPath, 'Widget.jsx');
+    const widgetsDir = path.join(itemFullPath, 'widgets');
 
-    if (fs.existsSync(indexPath) || fs.existsSync(indexJsPath)) {
+    // A plugin is valid if it has index.jsx/index.js OR a widgets directory
+    const hasIndex = fs.existsSync(indexPath) || fs.existsSync(indexJsPath);
+    const hasWidgetsDir = fs.existsSync(widgetsDir) && fs.statSync(widgetsDir).isDirectory();
+
+    if (hasIndex || hasWidgetsDir) {
       // Found a plugin!
-      const mainFile = fs.existsSync(indexPath) ? 'index.jsx' : 'index.js';
+      const mainFile = hasIndex ? (fs.existsSync(indexPath) ? 'index.jsx' : 'index.js') : null;
       const id = itemPath.replace(/\\/g, '-').replace(/\//g, '-');
       const isCore = CORE_PLUGINS.some(core => itemPath.replace(/\\/g, '/') === core);
 
@@ -80,7 +81,7 @@ function scanPluginsDirectory(baseDir, relativePath = '') {
 
       plugins.push({
         id,
-        path: `/plugins/${itemPath.replace(/\\/g, '/')}`,
+        path: `/src/plugins/${itemPath.replace(/\\/g, '/')}`,
         main: mainFile,
         widget: hasWidget ? 'Widget.jsx' : null,
         widgets: widgetFiles.length > 0 ? widgetFiles : null,

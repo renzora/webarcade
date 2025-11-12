@@ -1,5 +1,5 @@
 import { createPlugin } from '@/api/plugin';
-import { IconChartLine, IconDashboard, IconPlus } from '@tabler/icons-solidjs';
+import { IconChartLine, IconPlus } from '@tabler/icons-solidjs';
 import DashboardViewport from './viewport.jsx';
 import { dashboardAPI } from './api.js';
 

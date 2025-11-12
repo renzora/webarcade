@@ -1,5 +1,5 @@
-use hyper::{Method, Request, Response, body::Incoming};
-use http_body_util::{combinators::BoxBody};
+use hyper::{Method, Request, Response, StatusCode, body::Incoming};
+use http_body_util::{combinators::BoxBody, Full, BodyExt};
 use hyper::body::Bytes;
 use std::convert::Infallible;
 use std::collections::HashMap;
@@ -37,6 +37,11 @@ impl PluginRouter {
         query: &str,
         req: Request<Incoming>,
     ) -> Option<Response<BoxBody<Bytes, Infallible>>> {
+        // Automatically handle OPTIONS (CORS preflight) requests for all routes
+        if method == Method::OPTIONS {
+            return Some(cors_preflight_response());
+        }
+
         // Try exact match first
         if let Some(handler) = self.routes.get(&(method.clone(), path.to_string())) {
             return Some(handler(path.to_string(), query.to_string(), req).await);
@@ -85,6 +90,18 @@ fn paths_match(pattern: &str, path: &str) -> bool {
     }
 
     true
+}
+
+/// Create a CORS preflight response
+fn cors_preflight_response() -> Response<BoxBody<Bytes, Infallible>> {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        .header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        .header("Access-Control-Max-Age", "86400")
+        .body(BoxBody::new(Full::new(Bytes::from("")).map_err(|err: Infallible| match err {})))
+        .unwrap()
 }
 
 /// Registry for all plugin routers

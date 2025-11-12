@@ -2,7 +2,7 @@
   "plugins": [
     {
       "id": "dashboard",
-      "path": "/plugins/dashboard",
+      "path": "/src/plugins/dashboard",
       "main": "index.jsx",
       "widget": null,
       "widgets": null,
@@ -11,20 +11,16 @@
     },
     {
       "id": "database",
-      "path": "/plugins/database",
+      "path": "/src/plugins/database",
       "main": "index.jsx",
       "widget": null,
-      "widgets": [
-        "RowsWidget.jsx",
-        "SizeWidget.jsx",
-        "TablesWidget.jsx"
-      ],
+      "widgets": null,
       "enabled": true,
       "priority": 1
     },
     {
       "id": "menu",
-      "path": "/plugins/menu",
+      "path": "/src/plugins/menu",
       "main": "index.jsx",
       "widget": null,
       "widgets": null,
@@ -33,7 +29,7 @@
     },
     {
       "id": "plugin_ide",
-      "path": "/plugins/plugin_ide",
+      "path": "/src/plugins/plugin_ide",
       "main": "index.jsx",
       "widget": null,
       "widgets": null,
@@ -41,33 +37,30 @@
       "priority": 1
     },
     {
-      "id": "system-settings",
-      "path": "/plugins/system/settings",
+      "id": "settings",
+      "path": "/src/plugins/settings",
       "main": "index.jsx",
       "widget": null,
+      "widgets": null,
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "system",
+      "path": "/src/plugins/system",
+      "main": null,
+      "widget": null,
       "widgets": [
-        "Base64Widget.jsx",
         "CalculatorWidget.jsx",
         "ClockWidget.jsx",
         "ColorPickerWidget.jsx",
         "CpuWidget.jsx",
-        "CurrencyConverterWidget.jsx",
-        "GoalTrackerWidget.jsx",
-        "JokeGeneratorWidget.jsx",
-        "MemoryWidget.jsx",
-        "NotesWidget.jsx",
-        "PasswordGeneratorWidget.jsx",
-        "PomodoroWidget.jsx",
-        "QRGeneratorWidget.jsx",
-        "TranslateWidget.jsx",
-        "UnitConverterWidget.jsx",
-        "WaterTrackerWidget.jsx",
-        "WeatherWidget.jsx"
+        "MemoryWidget.jsx"
       ],
       "enabled": true,
       "priority": 1
     }
   ],
-  "generatedAt": "2025-11-12T18:57:37.523Z",
+  "generatedAt": "2025-11-12T22:51:40.025Z",
   "generator": "discover-plugins.js"
 }

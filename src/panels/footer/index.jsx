@@ -4,7 +4,7 @@ import { IconAlertTriangle, IconBrandGithub, IconBrandDiscord } from '@tabler/ic
 import { footerButtons } from '@/api/plugin';
 import BuildProgress from './BuildProgress';
 import DebugConsole from './DebugConsole';
-import { setShowAbout } from '../../../plugins/menu/index.jsx';
+import { setShowAbout } from '../../plugins/menu/index.jsx';
 
 const Footer = () => {
   const [engineInfo] = createSignal('Engine Ready');

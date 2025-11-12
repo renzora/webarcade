@@ -1,7 +1,5 @@
 import { createSignal, createContext, useContext, onMount, onCleanup, createRoot } from 'solid-js';
-import pluginStore, { PLUGIN_STATES as STORE_PLUGIN_STATES } from './store.jsx';
-
-const PLUGIN_STATES = STORE_PLUGIN_STATES;
+import pluginStore, { PLUGIN_STATES } from './store.jsx';
 
 const PluginAPIContext = createContext();
 
@@ -18,16 +16,13 @@ const [horizontalMenuButtonsEnabled, setHorizontalMenuButtonsEnabled] = createSi
 const [footerVisible, setFooterVisible] = createSignal(true);
 const [viewportTabsVisible, setViewportTabsVisible] = createSignal(true);
 const [layoutComponents, setLayoutComponents] = createSignal(new Map());
-const [plugins, setPlugins] = createSignal(new Map());
-const [pluginStates, setPluginStates] = createSignal(new Map());
-const [pluginErrors, setPluginErrors] = createSignal(new Map());
 
 class PluginLoader {
   constructor(PluginAPI) {
     this.PluginAPI = PluginAPI;
     this.updateInterval = null;
     this.pluginDirectories = [
-      '/plugins'
+      '/src/plugins'
     ];
   }
 
@@ -107,11 +102,11 @@ class PluginLoader {
     try {
       // Use require.context to create a webpack context for all plugins
       // This scans the plugins directory at build time
-      // Path from src/api/plugin/index.jsx to root plugins/ directory
-      const pluginContext = require.context('../../../plugins', true, /\.(jsx|js)$/);
+      // Path from src/api/plugin/index.jsx to src/plugins/
+      const pluginContext = require.context('../../plugins', true, /\.(jsx|js)$/);
 
-      // Path format: /plugins/plugin_name -> ./plugin_name/index.jsx
-      const relativePath = path.replace('/plugins', '.');
+      // Path format: /src/plugins/plugin_name -> ./plugin_name/index.jsx
+      const relativePath = path.replace('/src/plugins', '.');
       const mainPath = `${relativePath}/${mainFile}`;
 
       // Check if this exact path exists
@@ -170,66 +165,75 @@ class PluginLoader {
 
   async loadPlugin(pluginInfo) {
     const { id, path, manifest } = pluginInfo;
-    
+
     try {
       this.setPluginState(id, PLUGIN_STATES.LOADING);
       // Loading plugin: id
 
-      let pluginModule;
-      
-      try {
-        // Use a mapping approach that works with bundlers
-        pluginModule = await this.loadPluginDynamic(id, path, manifest.main);
-      } catch (importError) {
-        throw new Error(`Could not load plugin from ${path}`);
-      }
+      let pluginModule = null;
+      let pluginInstance = null;
 
-      if (!pluginModule.default && !pluginModule.Plugin) {
-        throw new Error(`Plugin ${id} must export a default plugin function`);
-      }
-
-      const PluginFactory = pluginModule.default || pluginModule.Plugin;
-      let pluginInstance;
-      
-      // Handle class-based plugins
-      if (PluginFactory.prototype && PluginFactory.prototype.constructor) {
-        pluginInstance = new PluginFactory(this.PluginAPI);
-        // Add required methods for class-based plugins
-        if (!pluginInstance.getId) {
-          pluginInstance.getId = () => pluginInstance.id;
-        }
-        if (!pluginInstance.getName) {
-          pluginInstance.getName = () => pluginInstance.name;
-        }
-        if (!pluginInstance.getVersion) {
-          pluginInstance.getVersion = () => pluginInstance.version;
-        }
-        if (!pluginInstance.onInit) {
-          pluginInstance.onInit = () => pluginInstance.initialize();
-        }
+      // Check if this is a widget-only plugin (no main file)
+      if (!manifest.main) {
+        // Widget-only plugin - create a minimal dummy instance
+        pluginInstance = {
+          id,
+          name: manifest.name,
+          version: manifest.version,
+          getId: () => id,
+          getName: () => manifest.name,
+          getVersion: () => manifest.version,
+          // No onInit or onStart needed for widget-only plugins
+        };
       } else {
-        // Handle function-based plugins
-        pluginInstance = PluginFactory(this.PluginAPI);
-      }
-      const requiredMethods = ['getId', 'getName', 'getVersion'];
-      requiredMethods.forEach(method => {
-        if (typeof pluginInstance[method] !== 'function') {
+        // Regular plugin with a main file
+        try {
+          // Use a mapping approach that works with bundlers
+          pluginModule = await this.loadPluginDynamic(id, path, manifest.main);
+        } catch (importError) {
+          throw new Error(`Could not load plugin from ${path}`);
         }
-      });
 
-      setPlugins(prev => new Map(prev.set(id, {
-        ...pluginInfo,
-        instance: pluginInstance,
-        module: pluginModule,
-        loadedAt: Date.now()
-      })));
+        if (!pluginModule.default && !pluginModule.Plugin) {
+          throw new Error(`Plugin ${id} must export a default plugin function`);
+        }
 
-      // Sync with store
+        const PluginFactory = pluginModule.default || pluginModule.Plugin;
+
+        // Handle class-based plugins
+        if (PluginFactory.prototype && PluginFactory.prototype.constructor) {
+          pluginInstance = new PluginFactory(this.PluginAPI);
+          // Add required methods for class-based plugins
+          if (!pluginInstance.getId) {
+            pluginInstance.getId = () => pluginInstance.id;
+          }
+          if (!pluginInstance.getName) {
+            pluginInstance.getName = () => pluginInstance.name;
+          }
+          if (!pluginInstance.getVersion) {
+            pluginInstance.getVersion = () => pluginInstance.version;
+          }
+          if (!pluginInstance.onInit) {
+            pluginInstance.onInit = () => pluginInstance.initialize();
+          }
+        } else {
+          // Handle function-based plugins
+          pluginInstance = PluginFactory(this.PluginAPI);
+        }
+
+        const requiredMethods = ['getId', 'getName', 'getVersion'];
+        requiredMethods.forEach(method => {
+          if (typeof pluginInstance[method] !== 'function') {
+          }
+        });
+      }
+
+      // Store plugin instance in store (single source of truth)
       pluginStore.setPluginInstance(id, pluginInstance, pluginModule);
 
       this.setPluginState(id, PLUGIN_STATES.LOADED);
       // Plugin loaded successfully
-      
+
       return pluginInstance;
     } catch (error) {
       this.setPluginError(id, error);
@@ -239,10 +243,20 @@ class PluginLoader {
   }
 
   async initializePlugin(pluginId) {
-    const plugin = plugins().get(pluginId);
-    if (!plugin || !plugin.instance) {
+    const pluginData = pluginStore.getPluginInstance(pluginId);
+    const pluginConfig = pluginStore.getPluginConfig(pluginId);
+    if (!pluginData || !pluginData.instance) {
       throw new Error(`Plugin ${pluginId} not loaded`);
     }
+    const plugin = {
+      instance: pluginData.instance,
+      manifest: {
+        name: pluginConfig?.name || pluginId,
+        version: pluginConfig?.version || '1.0.0',
+        description: pluginConfig?.description || '',
+        author: pluginConfig?.author || 'Unknown'
+      }
+    };
 
     try {
       this.setPluginState(pluginId, PLUGIN_STATES.INITIALIZING);
@@ -279,10 +293,19 @@ class PluginLoader {
   }
 
   async startPlugin(pluginId) {
-    const plugin = plugins().get(pluginId);
-    if (!plugin || !plugin.instance) {
+    const pluginData = pluginStore.getPluginInstance(pluginId);
+    const pluginConfig = pluginStore.getPluginConfig(pluginId);
+    if (!pluginData || !pluginData.instance) {
       throw new Error(`Plugin ${pluginId} not loaded`);
     }
+    const plugin = {
+      instance: pluginData.instance,
+      path: pluginConfig?.path || '',
+      manifest: {
+        name: pluginConfig?.name || pluginId,
+        priority: pluginConfig?.priority || 100
+      }
+    };
 
     try {
       this.setPluginState(pluginId, PLUGIN_STATES.STARTING);
@@ -326,53 +349,55 @@ class PluginLoader {
     }
   }
 
+  // Helper method to load and register a widget
+  loadWidgetComponent(pluginId, widgetPath, widgetConfig) {
+    try {
+      const pluginContext = require.context('../../plugins', true, /\.(jsx|js)$/);
+      const relativePath = widgetPath.replace('/src/plugins', '.');
+
+      if (pluginContext.keys().includes(relativePath)) {
+        const widgetModule = pluginContext(relativePath);
+        const WidgetComponent = widgetModule.default;
+
+        if (WidgetComponent) {
+          this.PluginAPI.registerWidget(widgetConfig.id, {
+            ...widgetConfig,
+            component: WidgetComponent
+          });
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      return false;
+    }
+  }
+
   async autoLoadWidget(pluginId, plugin) {
     try {
-      // Get plugin config to check if it has a widget
-      const pluginConfigs = pluginStore.getPluginConfigs();
-      const pluginConfig = pluginConfigs.get(pluginId);
+      const pluginConfig = pluginStore.getPluginConfig(pluginId);
+      if (!pluginConfig?.widget) return;
 
-      if (!pluginConfig || !pluginConfig.widget) {
-        return; // No widget to load
-      }
-
-      // Try to load the widget component
       const widgetPath = `${plugin.path}/${pluginConfig.widget}`;
-      const relativePath = widgetPath.replace('/plugins', '.');
+      const widgetId = `${pluginId}-widget`;
+      const widgetTitle = plugin.manifest.name || pluginId.split('-').map(w =>
+        w.charAt(0).toUpperCase() + w.slice(1)
+      ).join(' ');
 
-      try {
-        const pluginContext = require.context('../../../plugins', true, /\.(jsx|js)$/);
-
-        if (pluginContext.keys().includes(relativePath)) {
-          const widgetModule = pluginContext(relativePath);
-          const WidgetComponent = widgetModule.default;
-
-          if (WidgetComponent) {
-            // Auto-register the widget
-            const widgetId = `${pluginId}-widget`;
-            const widgetTitle = plugin.manifest.name || pluginId.split('-').map(w =>
-              w.charAt(0).toUpperCase() + w.slice(1)
-            ).join(' ');
-
-            // Get icon from plugin instance if available
-            let widgetIcon = null;
-            if (plugin.instance && typeof plugin.instance.getIcon === 'function') {
-              widgetIcon = plugin.instance.getIcon();
-            }
-
-            this.PluginAPI.registerWidget(widgetId, {
-              title: widgetTitle,
-              component: WidgetComponent,
-              icon: widgetIcon,
-              description: `${widgetTitle} widget`,
-              defaultSize: { w: 2, h: 3 },
-              order: plugin.manifest.priority || 100
-            });
-          }
-        }
-      } catch (error) {
-        // Widget loading failed, but don't break plugin startup
+      let widgetIcon = null;
+      if (plugin.instance && typeof plugin.instance.getIcon === 'function') {
+        widgetIcon = plugin.instance.getIcon();
       }
+
+      this.loadWidgetComponent(pluginId, widgetPath, {
+        id: widgetId,
+        title: widgetTitle,
+        component: null, // Will be set by loadWidgetComponent
+        icon: widgetIcon,
+        description: `${widgetTitle} widget`,
+        defaultSize: { w: 2, h: 3 },
+        order: plugin.manifest.priority || 100
+      });
     } catch (error) {
       // Silently fail widget auto-loading
     }
@@ -380,53 +405,35 @@ class PluginLoader {
 
   async autoLoadWidgetsFromDirectory(pluginId) {
     try {
-      const pluginConfigs = pluginStore.getPluginConfigs();
-      const pluginConfig = pluginConfigs.get(pluginId);
-
-      if (!pluginConfig || !pluginConfig.widgets || pluginConfig.widgets.length === 0) {
-        return; // No widgets directory
-      }
-
-      const pluginContext = require.context('../../../plugins', true, /\.(jsx|js)$/);
+      const pluginConfig = pluginStore.getPluginConfig(pluginId);
+      if (!pluginConfig?.widgets || pluginConfig.widgets.length === 0) return;
 
       for (const widgetFile of pluginConfig.widgets) {
+        const widgetPath = `${pluginConfig.path}/widgets/${widgetFile}`;
+        const widgetName = widgetFile.replace('.jsx', '').replace(/Widget$/, '');
+        const widgetId = `${pluginId}-${widgetName.toLowerCase()}`;
+
+        let widgetIcon = null;
         try {
-          const widgetPath = `${pluginConfig.path}/widgets/${widgetFile}`;
-          const relativePath = widgetPath.replace('/plugins', '.');
+          const icons = require('@tabler/icons-solidjs');
+          const iconName = `Icon${widgetName}`;
+          widgetIcon = icons[iconName] || icons.IconBox;
+        } catch (e) {
+          // Icon not found, will use default
+        }
 
-          if (pluginContext.keys().includes(relativePath)) {
-            const widgetModule = pluginContext(relativePath);
-            const WidgetComponent = widgetModule.default;
+        const loaded = this.loadWidgetComponent(pluginId, widgetPath, {
+          id: widgetId,
+          title: widgetName,
+          component: null, // Will be set by loadWidgetComponent
+          icon: widgetIcon,
+          description: `${widgetName} widget`,
+          defaultSize: { w: 1, h: 1 },
+          order: 100
+        });
 
-            if (WidgetComponent) {
-              // Extract widget name from filename
-              const widgetName = widgetFile.replace('.jsx', '').replace(/Widget$/, '');
-              const widgetId = `${pluginId}-${widgetName.toLowerCase()}`;
-
-              // Try to get icon dynamically
-              const iconName = `Icon${widgetName}`;
-              let widgetIcon = null;
-              try {
-                const icons = require('@tabler/icons-solidjs');
-                widgetIcon = icons[iconName] || icons.IconBox;
-              } catch (e) {
-                // Icon not found, will use default
-              }
-
-              this.PluginAPI.registerWidget(widgetId, {
-                title: widgetName,
-                component: WidgetComponent,
-                icon: widgetIcon,
-                description: `${widgetName} widget`,
-                defaultSize: { w: 1, h: 1 },
-                order: 100
-              });
-
-              console.log(`  ✓ Auto-loaded widget: ${widgetId}`);
-            }
-          }
-        } catch (error) {
-          console.error(`  ✗ Failed to auto-load widget ${widgetFile}:`, error);
+        if (loaded) {
+          console.log(`  ✓ Auto-loaded widget: ${widgetId}`);
         }
       }
     } catch (error) {
@@ -436,28 +443,17 @@ class PluginLoader {
 
   async loadAllPlugins() {
     // Loading all plugins
-    
+
     const discovered = await this.discoverPlugins();
     const loadPromises = [];
 
     for (const [id, pluginInfo] of discovered) {
-      // Skip loading disabled plugins but still add them to store
+      // Skip loading disabled plugins
       if (!pluginInfo.enabled) {
         this.setPluginState(id, PLUGIN_STATES.DISABLED);
-        
-        // Add disabled plugin to registry so it appears in the list
-        setPlugins(prev => new Map(prev.set(id, {
-          ...pluginInfo,
-          instance: null,
-          module: null,
-          loadedAt: null
-        })));
-        
-        // Update store state
-        pluginStore.setPluginState(id, PLUGIN_STATES.DISABLED);
         continue;
       }
-      
+
       loadPromises.push(
         this.loadPlugin(pluginInfo).catch(error => {
           pluginStore.setPluginError(id, error);
@@ -470,42 +466,41 @@ class PluginLoader {
     await Promise.all(loadPromises);
 
     const initPromises = [];
-    for (const [id] of plugins()) {
-      const pluginInfo = discovered.get(id);
-      if (this.getPluginState(id) === PLUGIN_STATES.LOADED && pluginInfo?.enabled) {
-        initPromises.push(
-          this.initializePlugin(id).catch(error => {
-            pluginStore.setPluginError(id, error);
-            pluginStore.setPluginState(id, PLUGIN_STATES.ERROR);
-            return null;
-          })
-        );
-      }
+    const loadedPlugins = pluginStore.getAllPlugins().filter(p =>
+      p.state === PLUGIN_STATES.LOADED && p.enabled
+    );
+    for (const plugin of loadedPlugins) {
+      initPromises.push(
+        this.initializePlugin(plugin.id).catch(error => {
+          pluginStore.setPluginError(plugin.id, error);
+          pluginStore.setPluginState(plugin.id, PLUGIN_STATES.ERROR);
+          return null;
+        })
+      );
     }
 
     await Promise.all(initPromises);
 
     const startPromises = [];
-    for (const [id] of plugins()) {
-      const pluginInfo = discovered.get(id);
-      if (this.getPluginState(id) === PLUGIN_STATES.INITIALIZED && pluginInfo?.enabled) {
-        startPromises.push(
-          this.startPlugin(id).catch(error => {
-            pluginStore.setPluginError(id, error);
-            pluginStore.setPluginState(id, PLUGIN_STATES.ERROR);
-            return null;
-          })
-        );
-      }
+    const initializedPlugins = pluginStore.getAllPlugins().filter(p =>
+      p.state === PLUGIN_STATES.INITIALIZED && p.enabled
+    );
+    for (const plugin of initializedPlugins) {
+      startPromises.push(
+        this.startPlugin(plugin.id).catch(error => {
+          pluginStore.setPluginError(plugin.id, error);
+          pluginStore.setPluginState(plugin.id, PLUGIN_STATES.ERROR);
+          return null;
+        })
+      );
     }
 
     await Promise.all(startPromises);
 
     // Auto-load widgets from widgets directories
-    for (const [id] of plugins()) {
-      if (this.getPluginState(id) === PLUGIN_STATES.RUNNING) {
-        await this.autoLoadWidgetsFromDirectory(id);
-      }
+    const runningPlugins = pluginStore.getRunningPlugins();
+    for (const plugin of runningPlugins) {
+      await this.autoLoadWidgetsFromDirectory(plugin.id);
     }
 
     // Plugin loading completed
@@ -525,13 +520,13 @@ class PluginLoader {
 
   async loadSinglePlugin(pluginId, pluginPath, mainFile) {
     try {
-      
       // Create plugin info from parameters
       const pluginInfo = {
         id: pluginId,
         path: pluginPath,
+        enabled: true,
         manifest: {
-          name: pluginId.split('-').map(word => 
+          name: pluginId.split('-').map(word =>
             word.charAt(0).toUpperCase() + word.slice(1)
           ).join(' ') + ' Plugin',
           version: '1.0.0',
@@ -546,111 +541,16 @@ class PluginLoader {
       };
 
       // Load the plugin
-      const pluginInstance = await this.loadPlugin(pluginInfo);
-      
+      await this.loadPlugin(pluginInfo);
+
       // Initialize the plugin
       await this.initializePlugin(pluginId);
-      
+
       // Start the plugin
       await this.startPlugin(pluginId);
-      
-      return pluginInstance;
+
+      return pluginStore.getPluginInstance(pluginId)?.instance;
     } catch (error) {
-      throw error;
-    }
-  }
-
-  async loadPluginWithDynamicImport(pluginId, pluginPath, mainFile) {
-    try {
-
-      // Use the sync context-based loader to get the module
-      // Dynamic imports with variable paths don't work well with rspack
-      const pluginModule = await this.loadPluginDynamic(pluginId, pluginPath, mainFile);
-
-      if (!pluginModule.default && !pluginModule.Plugin) {
-        throw new Error(`Plugin ${pluginId} must export a default plugin function`);
-      }
-
-      const PluginFactory = pluginModule.default || pluginModule.Plugin;
-      let pluginInstance;
-      
-      // Handle class-based plugins
-      if (PluginFactory.prototype && PluginFactory.prototype.constructor) {
-        pluginInstance = new PluginFactory(this.PluginAPI);
-      } else {
-        // Handle function-based plugins
-        pluginInstance = PluginFactory(this.PluginAPI);
-      }
-
-      // Create plugin info
-      const pluginInfo = {
-        id: pluginId,
-        path: pluginPath,
-        manifest: {
-          name: pluginId.split('-').map(word => 
-            word.charAt(0).toUpperCase() + word.slice(1)
-          ).join(' ') + ' Plugin',
-          version: '1.0.0',
-          description: `Dynamically loaded plugin: ${pluginId}`,
-          author: 'Plugin Developer',
-          main: mainFile,
-          dependencies: [],
-          permissions: this.inferPermissions(pluginPath),
-          apiVersion: '1.0.0',
-          priority: 1
-        }
-      };
-
-      // Store plugin in registry
-      setPlugins(prev => new Map(prev.set(pluginId, {
-        ...pluginInfo,
-        instance: pluginInstance,
-        module: pluginModule,
-        loadedAt: Date.now()
-      })));
-
-      this.setPluginState(pluginId, PLUGIN_STATES.LOADED);
-      
-      // Initialize the plugin
-      if (typeof pluginInstance.onInit === 'function') {
-        this.setPluginState(pluginId, PLUGIN_STATES.INITIALIZING);
-        await pluginInstance.onInit();
-        
-        this.PluginAPI.registerPlugin(pluginId, {
-          name: pluginInfo.manifest.name,
-          version: pluginInfo.manifest.version,
-          description: pluginInfo.manifest.description,
-          author: pluginInfo.manifest.author,
-          instance: pluginInstance
-        });
-        
-        this.setPluginState(pluginId, PLUGIN_STATES.INITIALIZED);
-      }
-      
-      // Start the plugin
-      if (typeof pluginInstance.onStart === 'function') {
-        this.setPluginState(pluginId, PLUGIN_STATES.STARTING);
-        
-        await new Promise((resolve, reject) => {
-          createRoot(async (dispose) => {
-            try {
-              await pluginInstance.onStart();
-              pluginInstance._dispose = dispose;
-              resolve();
-            } catch (error) {
-              dispose();
-              reject(error);
-            }
-          });
-        });
-        
-        this.setPluginState(pluginId, PLUGIN_STATES.RUNNING);
-      }
-
-      return pluginInstance;
-    } catch (error) {
-      this.setPluginError(pluginId, error);
-      this.setPluginState(pluginId, PLUGIN_STATES.ERROR);
       throw error;
     }
   }
@@ -687,21 +587,16 @@ class PluginLoader {
   }
 
   getRunningPlugins() {
-    return Array.from(plugins().values()).filter(plugin => 
-      this.getPluginState(plugin.id) === PLUGIN_STATES.RUNNING
-    );
+    return pluginStore.getRunningPlugins();
   }
 
   getPluginState(pluginId) {
-    return pluginStates().get(pluginId) || PLUGIN_STATES.DISCOVERED;
+    return pluginStore.getPluginState(pluginId);
   }
 
   setPluginState(pluginId, state) {
-    setPluginStates(prev => new Map(prev.set(pluginId, state)));
-    
-    // Sync with store
     pluginStore.setPluginState(pluginId, state);
-    
+
     this.PluginAPI.emit('plugin-state-changed', {
       pluginId,
       state,
@@ -710,34 +605,19 @@ class PluginLoader {
   }
 
   setPluginError(pluginId, error) {
-    setPluginErrors(prev => new Map(prev.set(pluginId, {
-      error: error.message,
-      stack: error.stack,
-      timestamp: Date.now()
-    })));
+    pluginStore.setPluginError(pluginId, error);
   }
 
   getPluginInfo(pluginId) {
-    return plugins().get(pluginId);
+    return pluginStore.getAllPlugins().find(p => p.id === pluginId);
   }
 
   getAllPlugins() {
-    return Array.from(plugins().values());
+    return pluginStore.getAllPlugins();
   }
 
   getStats() {
-    const allPlugins = this.getAllPlugins();
-    const states = {};
-    
-    Object.values(PLUGIN_STATES).forEach(state => {
-      states[state] = allPlugins.filter(p => this.getPluginState(p.id) === state).length;
-    });
-
-    return {
-      total: allPlugins.length,
-      states,
-      errors: pluginErrors().size
-    };
+    return pluginStore.getStats();
   }
 }
 
@@ -891,10 +771,10 @@ export class PluginAPI {
 
   async dispose() {
     if (!this.initialized) return;
-    
+
     // Disposing Plugin API
     this.pluginLoader.stopUpdateLoop();
-    
+
     const plugins = this.pluginLoader.getAllPlugins();
     for (const plugin of plugins) {
       if (plugin.instance) {
@@ -905,7 +785,7 @@ export class PluginAPI {
           } catch (error) {
           }
         }
-        
+
         if (typeof plugin.instance.onDispose === 'function') {
           try {
             await plugin.instance.onDispose();
@@ -914,7 +794,7 @@ export class PluginAPI {
         }
       }
     }
-    
+
     this.initialized = false;
     // Plugin API disposed
   }
@@ -1216,7 +1096,7 @@ export class PluginAPI {
 
   async loadPluginDynamically(pluginId, pluginPath, mainFile) {
     try {
-      return await this.pluginLoader.loadPluginWithDynamicImport(pluginId, pluginPath, mainFile);
+      return await this.pluginLoader.loadSinglePlugin(pluginId, pluginPath, mainFile);
     } catch (error) {
       throw error;
     }
@@ -1225,11 +1105,11 @@ export class PluginAPI {
   async reloadPlugins() {
     try {
       await this.pluginLoader.reloadPluginRegistry();
-      
+
       // Discover and load any new plugins
       const discovered = await this.pluginLoader.discoverPlugins();
-      const currentPlugins = new Set(Array.from(plugins().keys()));
-      
+      const currentPlugins = new Set(pluginStore.getAllPlugins().map(p => p.id));
+
       // Load only new plugins
       for (const [id, pluginInfo] of discovered) {
         if (!currentPlugins.has(id)) {
@@ -1241,7 +1121,7 @@ export class PluginAPI {
           }
         }
       }
-      
+
       return true;
     } catch (error) {
       return false;
@@ -1331,9 +1211,6 @@ export {
   footerVisible,
   viewportTabsVisible,
   layoutComponents,
-  plugins,
-  pluginStates,
-  pluginErrors,
   PLUGIN_STATES
 };
 

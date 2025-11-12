@@ -6,7 +6,7 @@ const path = require('path');
  * and generate bridge/src/plugins/generated.rs
  */
 
-const PLUGINS_DIR = path.join(__dirname, '../plugins');
+const PLUGINS_DIR = path.join(__dirname, '../src/plugins');
 const OUTPUT_FILE = path.join(__dirname, '../src-tauri/src/bridge/plugins/generated.rs');
 
 function toPascalCase(str) {
@@ -55,7 +55,7 @@ function generatePluginsCode() {
   code += '// DO NOT EDIT MANUALLY\n\n';
 
   for (const plugin of plugins) {
-    code += `#[path = "../../../../plugins/${plugin}/mod.rs"]\n`;
+    code += `#[path = "../../../../src/plugins/${plugin}/mod.rs"]\n`;
     code += `pub mod ${plugin};\n`;
   }
 

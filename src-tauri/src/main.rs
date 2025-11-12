@@ -5,8 +5,6 @@ use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Listener, Manager};
 use std::collections::VecDeque;
 
-mod renderer;
-mod screen_capture;
 mod bridge;
 
 // Re-export bridge modules at crate root for plugin compatibility
@@ -97,8 +95,6 @@ fn main() {
     let close_approved_clone = close_approved.clone();
 
     tauri::Builder::default()
-        .manage(Mutex::new(None::<renderer::RendererState>))
-        .manage(screen_capture::CaptureState::new())
         .setup(move |app| {
             let handle = app.handle().clone();
             let close_approved = close_approved.clone();
@@ -156,13 +152,6 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            renderer::init_renderer,
-            renderer::render_frame,
-            renderer::cleanup_renderer,
-            screen_capture::list_displays,
-            screen_capture::start_display_capture,
-            screen_capture::get_display_frame,
-            screen_capture::stop_display_capture,
             get_bridge_logs,
             check_bridge_health
         ])

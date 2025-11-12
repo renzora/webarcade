@@ -18,12 +18,9 @@ pub async fn register_routes(ctx: &PluginContext) -> Result<()> {
     route!(router, GET "/tree/:plugin", path => handle_get_tree);
     route!(router, GET "/file/*", path => handle_get_file);
     route!(router, PUT "/file/*", path => handle_save_file);
-    route!(router, OPTIONS "/file/*" => handle_cors_preflight);
     route!(router, POST "/file/:plugin", path => handle_create_file);
     route!(router, DELETE "/file/*", path => handle_delete_file);
     route!(router, POST "/build/:plugin", path => handle_build_plugin);
-    route!(router, OPTIONS "/build/:plugin" => handle_cors_preflight);
-    route!(router, OPTIONS "/create" => handle_cors_preflight);
     route!(router, POST "/create" => handle_create_plugin);
 
     ctx.register_router("plugin_ide", router).await;
@@ -57,16 +54,6 @@ fn get_plugins_dirs() -> Vec<PathBuf> {
     vec![
         project_root.join("plugins").join("plugin_ide"),
     ]
-}
-
-async fn handle_cors_preflight() -> Response<BoxBody<Bytes, Infallible>> {
-    Response::builder()
-        .status(StatusCode::OK)
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-        .header("Access-Control-Allow-Headers", "Content-Type")
-        .body(full_body(""))
-        .unwrap()
 }
 
 async fn handle_debug() -> Response<BoxBody<Bytes, Infallible>> {

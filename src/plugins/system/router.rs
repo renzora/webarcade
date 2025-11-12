@@ -63,9 +63,6 @@ pub async fn register_routes(ctx: &PluginContext) -> Result<()> {
     // DELETE /system/plugins/:plugin_name - Remove an installed plugin
     route!(router, DELETE "/plugins/:plugin_name", path => handle_plugin_delete);
 
-    // OPTIONS /system/plugins/:plugin_name - CORS preflight
-    route!(router, OPTIONS "/plugins/:plugin_name" => cors_preflight);
-
     ctx.register_router("system", router).await;
     Ok(())
 }

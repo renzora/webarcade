@@ -24,7 +24,7 @@ const LeftPanel = () => {
   const handleResizeMove = (e) => {
     if (!isResizing()) return;
 
-    const minPanelWidth = 200;
+    const minPanelWidth = 180;
     const maxPanelWidth = 600;
 
     const newWidth = e.clientX - dragOffset();

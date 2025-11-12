@@ -37,8 +37,6 @@ pub async fn register_routes(ctx: &PluginContext) -> Result<()> {
     route!(router, POST "/dashboards" => handle_create_dashboard);
     route!(router, PUT "/dashboards/:id", path => handle_update_dashboard);
     route!(router, DELETE "/dashboards/:id", path => handle_delete_dashboard);
-    route!(router, OPTIONS "/dashboards" => cors_preflight);
-    route!(router, OPTIONS "/dashboards/:id" => cors_preflight);
 
     // Widget instance routes
     route!(router, GET "/dashboards/:id/widgets", path => handle_get_widgets);
@@ -47,24 +45,8 @@ pub async fn register_routes(ctx: &PluginContext) -> Result<()> {
     route!(router, DELETE "/widgets/:id", path => handle_delete_widget);
     route!(router, POST "/dashboards/:id/widgets/reorder", path => handle_reorder_widgets);
 
-    // CORS preflight
-    route!(router, OPTIONS "/dashboards/:id/widgets" => cors_preflight);
-    route!(router, OPTIONS "/dashboards/:id/widgets/reorder" => cors_preflight);
-    route!(router, OPTIONS "/widgets/:id" => cors_preflight);
-
     ctx.register_router("dashboard", router).await;
     Ok(())
-}
-
-// CORS preflight handler
-async fn cors_preflight() -> Response<BoxBody<Bytes, Infallible>> {
-    Response::builder()
-        .status(StatusCode::OK)
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-        .header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-        .body(full_body(""))
-        .unwrap()
 }
 
 // GET /dashboard/dashboards
