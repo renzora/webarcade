@@ -5,6 +5,7 @@ dist
 
 # Project data
 projects/
+src/plugins/developer/projects/
 
 # Database and data files
 data/

@@ -1,5 +1,6 @@
 import { createSignal, createEffect, onCleanup } from 'solid-js';
 import { IconCpu } from '@tabler/icons-solidjs';
+import { bridge } from '@/api/bridge';
 
 export default function CpuWidget() {
   const [cpuUsage, setCpuUsage] = createSignal(0);
@@ -7,7 +8,7 @@ export default function CpuWidget() {
   createEffect(() => {
     const fetchSystemStats = async () => {
       try {
-        const response = await fetch('/system/stats');
+        const response = await bridge('/system/stats');
         if (response.ok) {
           const stats = await response.json();
           setCpuUsage(stats.cpu_usage || 0);

@@ -3,7 +3,7 @@ import { usePluginAPI } from '@/api/plugin';
 import { IconX, IconColumns1, IconColumns2, IconPlus, IconLayoutGrid, IconLayoutGridAdd } from '@tabler/icons-solidjs';
 import Packery from 'packery';
 import Draggabilly from 'draggabilly';
-import { dashboardAPI } from './api.js';
+import { dashboardAPI } from './api';
 
 export default function WidgetGrid(props) {
   const api = usePluginAPI();

@@ -1,4 +1,4 @@
-import { createSignal, createEffect, Show, For } from 'solid-js';
+import { createSignal, createEffect, Show, For, onMount, onCleanup } from 'solid-js';
 import { ProjectTree } from './ProjectTree';
 import { bridge } from '@/api/bridge';
 
@@ -9,6 +9,39 @@ export default function FilesPanel(props) {
   createEffect(() => {
     loadPlugins();
   });
+
+  onMount(() => {
+    // Listen for plugin creation events
+    window.addEventListener('plugin-ide:plugin-created', handlePluginCreated);
+    onCleanup(() => {
+      window.removeEventListener('plugin-ide:plugin-created', handlePluginCreated);
+    });
+  });
+
+  const handlePluginCreated = async (event) => {
+    const { pluginId } = event.detail;
+    console.log('[FilesPanel] Plugin created:', pluginId);
+
+    // Reload plugins
+    await loadPlugins();
+
+    // Select the new plugin
+    setCurrentPlugin(pluginId);
+
+    // Trigger file selection for index.jsx
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('plugin-ide:file-select', {
+        detail: {
+          file: {
+            path: `plugins/developer/projects/${pluginId}/index.jsx`,
+            name: 'index.jsx',
+            type: 'file'
+          },
+          plugin: pluginId
+        }
+      }));
+    }, 100);
+  };
 
   const loadPlugins = async () => {
     try {

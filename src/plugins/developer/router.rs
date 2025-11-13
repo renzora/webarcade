@@ -49,10 +49,10 @@ struct FileNode {
 
 fn get_plugins_dirs() -> Vec<PathBuf> {
     let cwd = std::env::current_dir().unwrap();
-    // Go up one level from src-tauri to project root, then into src/plugins/developer
+    // Go up one level from src-tauri to project root, then into src/plugins/developer/projects
     let project_root = cwd.parent().unwrap_or(&cwd);
     vec![
-        project_root.join("src").join("plugins").join("developer"),
+        project_root.join("src").join("plugins").join("developer").join("projects"),
     ]
 }
 
@@ -65,8 +65,8 @@ async fn handle_debug() -> Response<BoxBody<Bytes, Infallible>> {
         "cwd": cwd.to_string_lossy(),
         "project_root": project_root.to_string_lossy(),
         "plugins_dirs": plugins_dirs.iter().map(|p| p.to_string_lossy().to_string()).collect::<Vec<_>>(),
-        "test_path_exists": project_root.join("src").join("plugins").join("developer").join("test").exists(),
-        "test_has_index": project_root.join("src").join("plugins").join("developer").join("test").join("index.jsx").exists(),
+        "test_path_exists": project_root.join("src").join("plugins").join("developer").join("projects").join("test").exists(),
+        "test_has_index": project_root.join("src").join("plugins").join("developer").join("projects").join("test").join("index.jsx").exists(),
     });
 
     json_response(&debug_info)
@@ -374,28 +374,36 @@ async fn handle_build_plugin(path: String, _req: Request<Incoming>) -> Response<
 
     log::info!("[Developer] Building plugin: {}", plugin_id);
 
-    // Create a zip file of the plugin
-    let cwd = std::env::current_dir().unwrap();
-    let project_root = cwd.parent().unwrap_or(&cwd);
-    let output_dir = project_root.join("dist").join("plugins");
+    // Use the real PluginBuilder
+    let builder = match crate::plugins::developer::builder::PluginBuilder::new(plugin_id) {
+        Ok(b) => b,
+        Err(e) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to initialize builder: {}", e)),
+    };
 
-    if let Err(e) = fs::create_dir_all(&output_dir) {
-        return error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to create output directory: {}", e));
-    }
+    // Run the build
+    let result = builder.build(
+        |progress| {
+            log::info!("[Developer] Build progress: {} - {}", progress.step, progress.message);
+        },
+        |log_msg| {
+            log::info!("[Developer] {}", log_msg);
+        },
+    );
 
-    let zip_path = output_dir.join(format!("{}.zip", plugin_id));
-
-    // Create zip file
-    match create_plugin_zip(&plugin_path, &zip_path) {
-        Ok(_) => {
-            let response = serde_json::json!({
-                "success": true,
-                "plugin": plugin_id,
-                "output": zip_path.to_string_lossy(),
-            });
-            json_response(&response)
+    match result {
+        Ok(build_result) => {
+            if build_result.success {
+                let response = serde_json::json!({
+                    "success": true,
+                    "plugin": plugin_id,
+                    "output": build_result.output_path.unwrap_or_default(),
+                });
+                json_response(&response)
+            } else {
+                error_response(StatusCode::INTERNAL_SERVER_ERROR, &build_result.error.unwrap_or_else(|| "Build failed".to_string()))
+            }
         }
-        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to create zip: {}", e)),
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Build failed: {}", e)),
     }
 }
 
@@ -451,10 +459,15 @@ async fn handle_create_plugin(req: Request<Incoming>) -> Response<BoxBody<Bytes,
         Err(e) => return error_response(StatusCode::BAD_REQUEST, &format!("Invalid JSON: {}", e)),
     };
 
-    // All plugins are created in the developer directory
+    // All plugins are created in the developer/projects directory
     let cwd = std::env::current_dir().unwrap();
     let project_root = cwd.parent().unwrap_or(&cwd);
-    let base_dir = project_root.join("src").join("plugins").join("developer");
+    let base_dir = project_root.join("src").join("plugins").join("developer").join("projects");
+
+    // Ensure projects directory exists
+    if let Err(e) = fs::create_dir_all(&base_dir) {
+        return error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("Failed to create projects directory: {}", e));
+    }
 
     let plugin_path = base_dir.join(&create_req.id);
 
@@ -581,6 +594,7 @@ export default createPlugin({{
         "version": "1.0.0",
         "description": req.description,
         "author": req.author,
+        "dependencies": {}
     });
 
     fs::write(
@@ -592,11 +606,12 @@ export default createPlugin({{
 }
 
 fn create_widget_template(path: &Path, req: &CreatePluginRequest) -> Result<()> {
-    // Create index.jsx with createPlugin
+    // Create index.jsx with createPlugin and widget registration
     let index_content = format!(
         r#"import {{ createPlugin }} from '@/api/plugin';
 import {{ IconChartBar }} from '@tabler/icons-solidjs';
 import MyViewport from './viewport.jsx';
+import MainWidget from './widgets/MainWidget.jsx';
 
 export default createPlugin({{
   id: '{}',
@@ -622,12 +637,27 @@ export default createPlugin({{
         api.open('{}-viewport', {{ label: '{}' }});
       }}
     }});
+
+    // Register the widget
+    api.widget('{}-widget', {{
+      title: '{}',
+      component: MainWidget,
+      icon: IconChartBar,
+      description: '{}',
+      defaultSize: {{ w: 2, h: 2 }},
+      minSize: {{ w: 1, h: 1 }},
+      maxSize: {{ w: 4, h: 4 }}
+    }});
+
+    console.log('[{}] Started successfully with widget');
   }}
 }});
 "#,
         req.id, req.name, req.description, req.author,
         req.name, req.id, req.name, req.description,
-        req.id, req.name, req.id, req.name
+        req.id, req.name, req.id, req.name,
+        req.id, req.name, req.description,
+        req.name
     );
 
     fs::write(path.join("index.jsx"), index_content)?;
@@ -648,17 +678,43 @@ export default createPlugin({{
 
     fs::write(path.join("viewport.jsx"), viewport_content)?;
 
-    // Create widgets directory structure
-    let widgets_dir = path.join("widgets").join("main");
+    // Create widgets directory
+    let widgets_dir = path.join("widgets");
     fs::create_dir_all(&widgets_dir)?;
 
     let widget_content = format!(
-        r#"export default function MainWidget(props) {{
+        r#"import {{ createSignal }} from 'solid-js';
+import {{ IconChartBar }} from '@tabler/icons-solidjs';
+
+export default function MainWidget() {{
+  const [count, setCount] = createSignal(0);
+
   return (
-    <div class="card bg-base-100 shadow-xl">
-      <div class="card-body">
-        <h2 class="card-title">{}</h2>
-        <p>Widget content here</p>
+    <div class="card bg-gradient-to-br from-primary/20 to-primary/5 bg-base-100 shadow-lg h-full flex flex-col p-4">
+      {{/* Header */}}
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <IconChartBar size={{20}} class="text-primary opacity-80" />
+          <span class="text-sm font-medium opacity-70">{}</span>
+        </div>
+      </div>
+
+      {{/* Content */}}
+      <div class="flex-1 flex flex-col items-center justify-center">
+        <div class="text-4xl font-bold text-primary mb-4">
+          {{count()}}
+        </div>
+        <button
+          class="btn btn-primary btn-sm"
+          onClick={{() => setCount(count() + 1)}}
+        >
+          Increment
+        </button>
+      </div>
+
+      {{/* Footer */}}
+      <div class="text-xs opacity-50 text-center mt-2">
+        Click to increment
       </div>
     </div>
   );
@@ -667,25 +723,14 @@ export default createPlugin({{
         req.name
     );
 
-    fs::write(widgets_dir.join("Viewport.jsx"), widget_content)?;
-
-    let metadata = serde_json::json!({
-        "id": "main",
-        "name": format!("{} Widget", req.name),
-        "description": format!("Main widget for {}", req.name),
-        "defaultConfig": {},
-    });
-
-    fs::write(
-        widgets_dir.join("metadata.json"),
-        serde_json::to_string_pretty(&metadata)?,
-    )?;
+    fs::write(widgets_dir.join("MainWidget.jsx"), widget_content)?;
 
     let package_json = serde_json::json!({
         "name": req.id,
         "version": "1.0.0",
         "description": req.description,
         "author": req.author,
+        "dependencies": {}
     });
 
     fs::write(
@@ -705,12 +750,8 @@ fn create_backend_template(path: &Path, req: &CreatePluginRequest) -> Result<()>
     let mod_content = format!(
         r#"mod router;
 
-use crate::core::plugin::Plugin;
-use crate::core::plugin_context::PluginContext;
-use crate::plugin_metadata;
-use async_trait::async_trait;
+use webarcade_api::prelude::*;
 use std::sync::Arc;
-use anyhow::Result;
 
 pub struct {}Plugin;
 
@@ -718,7 +759,7 @@ pub struct {}Plugin;
 impl Plugin for {}Plugin {{
     plugin_metadata!("{}", "{}", "1.0.0", "{}", author: "{}");
 
-    async fn init(&self, ctx: &PluginContext) -> Result<()> {{
+    async fn init(&self, ctx: &Context) -> Result<()> {{
         log::info!("[{}] Initializing");
 
         // Database migrations
@@ -738,7 +779,7 @@ impl Plugin for {}Plugin {{
         Ok(())
     }}
 
-    async fn start(&self, _ctx: Arc<PluginContext>) -> Result<()> {{
+    async fn start(&self, _ctx: Arc<Context>) -> Result<()> {{
         log::info!("[{}] Started");
         Ok(())
     }}
@@ -765,17 +806,10 @@ impl Plugin for {}Plugin {{
     fs::write(path.join("mod.rs"), mod_content)?;
 
     let router_content = format!(
-        r#"use crate::core::plugin_context::PluginContext;
-use crate::core::plugin_router::PluginRouter;
-use crate::core::router_utils::*;
-use crate::route;
-use anyhow::Result;
-use http_body_util::combinators::BoxBody;
-use hyper::{{body::Bytes, body::Incoming, Request, Response, StatusCode}};
-use std::convert::Infallible;
+        r#"use webarcade_api::prelude::*;
 
-pub async fn register_routes(ctx: &PluginContext) -> Result<()> {{
-    let mut router = PluginRouter::new();
+pub async fn register_routes(ctx: &Context) -> Result<()> {{
+    let mut router = Router::new();
 
     route!(router, GET "/hello" => handle_hello);
 
@@ -784,8 +818,8 @@ pub async fn register_routes(ctx: &PluginContext) -> Result<()> {{
     Ok(())
 }}
 
-async fn handle_hello() -> Response<BoxBody<Bytes, Infallible>> {{
-    let response = serde_json::json!({{
+async fn handle_hello() -> HttpResponse {{
+    let response = json!({{
         "message": "Hello from {}!"
     }});
 
@@ -797,23 +831,320 @@ async fn handle_hello() -> Response<BoxBody<Bytes, Infallible>> {{
 
     fs::write(path.join("router.rs"), router_content)?;
 
-    Ok(())
-}
+    // Create Cargo.toml
+    // Note: webarcade_api dependency is automatically added by the build system
+    let cargo_toml = format!(
+        r#"[package]
+name = "{}"
+version = "1.0.0"
+edition = "2021"
 
-fn create_fullstack_template(path: &Path, req: &CreatePluginRequest) -> Result<()> {
-    create_backend_template(path, req)?;
-    create_widget_template(path, req)?;
+[lib]
+crate-type = ["cdylib"]
+path = "mod.rs"
 
-    let api_content = format!(
-        r#"export async function fetchHello() {{
-  const response = await fetch('/{}/hello');
-  return response.json();
-}}
+[dependencies]
+# webarcade_api is automatically injected by the plugin builder
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
 "#,
         req.id
     );
 
-    fs::write(path.join("api.js"), api_content)?;
+    fs::write(path.join("Cargo.toml"), cargo_toml)?;
+
+    Ok(())
+}
+
+fn create_fullstack_template(path: &Path, req: &CreatePluginRequest) -> Result<()> {
+    // Create Rust backend files
+    let plugin_struct_name = capitalize_plugin_name(&req.id);
+    let table_name = req.id.replace("-", "_");
+
+    let mod_content = format!(
+        r#"mod router;
+
+use webarcade_api::prelude::*;
+use std::sync::Arc;
+
+pub struct {}Plugin;
+
+#[async_trait]
+impl Plugin for {}Plugin {{
+    plugin_metadata!("{}", "{}", "1.0.0", "{}", author: "{}");
+
+    async fn init(&self, ctx: &Context) -> Result<()> {{
+        log::info!("[{}] Initializing");
+
+        // Database migrations
+        ctx.migrate(&[
+            r"
+            CREATE TABLE IF NOT EXISTS {}_data (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at INTEGER NOT NULL
+            )
+            ",
+        ])?;
+
+        // Register routes
+        router::register_routes(ctx).await?;
+
+        log::info!("[{}] Initialized successfully");
+        Ok(())
+    }}
+
+    async fn start(&self, _ctx: Arc<Context>) -> Result<()> {{
+        log::info!("[{}] Started");
+        Ok(())
+    }}
+
+    async fn stop(&self) -> Result<()> {{
+        log::info!("[{}] Stopped");
+        Ok(())
+    }}
+}}
+"#,
+        plugin_struct_name,
+        plugin_struct_name,
+        req.id,
+        req.name,
+        req.description,
+        req.author,
+        req.id,
+        table_name,
+        req.id,
+        req.id,
+        req.id
+    );
+
+    fs::write(path.join("mod.rs"), mod_content)?;
+
+    let router_content = format!(
+        r#"use webarcade_api::prelude::*;
+
+pub async fn register_routes(ctx: &Context) -> Result<()> {{
+    let mut router = Router::new();
+
+    route!(router, GET "/hello" => handle_hello);
+
+    ctx.register_router("{}", router).await;
+
+    Ok(())
+}}
+
+async fn handle_hello() -> HttpResponse {{
+    let response = json!({{
+        "message": "Hello from {}!"
+    }});
+
+    json_response(&response)
+}}
+"#,
+        req.id, req.name
+    );
+
+    fs::write(path.join("router.rs"), router_content)?;
+
+    // Create frontend files with widget
+    let index_content = format!(
+        r#"import {{ createPlugin }} from '@/api/plugin';
+import {{ IconRocket }} from '@tabler/icons-solidjs';
+import MyViewport from './viewport.jsx';
+import MainWidget from './widgets/MainWidget.jsx';
+
+export default createPlugin({{
+  id: '{}',
+  name: '{}',
+  version: '1.0.0',
+  description: '{}',
+  author: '{}',
+
+  async onStart(api) {{
+    console.log('[{}] Starting...');
+
+    api.viewport('{}-viewport', {{
+      label: '{}',
+      component: MyViewport,
+      icon: IconRocket,
+      description: '{}'
+    }});
+
+    api.menu('{}-menu', {{
+      label: '{}',
+      icon: IconRocket,
+      onClick: () => {{
+        api.open('{}-viewport', {{ label: '{}' }});
+      }}
+    }});
+
+    // Register the widget
+    api.widget('{}-widget', {{
+      title: '{}',
+      component: MainWidget,
+      icon: IconRocket,
+      description: '{}',
+      defaultSize: {{ w: 2, h: 2 }},
+      minSize: {{ w: 1, h: 1 }},
+      maxSize: {{ w: 4, h: 4 }}
+    }});
+
+    console.log('[{}] Started successfully with backend and widget');
+  }}
+}});
+"#,
+        req.id, req.name, req.description, req.author,
+        req.name, req.id, req.name, req.description,
+        req.id, req.name, req.id, req.name,
+        req.id, req.name, req.description,
+        req.name
+    );
+
+    fs::write(path.join("index.jsx"), index_content)?;
+
+    // Create viewport.jsx
+    let viewport_content = format!(
+        r#"import {{ createSignal, onMount }} from 'solid-js';
+import {{ bridge }} from '@/api/bridge';
+
+export default function MyViewport() {{
+  const [message, setMessage] = createSignal('Loading...');
+
+  onMount(async () => {{
+    try {{
+      const response = await bridge('/{}/hello');
+      const data = await response.json();
+      setMessage(data.message);
+    }} catch (err) {{
+      setMessage('Error loading data');
+    }}
+  }});
+
+  return (
+    <div class="h-full w-full flex flex-col bg-base-200 p-4">
+      <h1 class="text-2xl font-bold mb-4">{}</h1>
+      <p class="text-base-content/70 mb-4">{}</p>
+      <div class="card bg-base-100 shadow-xl p-4">
+        <p class="font-mono">{{message()}}</p>
+      </div>
+    </div>
+  );
+}}
+"#,
+        req.id, req.name, req.description
+    );
+
+    fs::write(path.join("viewport.jsx"), viewport_content)?;
+
+    // Create widgets directory
+    let widgets_dir = path.join("widgets");
+    fs::create_dir_all(&widgets_dir)?;
+
+    let widget_content = format!(
+        r#"import {{ createSignal, onMount }} from 'solid-js';
+import {{ IconRocket }} from '@tabler/icons-solidjs';
+import {{ bridge }} from '@/api/bridge';
+
+export default function MainWidget() {{
+  const [message, setMessage] = createSignal('Loading...');
+  const [loading, setLoading] = createSignal(true);
+
+  const fetchData = async () => {{
+    try {{
+      setLoading(true);
+      const response = await bridge('/{}/hello');
+      const data = await response.json();
+      setMessage(data.message);
+    }} catch (err) {{
+      setMessage('Error');
+    }} finally {{
+      setLoading(false);
+    }}
+  }};
+
+  onMount(fetchData);
+
+  return (
+    <div class="card bg-gradient-to-br from-accent/20 to-accent/5 bg-base-100 shadow-lg h-full flex flex-col p-4">
+      {{/* Header */}}
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <IconRocket size={{20}} class="text-accent opacity-80" />
+          <span class="text-sm font-medium opacity-70">{}</span>
+        </div>
+      </div>
+
+      {{/* Content */}}
+      <div class="flex-1 flex flex-col items-center justify-center">
+        {{loading() ? (
+          <span class="loading loading-spinner loading-md text-accent"></span>
+        ) : (
+          <div class="text-center">
+            <div class="text-lg font-medium mb-2">{{message()}}</div>
+            <button
+              class="btn btn-accent btn-sm"
+              onClick={{fetchData}}
+            >
+              Refresh
+            </button>
+          </div>
+        )}}
+      </div>
+
+      {{/* Footer */}}
+      <div class="text-xs opacity-50 text-center mt-2">
+        Backend API connected
+      </div>
+    </div>
+  );
+}}
+"#,
+        req.id, req.name
+    );
+
+    fs::write(widgets_dir.join("MainWidget.jsx"), widget_content)?;
+
+    let package_json = serde_json::json!({
+        "name": req.id,
+        "version": "1.0.0",
+        "description": req.description,
+        "author": req.author,
+        "dependencies": {}
+    });
+
+    fs::write(
+        path.join("package.json"),
+        serde_json::to_string_pretty(&package_json)?,
+    )?;
+
+    // Create Cargo.toml
+    // Note: webarcade_api dependency is automatically added by the build system
+    let cargo_toml = format!(
+        r#"[package]
+name = "{}"
+version = "1.0.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+path = "mod.rs"
+
+[dependencies]
+# webarcade_api is automatically injected by the plugin builder
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+"#,
+        req.id
+    );
+
+    fs::write(path.join("Cargo.toml"), cargo_toml)?;
 
     Ok(())
 }

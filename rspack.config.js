@@ -39,6 +39,10 @@ const config = {
     rules: [
       {
         test: /\.(jsx|tsx)$/,
+        exclude: [
+          /node_modules/,
+          /src\/plugins\/developer\/projects/,
+        ],
         use: [
           {
             loader: 'babel-loader',
@@ -105,6 +109,11 @@ const config = {
       'import.meta.env.PROD': JSON.stringify(isProduction),
       'import.meta.env.MODE': JSON.stringify(isProduction ? 'production' : 'development'),
       '__DEV__': JSON.stringify(!isProduction),
+    }),
+    // Ignore developer/projects directory to prevent bundling development plugins
+    new rspack.IgnorePlugin({
+      resourceRegExp: /^.*$/,
+      contextRegExp: /src[\/\\]plugins[\/\\]developer[\/\\]projects/,
     }),
     !isProduction && new rspack.HotModuleReplacementPlugin(),
     !isProduction && new RspackProgressPlugin({ backendUrl: 'http://localhost:3001' }),

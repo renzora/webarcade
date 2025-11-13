@@ -1,4 +1,5 @@
 import { createSignal, createEffect, onCleanup } from 'solid-js';
+import { bridge } from '@/api/bridge';
 
 // Build status store
 const [buildStatus, setBuildStatus] = createSignal({
@@ -62,7 +63,7 @@ export const initBuildStatusMonitor = () => {
   // Check backend status via polling
   const checkBackendStatus = async () => {
     try {
-      const response = await fetch('/api/health', {
+      const response = await bridge('/api/health', {
         method: 'GET',
         signal: AbortSignal.timeout(2000)
       });

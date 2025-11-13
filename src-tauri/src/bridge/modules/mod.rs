@@ -6,6 +6,7 @@ pub mod file_sync;
 pub mod system_monitor;
 pub mod memory_cache;
 pub mod websocket_server;
+pub mod system_api;
 
 // Exports
 pub use file_watcher::{initialize_file_watcher, get_base_path, get_projects_path};

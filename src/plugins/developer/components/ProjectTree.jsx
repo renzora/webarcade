@@ -1,4 +1,4 @@
-import { createSignal, createEffect, onCleanup, Show, For } from 'solid-js';
+import { createSignal, createEffect, onCleanup, onMount, Show, For } from 'solid-js';
 import {
   IconFile,
   IconFolder,
@@ -29,6 +29,21 @@ export function ProjectTree(props) {
       loadTree();
     }
   });
+
+  onMount(() => {
+    // Listen for plugin creation to force refresh
+    window.addEventListener('plugin-ide:plugin-created', handlePluginCreated);
+    onCleanup(() => {
+      window.removeEventListener('plugin-ide:plugin-created', handlePluginCreated);
+    });
+  });
+
+  const handlePluginCreated = () => {
+    // Force reload the tree when a plugin is created
+    setTimeout(() => {
+      loadTree();
+    }, 200);
+  };
 
   const loadTree = async () => {
     try {

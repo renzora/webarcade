@@ -5,21 +5,21 @@ import FilesPanel from './components/FilesPanel';
 
 export default createPlugin({
   id: 'plugin-ide',
-  name: 'Plugin IDE',
+  name: 'Developer',
   version: '1.0.0',
   description: 'Integrated development environment for building WebArcade plugins',
   author: 'WebArcade',
 
   async onInit() {
-    console.log('[Plugin IDE] Initializing...');
+    console.log('[Developer] Initializing...');
   },
 
   async onStart(api) {
-    console.log('[Plugin IDE] Starting...');
+    console.log('[Developer] Starting...');
 
     // Register the IDE viewport
     api.viewport('plugin-ide-viewport', {
-      label: 'Plugin IDE',
+      label: 'Developer',
       component: PluginIDEViewport,
       icon: IconCode,
       description: 'Develop and manage plugins with Monaco editor'
@@ -27,7 +27,7 @@ export default createPlugin({
 
     // Register Files panel in right panel
     api.tab('plugin-ide-files', {
-      title: 'Files',
+      title: 'Developer',
       component: FilesPanel,
       icon: IconCode,
       order: 1,
@@ -40,14 +40,14 @@ export default createPlugin({
     api.showFooter(true);
     api.showTabs(true);
 
-    console.log('[Plugin IDE] Started successfully');
+    console.log('[Developer] Started successfully');
   },
 
   async onStop() {
-    console.log('[Plugin IDE] Stopping...');
+    console.log('[Developer] Stopping...');
   },
 
   async onDispose() {
-    console.log('[Plugin IDE] Disposing...');
+    console.log('[Developer] Disposing...');
   }
 });

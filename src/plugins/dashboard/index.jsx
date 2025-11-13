@@ -1,7 +1,7 @@
 import { createPlugin } from '@/api/plugin';
 import { IconChartLine, IconPlus } from '@tabler/icons-solidjs';
 import DashboardViewport from './viewport.jsx';
-import { dashboardAPI } from './api.js';
+import { dashboardAPI } from './api';
 
 // Store current dashboard ID globally
 let currentDashboardId = 'default';

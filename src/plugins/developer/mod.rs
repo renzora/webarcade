@@ -1,4 +1,5 @@
 mod router;
+pub mod builder;
 
 use crate::core::plugin::Plugin;
 use crate::core::plugin_context::PluginContext;

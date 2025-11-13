@@ -6,7 +6,7 @@
   "description": "🚀 High-speed development framework for web and desktop applications",
   "scripts": {
     "create-plugin": "node scripts/create_plugin.js",
-    "discover": "bun run scripts/discover-plugins.js",
+    "discover": "node scripts/discover-plugins.cjs",
     "dev": "bun run kill && bun run discover && npx tauri dev",
     "build": "bun run kill && bun run discover && npx tauri build",
     "build:debug": "bun run kill && bun run discover && npx tauri build --debug",

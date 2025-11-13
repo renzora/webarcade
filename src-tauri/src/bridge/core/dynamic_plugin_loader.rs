@@ -79,8 +79,7 @@ impl DynamicPluginLoader {
 
         // Only load backend if it exists
         if has_backend {
-            let binary_dir = plugin_dir.join("binaries");
-            let dll_path = self.find_platform_binary(&binary_dir, &plugin_id)?;
+            let dll_path = self.find_platform_binary(&plugin_dir, &plugin_id)?;
 
             log::info!("📚 Loading DLL: {:?}", dll_path);
 
@@ -118,20 +117,21 @@ impl DynamicPluginLoader {
         }
     }
 
-    fn find_platform_binary(&self, binary_dir: &Path, plugin_id: &str) -> Result<PathBuf> {
+    fn find_platform_binary(&self, plugin_dir: &Path, plugin_id: &str) -> Result<PathBuf> {
+        // Look for platform-specific binary in plugin root directory
         #[cfg(target_os = "windows")]
-        let platform_path = binary_dir.join("windows").join(format!("{}.dll", plugin_id));
+        let binary_path = plugin_dir.join(format!("{}.dll", plugin_id));
 
         #[cfg(target_os = "linux")]
-        let platform_path = binary_dir.join("linux").join(format!("lib{}.so", plugin_id));
+        let binary_path = plugin_dir.join(format!("lib{}.so", plugin_id));
 
         #[cfg(target_os = "macos")]
-        let platform_path = binary_dir.join("macos").join(format!("lib{}.dylib", plugin_id));
+        let binary_path = plugin_dir.join(format!("lib{}.dylib", plugin_id));
 
-        if platform_path.exists() {
-            Ok(platform_path)
+        if binary_path.exists() {
+            Ok(binary_path)
         } else {
-            Err(anyhow!("Platform binary not found: {:?}", platform_path))
+            Err(anyhow!("Platform binary not found: {:?}", binary_path))
         }
     }
 

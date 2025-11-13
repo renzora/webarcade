@@ -4,6 +4,10 @@ const path = require('path');
 /**
  * Automatically discover plugins from src/plugins directory
  * and generate both frontend (plugins.json) and backend (generated.rs) configurations
+ *
+ * Note: Core components (dashboard, database, developer, menu, settings, system)
+ * have been moved to src/components and are no longer plugins.
+ * They are initialized directly in the app.
  */
 
 const PLUGINS_DIR = path.join(__dirname, '../src/plugins');
@@ -58,6 +62,13 @@ function scanPluginsDirectory(baseDir, relativePath = '') {
 
     const itemPath = path.join(relativePath, item.name);
     const itemFullPath = path.join(baseDir, itemPath);
+
+    // Skip the developer/projects directory
+    const normalizedPath = itemPath.replace(/\\/g, '/');
+    if (normalizedPath === 'developer/projects' || normalizedPath.startsWith('developer/projects/')) {
+      console.log(`⏭️  Skipping development projects directory: ${itemPath}`);
+      continue;
+    }
 
     // Check for frontend plugin files
     const indexPath = path.join(itemFullPath, 'index.jsx');

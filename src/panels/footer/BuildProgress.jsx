@@ -1,5 +1,6 @@
 import { createSignal, createEffect, onCleanup, Show } from 'solid-js';
 import { IconHammer, IconCheck, IconX, IconRefresh } from '@tabler/icons-solidjs';
+import { bridge } from '@/api/bridge';
 
 const BuildProgress = () => {
   const [buildStatus, setBuildStatus] = createSignal({
@@ -13,7 +14,7 @@ const BuildProgress = () => {
   createEffect(() => {
     const fetchBuildStatus = async () => {
       try {
-        const response = await fetch('/system/build-progress');
+        const response = await bridge('/system/build-progress');
         if (response.ok) {
           const status = await response.json();
           setBuildStatus(status);
@@ -31,7 +32,7 @@ const BuildProgress = () => {
 
   const handleRebuild = async () => {
     try {
-      const response = await fetch('/system/trigger-rebuild', {
+      const response = await bridge('/system/trigger-rebuild', {
         method: 'POST',
       });
 

@@ -5,16 +5,17 @@ import { footerButtons } from '@/api/plugin';
 import BuildProgress from './BuildProgress';
 import DebugConsole from './DebugConsole';
 import { setShowAbout } from '../../plugins/menu/index.jsx';
+import { bridge } from '@/api/bridge';
 
 const Footer = () => {
   const [engineInfo] = createSignal('Engine Ready');
   const [systemStats, setSystemStats] = createSignal(null);
-  
+
   // Ultra-fast system stats polling (100ms for near real-time)
   createEffect(() => {
     const fetchSystemStats = async () => {
       try {
-        const response = await fetch('/system/stats');
+        const response = await bridge('/system/stats');
         if (response.ok) {
           const stats = await response.json();
           setSystemStats(stats);

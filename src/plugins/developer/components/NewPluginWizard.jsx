@@ -17,30 +17,30 @@ export function NewPluginWizard(props) {
     {
       id: 'basic',
       name: 'Basic Plugin',
-      description: 'Simple frontend-only plugin with a single component',
+      description: 'Simple frontend-only plugin with viewport and menu',
       icon: IconFile,
-      files: ['index.jsx', 'package.json'],
+      files: ['index.jsx', 'viewport.jsx', 'package.json'],
     },
     {
       id: 'widget',
       name: 'Widget Plugin',
-      description: 'Dashboard widget with configuration',
+      description: 'Plugin with dashboard widget properly registered',
       icon: IconChartBar,
-      files: ['index.jsx', 'Widget.jsx', 'metadata.json', 'package.json'],
+      files: ['index.jsx', 'viewport.jsx', 'widgets/MainWidget.jsx', 'package.json'],
     },
     {
       id: 'backend',
       name: 'Backend Plugin',
       description: 'Rust backend with HTTP routes and database',
       icon: IconBrandRust,
-      files: ['mod.rs', 'router.rs', 'index.jsx', 'package.json'],
+      files: ['mod.rs', 'router.rs', 'index.jsx', 'viewport.jsx', 'package.json'],
     },
     {
       id: 'fullstack',
       name: 'Full-Stack Plugin',
-      description: 'Complete plugin with frontend, backend, widgets, and API',
+      description: 'Complete plugin with Rust backend, frontend, and dashboard widget',
       icon: IconRocket,
-      files: ['mod.rs', 'router.rs', 'index.jsx', 'Widget.jsx', 'api.js', 'package.json'],
+      files: ['mod.rs', 'router.rs', 'index.jsx', 'viewport.jsx', 'widgets/MainWidget.jsx', 'api.js', 'package.json'],
     },
   ];
 
@@ -76,6 +76,12 @@ export function NewPluginWizard(props) {
       }
 
       const { plugin } = await response.json();
+
+      // Notify the file panel to refresh and load index.jsx
+      window.dispatchEvent(new CustomEvent('plugin-ide:plugin-created', {
+        detail: { pluginId: config().id }
+      }));
+
       props.onCreate?.(plugin);
       props.onClose();
     } catch (error) {

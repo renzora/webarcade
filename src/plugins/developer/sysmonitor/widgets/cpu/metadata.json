@@ -1,6 +1,0 @@
-{
-  "defaultConfig": {},
-  "description": "Live CPU usage monitor",
-  "id": "cpu",
-  "name": "CPU Monitor"
-}

@@ -1,5 +1,5 @@
 import { createSignal, createContext, useContext, onMount, onCleanup, createRoot } from 'solid-js';
-import pluginStore, { PLUGIN_STATES } from './store.jsx';
+import pluginStore, { PLUGIN_STATES, setPluginConfigs } from './store.jsx';
 
 const PluginAPIContext = createContext();
 
@@ -50,10 +50,10 @@ class PluginLoader {
 
   async scanForPlugins() {
     const plugins = [];
-    
+
     // Get plugin configs from store instead of importing JSON
     const pluginConfigs = pluginStore.getPluginConfigs();
-    
+
     for (const [id, pluginConfig] of pluginConfigs) {
       try {
         if (pluginConfig.id.includes('test') && process.env.NODE_ENV === 'production') {
@@ -68,12 +68,13 @@ class PluginLoader {
           .join(' ') + ' Plugin');
 
         const isCore = this.isCorePlugin(pluginConfig.path);
-        
+
         const plugin = {
           id: pluginConfig.id,
           path: pluginConfig.path,
           enabled: isCore ? true : pluginConfig.enabled, // Core plugins are always enabled
           isCore: isCore,
+          isRuntime: false, // Static plugin
           manifest: {
             name: pluginName,
             version: pluginConfig.version || '1.0.0',
@@ -93,24 +94,99 @@ class PluginLoader {
       }
     }
 
+    // Fetch runtime plugins from backend
+    try {
+      console.log('[PluginLoader] Fetching runtime plugins from backend...');
+      const response = await fetch('http://localhost:3001/api/plugins/list');
+      console.log('[PluginLoader] Runtime plugins response:', response.status, response.ok);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[PluginLoader] Runtime plugins data:', data);
+
+        for (const runtimePlugin of data.plugins) {
+          // Only load frontend plugins or plugins with both frontend and backend
+          if (runtimePlugin.has_frontend) {
+            const pluginConfig = {
+              id: runtimePlugin.id,
+              path: `/runtime/${runtimePlugin.id}`, // Virtual path for runtime plugins
+              name: runtimePlugin.name || runtimePlugin.id,
+              version: runtimePlugin.version || '1.0.0',
+              description: runtimePlugin.description || `Runtime plugin: ${runtimePlugin.name || runtimePlugin.id}`,
+              author: runtimePlugin.author || 'Plugin Developer',
+              main: 'plugin.js', // Runtime plugins always use plugin.js
+              enabled: true,
+              priority: 100, // Lower priority than core plugins
+              widget: null,
+              widgets: null
+            };
+
+            // Register runtime plugin config in store so it can be tracked
+            setPluginConfigs(prev => new Map(prev.set(runtimePlugin.id, pluginConfig)));
+
+            const plugin = {
+              id: runtimePlugin.id,
+              path: `/runtime/${runtimePlugin.id}`,
+              enabled: true,
+              isCore: false,
+              isRuntime: true, // Runtime plugin flag
+              manifest: {
+                name: pluginConfig.name,
+                version: pluginConfig.version,
+                description: pluginConfig.description,
+                author: pluginConfig.author,
+                main: pluginConfig.main,
+                dependencies: [],
+                permissions: ['ui-core'],
+                apiVersion: '1.0.0',
+                priority: pluginConfig.priority
+              }
+            };
+            console.log('[PluginLoader] Adding runtime plugin:', plugin.id);
+            plugins.push(plugin);
+          }
+        }
+        console.log('[PluginLoader] Total runtime plugins added:', data.plugins.filter(p => p.has_frontend).length);
+      }
+    } catch (error) {
+      // Runtime plugins not available, continue with static plugins only
+      console.error('[PluginLoader] Failed to fetch runtime plugins:', error);
+    }
+
     plugins.sort((a, b) => a.manifest.priority - b.manifest.priority);
     return plugins;
   }
 
   async loadPluginDynamic(id, path, mainFile) {
-
     try {
-      // Use require.context to create a webpack context for all plugins
-      // This scans the plugins directory at build time
+      // Check if this is a runtime plugin
+      if (path.startsWith('/runtime/')) {
+        // Load runtime plugin from backend
+        const pluginId = path.replace('/runtime/', '');
+        const pluginUrl = `http://localhost:3001/api/plugins/${pluginId}/${mainFile}`;
+
+        console.log(`[PluginLoader] Loading runtime plugin "${id}" from ${pluginUrl}`);
+
+        // Dynamically import the plugin.js file from the backend
+        const pluginModule = await import(/* webpackIgnore: true */ pluginUrl);
+        console.log(`[PluginLoader] Successfully loaded runtime plugin "${id}"`, pluginModule);
+        console.log(`[PluginLoader] Module keys for "${id}":`, Object.keys(pluginModule));
+        console.log(`[PluginLoader] Module.default for "${id}":`, pluginModule.default);
+        return pluginModule;
+      }
+
+      // Static plugin - use require.context for build-time plugins
       // Path from src/api/plugin/index.jsx to src/plugins/
-      const pluginContext = require.context('../../plugins', true, /\.(jsx|js)$/);
+      // Exclude developer/projects directory from context
+      const pluginContext = require.context('../../plugins', true, /\.(jsx|js)$/, 'lazy');
+      const allKeys = pluginContext.keys().filter(key => !key.includes('/developer/projects/'));
 
       // Path format: /src/plugins/plugin_name -> ./plugin_name/index.jsx
       const relativePath = path.replace('/src/plugins', '.');
       const mainPath = `${relativePath}/${mainFile}`;
 
       // Check if this exact path exists
-      if (pluginContext.keys().includes(mainPath)) {
+      if (allKeys.includes(mainPath)) {
         const pluginModule = pluginContext(mainPath);
         return pluginModule;
       }
@@ -125,13 +201,13 @@ class PluginLoader {
       ];
 
       for (const tryPath of tryPaths) {
-        if (pluginContext.keys().includes(tryPath)) {
+        if (allKeys.includes(tryPath)) {
           const pluginModule = pluginContext(tryPath);
           return pluginModule;
         }
       }
 
-      throw new Error(`Plugin file not found: ${mainPath}. Available: ${pluginContext.keys().join(', ')}`);
+      throw new Error(`Plugin file not found: ${mainPath}. Available: ${allKeys.join(', ')}`);
 
     } catch (error) {
       throw error;
@@ -167,6 +243,7 @@ class PluginLoader {
     const { id, path, manifest } = pluginInfo;
 
     try {
+      console.log(`[PluginLoader] loadPlugin called for "${id}" (isRuntime: ${pluginInfo.isRuntime})`);
       this.setPluginState(id, PLUGIN_STATES.LOADING);
       // Loading plugin: id
 
@@ -199,9 +276,11 @@ class PluginLoader {
         }
 
         const PluginFactory = pluginModule.default || pluginModule.Plugin;
+        console.log(`[PluginLoader] PluginFactory for "${id}":`, typeof PluginFactory, PluginFactory);
 
         // Handle class-based plugins
         if (PluginFactory.prototype && PluginFactory.prototype.constructor) {
+          console.log(`[PluginLoader] Creating class-based plugin instance for "${id}"`);
           pluginInstance = new PluginFactory(this.PluginAPI);
           // Add required methods for class-based plugins
           if (!pluginInstance.getId) {
@@ -218,7 +297,9 @@ class PluginLoader {
           }
         } else {
           // Handle function-based plugins
+          console.log(`[PluginLoader] Creating function-based plugin instance for "${id}"`);
           pluginInstance = PluginFactory(this.PluginAPI);
+          console.log(`[PluginLoader] Plugin instance created for "${id}":`, pluginInstance);
         }
 
         const requiredMethods = ['getId', 'getName', 'getVersion'];
@@ -243,9 +324,11 @@ class PluginLoader {
   }
 
   async initializePlugin(pluginId) {
+    console.log(`[PluginLoader] initializePlugin called for "${pluginId}"`);
     const pluginData = pluginStore.getPluginInstance(pluginId);
     const pluginConfig = pluginStore.getPluginConfig(pluginId);
     if (!pluginData || !pluginData.instance) {
+      console.error(`[PluginLoader] Plugin "${pluginId}" not loaded - no instance found`);
       throw new Error(`Plugin ${pluginId} not loaded`);
     }
     const plugin = {
@@ -293,9 +376,11 @@ class PluginLoader {
   }
 
   async startPlugin(pluginId) {
+    console.log(`[PluginLoader] startPlugin called for "${pluginId}"`);
     const pluginData = pluginStore.getPluginInstance(pluginId);
     const pluginConfig = pluginStore.getPluginConfig(pluginId);
     if (!pluginData || !pluginData.instance) {
+      console.error(`[PluginLoader] Plugin "${pluginId}" not started - no instance found`);
       throw new Error(`Plugin ${pluginId} not loaded`);
     }
     const plugin = {
@@ -352,10 +437,12 @@ class PluginLoader {
   // Helper method to load and register a widget
   loadWidgetComponent(pluginId, widgetPath, widgetConfig) {
     try {
-      const pluginContext = require.context('../../plugins', true, /\.(jsx|js)$/);
+      // Exclude developer/projects directory from context
+      const pluginContext = require.context('../../plugins', true, /\.(jsx|js)$/, 'lazy');
+      const allKeys = pluginContext.keys().filter(key => !key.includes('/developer/projects/'));
       const relativePath = widgetPath.replace('/src/plugins', '.');
 
-      if (pluginContext.keys().includes(relativePath)) {
+      if (allKeys.includes(relativePath)) {
         const widgetModule = pluginContext(relativePath);
         const WidgetComponent = widgetModule.default;
 
@@ -1171,19 +1258,20 @@ export function usePluginAPI() {
 
 export function Engine(props) {
   onMount(async () => {
-    // Starting Renzora Engine
+    // Starting WebArcade Engine
     try {
       await pluginAPI.initialize();
-      // Renzora Engine started successfully
+      // Engine started successfully
     } catch (error) {
+      console.error('Failed to start engine:', error);
     }
   });
 
   onCleanup(async () => {
-    // Shutting down Renzora Engine
+    // Shutting down WebArcade Engine
     try {
       await pluginAPI.dispose();
-      // Renzora Engine shut down successfully
+      // Engine shut down successfully
     } catch (error) {
     }
   });

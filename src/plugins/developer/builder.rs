@@ -37,16 +37,16 @@ impl PluginBuilder {
             cwd.clone()
         };
 
-        // Check for plugin in developer subfolder first (for dev plugins)
-        let plugin_dir_ide = project_root.join("src").join("plugins").join("developer").join(plugin_id);
+        // Check for plugin in developer/projects subfolder first (for dev plugins)
+        let plugin_dir_projects = project_root.join("src").join("plugins").join("developer").join("projects").join(plugin_id);
         let plugin_dir_root = project_root.join("src").join("plugins").join(plugin_id);
 
-        let plugin_dir = if plugin_dir_ide.exists() {
-            plugin_dir_ide
+        let plugin_dir = if plugin_dir_projects.exists() {
+            plugin_dir_projects
         } else if plugin_dir_root.exists() {
             plugin_dir_root
         } else {
-            anyhow::bail!("Plugin directory does not exist: {:?} or {:?}", plugin_dir_ide, plugin_dir_root);
+            anyhow::bail!("Plugin directory does not exist: {:?} or {:?}", plugin_dir_projects, plugin_dir_root);
         };
 
         let build_dir = project_root.join("dist").join("plugins").join(plugin_id);
@@ -126,6 +126,26 @@ impl PluginBuilder {
         })
     }
 
+    fn read_cargo_dependencies_from_package_json(&self) -> Result<std::collections::HashMap<String, String>> {
+        let package_json_path = self.plugin_dir.join("package.json");
+        let mut deps = std::collections::HashMap::new();
+
+        if package_json_path.exists() {
+            let content = fs::read_to_string(&package_json_path)?;
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(cargo_deps) = json.get("cargo_dependencies").and_then(|v| v.as_object()) {
+                    for (key, value) in cargo_deps {
+                        if let Some(version) = value.as_str() {
+                            deps.insert(key.clone(), version.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(deps)
+    }
+
     fn setup_backend_build(&self) -> Result<()> {
         // Create a temporary build directory for Rust compilation
         let rust_build_dir = self.build_dir.join("rust_build");
@@ -136,59 +156,46 @@ impl PluginBuilder {
 
         // Check if plugin has its own Cargo.toml
         let plugin_cargo_toml = self.plugin_dir.join("Cargo.toml");
-        let api_path = self.project_root.join("webarcade_api");
+        let api_path = self.project_root.join("src-tauri").join("api");
         let api_path_str = api_path.to_string_lossy().replace("\\", "/");
 
+        // Read cargo_dependencies from package.json if it exists
+        let additional_deps = self.read_cargo_dependencies_from_package_json()?;
+
         let cargo_toml = if plugin_cargo_toml.exists() {
-            // Read existing Cargo.toml and inject webarcade_api path
-            let mut content = fs::read_to_string(&plugin_cargo_toml)?;
+            // Read existing Cargo.toml and update webarcade_api path to absolute
+            let content = fs::read_to_string(&plugin_cargo_toml)?;
 
-            // Ensure webarcade_api is in dependencies
-            if !content.contains("webarcade_api") {
-                // Add webarcade_api to dependencies section
-                if let Some(deps_pos) = content.find("[dependencies]") {
-                    let insert_pos = deps_pos + "[dependencies]".len();
-                    content.insert_str(insert_pos, &format!("\nwebarcade_api = {{ path = \"{}\" }}", api_path_str));
-                } else {
-                    // No dependencies section, add it
-                    content.push_str(&format!("\n[dependencies]\nwebarcade_api = {{ path = \"{}\" }}\n", api_path_str));
-                }
+            // Check if webarcade_api is already present
+            let re = regex::Regex::new(r#"webarcade_api\s*=\s*\{[^}]*path\s*=\s*"[^"]*"[^}]*\}"#).unwrap();
+
+            let content = if re.is_match(&content) {
+                // Replace existing webarcade_api path
+                re.replace(&content, format!("webarcade_api = {{ path = \"{}\" }}", api_path_str)).to_string()
             } else {
-                // Replace webarcade_api path
-                let re = regex::Regex::new(r#"webarcade_api\s*=\s*\{[^}]*\}"#).unwrap();
-                content = re.replace(&content, format!("webarcade_api = {{ path = \"{}\" }}", api_path_str)).to_string();
-            }
-
-            // Ensure crate-type is cdylib
-            if !content.contains("crate-type") {
-                if let Some(lib_pos) = content.find("[lib]") {
-                    let insert_pos = lib_pos + "[lib]".len();
-                    content.insert_str(insert_pos, "\ncrate-type = [\"cdylib\"]");
+                // Inject webarcade_api if not present
+                // Find [dependencies] section and add it there
+                let deps_re = regex::Regex::new(r"(?m)^\[dependencies\]\s*$").unwrap();
+                if let Some(mat) = deps_re.find(&content) {
+                    let insert_pos = mat.end();
+                    let mut new_content = content.clone();
+                    new_content.insert_str(insert_pos, &format!("\nwebarcade_api = {{ path = \"{}\" }}", api_path_str));
+                    new_content
                 } else {
-                    // Add [lib] section before [dependencies]
-                    if let Some(deps_pos) = content.find("[dependencies]") {
-                        content.insert_str(deps_pos, "[lib]\ncrate-type = [\"cdylib\"]\npath = \"lib.rs\"\n\n");
-                    } else {
-                        content.push_str("\n[lib]\ncrate-type = [\"cdylib\"]\npath = \"lib.rs\"\n");
-                    }
+                    content
                 }
-            }
-
-            // Ensure path is set to lib.rs
-            if !content.contains("path") || !content.contains("lib.rs") {
-                let re = regex::Regex::new(r#"\[lib\][^\[]*"#).unwrap();
-                if let Some(mat) = re.find(&content) {
-                    let lib_section = mat.as_str();
-                    if !lib_section.contains("path") {
-                        let insert_pos = mat.end();
-                        content.insert_str(insert_pos - 1, "path = \"lib.rs\"\n");
-                    }
-                }
-            }
+            };
 
             content
         } else {
             // Create default Cargo.toml
+            let mut deps = format!("webarcade_api = {{ path = \"{}\" }}\n", api_path_str);
+
+            // Add additional dependencies from package.json
+            for (dep_name, dep_version) in &additional_deps {
+                deps.push_str(&format!("{} = \"{}\"\n", dep_name, dep_version));
+            }
+
             format!(
                 r#"[package]
 name = "{}"
@@ -200,15 +207,14 @@ crate-type = ["cdylib"]
 path = "lib.rs"
 
 [dependencies]
-webarcade_api = {{ path = "{}" }}
-
+{}
 [profile.release]
 opt-level = "z"
 lto = true
 codegen-units = 1
 strip = true
 "#,
-                self.plugin_id, api_path_str
+                self.plugin_id, deps
             )
         };
 
@@ -500,8 +506,6 @@ pub extern "C" fn plugin_metadata() -> *const u8 {{
 
     fn copy_compiled_binaries(&self, rust_build_dir: &Path) -> Result<()> {
         let target_dir = rust_build_dir.join("target").join("release");
-        let binary_dir = self.build_dir.join("binaries");
-        fs::create_dir_all(&binary_dir)?;
 
         // Determine library name based on platform
         let lib_patterns = if cfg!(target_os = "windows") {
@@ -512,25 +516,14 @@ pub extern "C" fn plugin_metadata() -> *const u8 {{
             vec![format!("lib{}.so", self.plugin_id)]
         };
 
-        // Find and copy the compiled library
+        // Find and copy the compiled library directly to build_dir root
         for pattern in lib_patterns {
             let src_path = target_dir.join(&pattern);
             if src_path.exists() {
-                let platform = if cfg!(target_os = "windows") {
-                    "windows"
-                } else if cfg!(target_os = "macos") {
-                    "macos"
-                } else {
-                    "linux"
-                };
-
-                let dest_dir = binary_dir.join(platform);
-                fs::create_dir_all(&dest_dir)?;
-
-                let dest_path = dest_dir.join(&pattern);
+                let dest_path = self.build_dir.join(&pattern);
                 fs::copy(&src_path, &dest_path)?;
 
-                log::info!("[Developer] Copied {} binary: {}", platform, pattern);
+                log::info!("[Developer] Copied binary to root: {}", pattern);
                 return Ok(());
             }
         }
@@ -548,8 +541,8 @@ pub extern "C" fn plugin_metadata() -> *const u8 {{
             return Ok(());
         }
 
-        let frontend_dir = self.build_dir.join("frontend");
-        fs::create_dir_all(&frontend_dir)?;
+        // Install npm dependencies if package.json has dependencies
+        self.install_npm_dependencies()?;
 
         // Use Node.js bundler to bundle frontend code
         log::info!("[Developer] Bundling frontend with RSpack...");
@@ -591,6 +584,62 @@ pub extern "C" fn plugin_metadata() -> *const u8 {{
         Ok(())
     }
 
+    fn install_npm_dependencies(&self) -> Result<()> {
+        let package_json_path = self.plugin_dir.join("package.json");
+
+        // Check if package.json exists and has dependencies
+        if !package_json_path.exists() {
+            return Ok(());
+        }
+
+        let content = fs::read_to_string(&package_json_path)?;
+        let json: serde_json::Value = serde_json::from_str(&content)?;
+
+        // Check if there are any dependencies or devDependencies
+        let has_deps = json.get("dependencies").and_then(|d| d.as_object()).map(|o| !o.is_empty()).unwrap_or(false);
+        let has_dev_deps = json.get("devDependencies").and_then(|d| d.as_object()).map(|o| !o.is_empty()).unwrap_or(false);
+
+        if !has_deps && !has_dev_deps {
+            log::info!("[Developer] No npm dependencies to install");
+            return Ok(());
+        }
+
+        log::info!("[Developer] Installing npm dependencies...");
+
+        // Try bun first (faster), then npm
+        let install_result = if Command::new("bun").arg("--version").output().is_ok() {
+            log::info!("[Developer] Using bun to install dependencies");
+            Command::new("bun")
+                .arg("install")
+                .current_dir(&self.plugin_dir)
+                .output()
+        } else {
+            log::info!("[Developer] Using npm to install dependencies");
+            Command::new("npm")
+                .arg("install")
+                .current_dir(&self.plugin_dir)
+                .output()
+        };
+
+        match install_result {
+            Ok(output) => {
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    log::warn!("[Developer] Dependency installation had issues: {}", stderr);
+                    // Don't fail the build, just warn - bundler might still work
+                } else {
+                    log::info!("[Developer] Dependencies installed successfully");
+                }
+            }
+            Err(e) => {
+                log::warn!("[Developer] Could not install dependencies: {}", e);
+                // Don't fail the build - user might have dependencies pre-installed
+            }
+        }
+
+        Ok(())
+    }
+
     fn copy_dir_recursive(&self, src: &Path, dst: &Path) -> Result<()> {
         fs::create_dir_all(dst)?;
 
@@ -626,6 +675,24 @@ pub extern "C" fn plugin_metadata() -> *const u8 {{
         let options = FileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated);
 
+        // Add all files from build_dir root (flat structure)
+        for entry in fs::read_dir(&self.build_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            let file_name = entry.file_name();
+            let file_name_str = file_name.to_string_lossy();
+
+            // Skip directories (like rust_build, src)
+            if path.is_dir() {
+                continue;
+            }
+
+            // Add file to zip root
+            zip.start_file(file_name_str.as_ref(), options)?;
+            let content = fs::read(&path)?;
+            zip.write_all(&content)?;
+        }
+
         // Add manifest
         let manifest = self.create_manifest(has_backend)?;
         zip.start_file("manifest.json", options)?;
@@ -636,18 +703,6 @@ pub extern "C" fn plugin_metadata() -> *const u8 {{
         zip.start_file("routes.json", options)?;
         zip.write_all(routes_config.as_bytes())?;
 
-        // Add frontend files
-        let frontend_dir = self.build_dir.join("frontend");
-        if frontend_dir.exists() {
-            self.add_dir_to_zip(&mut zip, &frontend_dir, "frontend", &options)?;
-        }
-
-        // Add binaries if present
-        let binary_dir = self.build_dir.join("binaries");
-        if binary_dir.exists() {
-            self.add_dir_to_zip(&mut zip, &binary_dir, "binaries", &options)?;
-        }
-
         // Add README
         let readme = format!(
             r#"# {} Plugin
@@ -656,10 +711,7 @@ WebArcade Plugin Package
 
 ## Installation
 
-1. Open WebArcade
-2. Navigate to Plugins → Add Plugin
-3. Upload this zip file
-4. The plugin will be extracted and loaded automatically
+Drag and drop this .zip file anywhere in the WebArcade window to install.
 
 ## Contents
 
@@ -667,13 +719,21 @@ WebArcade Plugin Package
 - Backend: {}
 - Platform: {}
 
+## Plugin Structure
+
+All files are in the root directory for simplicity:
+- manifest.json - Plugin metadata
+- plugin.js - Frontend code (if has_frontend)
+- routes.json - Backend routes (if has_backend)
+- *.dll / lib*.so / lib*.dylib - Native binary (if has_backend)
+
 ## Note
 
 This plugin was built on {} and includes platform-specific binaries.
-For other platforms, you may need to rebuild from source in development mode.
+For other platforms, you may need to rebuild from source.
 "#,
             self.plugin_id,
-            if frontend_dir.exists() { "Included" } else { "None" },
+            if self.build_dir.join("plugin.js").exists() { "Included" } else { "None" },
             if has_backend { "Included" } else { "None" },
             if cfg!(target_os = "windows") {
                 "Windows"
@@ -774,55 +834,4 @@ For other platforms, you may need to rebuild from source in development mode.
         Ok(serde_json::to_string_pretty(&config)?)
     }
 
-    fn add_dir_to_zip(
-        &self,
-        zip: &mut ZipWriter<fs::File>,
-        src: &Path,
-        prefix: &str,
-        options: &FileOptions,
-    ) -> Result<()> {
-        for entry in fs::read_dir(src)? {
-            let entry = entry?;
-            let path = entry.path();
-            let name = path.file_name().unwrap();
-            let zip_path = format!("{}/{}", prefix, name.to_string_lossy());
-
-            if path.is_dir() {
-                zip.add_directory(&zip_path, *options)?;
-                self.add_dir_to_zip_recursive(zip, &path, &zip_path, options)?;
-            } else {
-                zip.start_file(&zip_path, *options)?;
-                let content = fs::read(&path)?;
-                zip.write_all(&content)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn add_dir_to_zip_recursive(
-        &self,
-        zip: &mut ZipWriter<fs::File>,
-        src: &Path,
-        prefix: &str,
-        options: &FileOptions,
-    ) -> Result<()> {
-        for entry in fs::read_dir(src)? {
-            let entry = entry?;
-            let path = entry.path();
-            let name = path.file_name().unwrap();
-            let zip_path = format!("{}/{}", prefix, name.to_string_lossy());
-
-            if path.is_dir() {
-                zip.add_directory(&zip_path, *options)?;
-                self.add_dir_to_zip_recursive(zip, &path, &zip_path, options)?;
-            } else {
-                zip.start_file(&zip_path, *options)?;
-                let content = fs::read(&path)?;
-                zip.write_all(&content)?;
-            }
-        }
-
-        Ok(())
-    }
 }

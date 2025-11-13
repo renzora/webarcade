@@ -6,6 +6,7 @@ use tauri::{Emitter, Listener, Manager};
 use std::collections::VecDeque;
 
 mod bridge;
+mod plugin_installer;
 
 // Re-export bridge modules at crate root for plugin compatibility
 pub use bridge::core;
@@ -56,6 +57,41 @@ async fn check_bridge_health() -> Result<String, String> {
             }
         }
         Err(e) => Err(format!("Bridge not responding: {}", e))
+    }
+}
+
+#[tauri::command]
+async fn install_plugin_from_zip(
+    zip_data: Vec<u8>,
+    file_name: String,
+) -> Result<plugin_installer::InstallResult, String> {
+    log::info!("Received plugin installation request: {}", file_name);
+
+    // Get the runtime plugins directory (AppData/WebArcade/plugins)
+    let plugins_dir = dirs::data_local_dir()
+        .ok_or_else(|| "Failed to get local data directory".to_string())?
+        .join("WebArcade")
+        .join("plugins");
+
+    log::info!("Installing plugin to: {:?}", plugins_dir);
+
+    // Create installer
+    let installer = plugin_installer::PluginInstaller::new(plugins_dir);
+
+    // Install the plugin
+    match installer.install_from_zip(&zip_data, &file_name) {
+        Ok(result) => {
+            log::info!("Plugin installed successfully: {}", result.plugin_id);
+
+            // TODO: Notify bridge to reload plugins
+            // For now, plugins will be loaded on next app restart
+
+            Ok(result)
+        }
+        Err(e) => {
+            log::error!("Plugin installation failed: {}", e);
+            Err(format!("Installation failed: {}", e))
+        }
     }
 }
 
@@ -153,7 +189,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             get_bridge_logs,
-            check_bridge_health
+            check_bridge_health,
+            install_plugin_from_zip
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

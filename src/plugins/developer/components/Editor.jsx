@@ -36,8 +36,18 @@ export function CodeEditor(props) {
       relativePath = relativePath.replace(/\\/g, '/');
 
       // Find the plugin directory in the path and get everything after it
-      const pluginPattern = new RegExp(`plugins/${props.currentPlugin}/(.+)$`);
-      const match = relativePath.match(pluginPattern);
+      // Try patterns in order: absolute path with projects, relative path with projects, regular relative path
+      const absoluteProjectsPattern = new RegExp(`src/plugins/developer/projects/${props.currentPlugin}/(.+)$`);
+      const relativeProjectsPattern = new RegExp(`plugins/developer/projects/${props.currentPlugin}/(.+)$`);
+      const regularPattern = new RegExp(`plugins/${props.currentPlugin}/(.+)$`);
+
+      let match = relativePath.match(absoluteProjectsPattern);
+      if (!match) {
+        match = relativePath.match(relativeProjectsPattern);
+      }
+      if (!match) {
+        match = relativePath.match(regularPattern);
+      }
 
       if (match && match[1]) {
         relativePath = match[1];
@@ -87,8 +97,18 @@ export function CodeEditor(props) {
       relativePath = relativePath.replace(/\\/g, '/');
 
       // Find the plugin directory in the path and get everything after it
-      const pluginPattern = new RegExp(`plugins/${props.currentPlugin}/(.+)$`);
-      const match = relativePath.match(pluginPattern);
+      // Try patterns in order: absolute path with projects, relative path with projects, regular relative path
+      const absoluteProjectsPattern = new RegExp(`src/plugins/developer/projects/${props.currentPlugin}/(.+)$`);
+      const relativeProjectsPattern = new RegExp(`plugins/developer/projects/${props.currentPlugin}/(.+)$`);
+      const regularPattern = new RegExp(`plugins/${props.currentPlugin}/(.+)$`);
+
+      let match = relativePath.match(absoluteProjectsPattern);
+      if (!match) {
+        match = relativePath.match(relativeProjectsPattern);
+      }
+      if (!match) {
+        match = relativePath.match(regularPattern);
+      }
 
       if (match && match[1]) {
         relativePath = match[1];

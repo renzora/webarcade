@@ -5,7 +5,7 @@ import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const rootDir = resolve(__dirname, '../../..');
+const rootDir = resolve(__dirname, '..');
 
 /**
  * Bundle a plugin's frontend code (JSX) into a standalone JavaScript module
@@ -29,9 +29,8 @@ export async function bundlePluginFrontend(pluginDir, outputDir) {
 
   console.log(`   📦 Bundling frontend for ${pluginName}...`);
 
-  // Ensure output directory exists
-  const frontendOutputDir = resolve(outputDir, 'src');
-  fs.mkdirSync(frontendOutputDir, { recursive: true });
+  // Ensure output directory exists (output directly to root)
+  fs.mkdirSync(outputDir, { recursive: true });
 
   const config = {
     mode: 'production',
@@ -39,11 +38,19 @@ export async function bundlePluginFrontend(pluginDir, outputDir) {
       main: entryFile,
     },
 
-    experiments: {
-      css: true,
+    devtool: false,
+
+    // Externals: Don't bundle shared dependencies - use globals from host app
+    externals: {
+      'solid-js': 'SolidJS',
+      'solid-js/web': 'SolidJSWeb',
+      'solid-js/store': 'SolidJSStore',
+      '@/api/plugin': 'WebArcadeAPI',
+      '@/api/bridge': 'WebArcadeAPI',
     },
 
-    devtool: false,
+    // Configure output to access externals from global scope
+    externalsType: 'window',
 
     resolve: {
       alias: {
@@ -76,6 +83,8 @@ export async function bundlePluginFrontend(pluginDir, outputDir) {
         {
           test: /\.css$/,
           use: [
+            'style-loader',
+            'css-loader',
             {
               loader: 'postcss-loader',
               options: {
@@ -86,8 +95,7 @@ export async function bundlePluginFrontend(pluginDir, outputDir) {
                 }
               }
             }
-          ],
-          type: 'css'
+          ]
         }
       ],
     },
@@ -112,17 +120,25 @@ export async function bundlePluginFrontend(pluginDir, outputDir) {
           },
         }),
       ],
+      // Disable all code splitting - force single file output
+      splitChunks: false,
+      runtimeChunk: false,
+      moduleIds: 'named',
+      chunkIds: 'named',
+      concatenateModules: true, // Enable scope hoisting to inline modules
     },
 
     output: {
-      path: frontendOutputDir,
+      path: outputDir,
       filename: 'plugin.js',
-      chunkFilename: '[name].js',
       library: {
         type: 'module',
       },
-      clean: true,
-      publicPath: `/plugins/${pluginName}/src/`,
+      clean: false, // Don't clean since binaries are already there
+      publicPath: `/plugins/${pluginName}/`,
+      asyncChunks: false, // Disable async chunk loading
+      wasmLoading: false,
+      chunkLoading: false,
     },
 
     experiments: {

@@ -96,6 +96,9 @@ rodio = "0.17"
 multer = "3.0"
 zip = "0.6"
 
+# Bridge dependencies - Dynamic plugin loading
+libloading = "0.8"
+
 # Bridge dependencies - Discord integration
 serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "rustls_backend", "model", "cache"] }
 

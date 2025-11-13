@@ -5,6 +5,7 @@ import { Engine, layoutComponents } from '@/api/plugin'
 import Layout from './layout'
 import DevNotice from './components/DevNotice'
 import KeyboardShortcuts from './components/KeyboardShortcuts'
+import PluginInstaller from './components/PluginInstaller'
 import { usePluginAPI } from '@/api/plugin'
 import { editorStore } from '@/layout/stores/EditorStore.jsx'
 import {
@@ -86,10 +87,11 @@ export default function App() {
   return (
     <Engine>
       <KeyboardShortcuts />
+      <PluginInstaller />
       <div class="w-full h-full">
         <Layout />
         <DevNotice />
-        
+
         {/* Render layout components from plugins */}
         <For each={Array.from(layoutComponents().values())}>
           {(layoutComponent) => {
