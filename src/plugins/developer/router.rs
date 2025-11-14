@@ -49,25 +49,24 @@ struct FileNode {
 }
 
 fn get_plugins_dirs() -> Vec<PathBuf> {
-    let cwd = std::env::current_dir().unwrap();
-    // Go up one level from src-tauri to project root, then into src/plugins/developer/projects
-    let project_root = cwd.parent().unwrap_or(&cwd);
+    // Use AppData/Local/WebArcade/projects directory
+    let appdata_dir = dirs::data_local_dir()
+        .or_else(|| dirs::data_dir())
+        .expect("Could not determine data directory");
+
     vec![
-        project_root.join("src").join("plugins").join("developer").join("projects"),
+        appdata_dir.join("WebArcade").join("projects"),
     ]
 }
 
 async fn handle_debug() -> Response<BoxBody<Bytes, Infallible>> {
     let cwd = std::env::current_dir().unwrap();
-    let project_root = cwd.parent().unwrap_or(&cwd);
     let plugins_dirs = get_plugins_dirs();
 
     let debug_info = serde_json::json!({
         "cwd": cwd.to_string_lossy(),
-        "project_root": project_root.to_string_lossy(),
         "plugins_dirs": plugins_dirs.iter().map(|p| p.to_string_lossy().to_string()).collect::<Vec<_>>(),
-        "test_path_exists": project_root.join("src").join("plugins").join("developer").join("projects").join("test").exists(),
-        "test_has_index": project_root.join("src").join("plugins").join("developer").join("projects").join("test").join("index.jsx").exists(),
+        "appdata_projects_exists": plugins_dirs.first().map(|p| p.exists()).unwrap_or(false),
     });
 
     json_response(&debug_info)
@@ -536,10 +535,13 @@ async fn handle_create_plugin(req: Request<Incoming>) -> Response<BoxBody<Bytes,
         Err(e) => return error_response(StatusCode::BAD_REQUEST, &format!("Invalid JSON: {}", e)),
     };
 
-    // All plugins are created in the developer/projects directory
-    let cwd = std::env::current_dir().unwrap();
-    let project_root = cwd.parent().unwrap_or(&cwd);
-    let base_dir = project_root.join("src").join("plugins").join("developer").join("projects");
+    // All plugins are created in AppData/Local/WebArcade/projects
+    let appdata_dir = match dirs::data_local_dir() {
+        Some(dir) => dir,
+        None => return error_response(StatusCode::INTERNAL_SERVER_ERROR, "Could not find AppData directory"),
+    };
+
+    let base_dir = appdata_dir.join("WebArcade").join("projects");
 
     // Ensure projects directory exists
     if let Err(e) = fs::create_dir_all(&base_dir) {

@@ -63,13 +63,6 @@ function scanPluginsDirectory(baseDir, relativePath = '') {
     const itemPath = path.join(relativePath, item.name);
     const itemFullPath = path.join(baseDir, itemPath);
 
-    // Skip the developer/projects directory
-    const normalizedPath = itemPath.replace(/\\/g, '/');
-    if (normalizedPath === 'developer/projects' || normalizedPath.startsWith('developer/projects/')) {
-      console.log(`⏭️  Skipping development projects directory: ${itemPath}`);
-      continue;
-    }
-
     // Check for frontend plugin files
     const indexPath = path.join(itemFullPath, 'index.jsx');
     const indexJsPath = path.join(itemFullPath, 'index.js');

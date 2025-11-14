@@ -6,17 +6,19 @@ use std::path::PathBuf;
 
 /// Get the path to the main database file
 pub fn get_database_path() -> PathBuf {
-    // Place the database in the same directory as the binary
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(exe_dir) = exe_path.parent() {
-            return exe_dir.join("database.db");
-        }
+    // Use platform-specific data directory
+    let data_dir = dirs::data_local_dir()
+        .or_else(|| dirs::data_dir())
+        .expect("Could not determine data directory");
+
+    let db_path = data_dir.join("WebArcade").join("database.db");
+
+    // Ensure the directory exists
+    if let Some(parent) = db_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
     }
 
-    // Fallback to current directory if we can't determine the executable path
-    std::env::current_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join("database.db")
+    db_path
 }
 
 /// Ensure the database directory exists

@@ -37,16 +37,20 @@ impl PluginBuilder {
             cwd.clone()
         };
 
-        // Check for plugin in developer/projects subfolder first (for dev plugins)
-        let plugin_dir_projects = project_root.join("src").join("plugins").join("developer").join("projects").join(plugin_id);
+        // Check for plugin in AppData/Local/WebArcade/projects first
+        let appdata_dir = dirs::data_local_dir()
+            .or_else(|| dirs::data_dir())
+            .expect("Could not determine data directory");
+
+        let plugin_dir_appdata = appdata_dir.join("WebArcade").join("projects").join(plugin_id);
         let plugin_dir_root = project_root.join("src").join("plugins").join(plugin_id);
 
-        let plugin_dir = if plugin_dir_projects.exists() {
-            plugin_dir_projects
+        let plugin_dir = if plugin_dir_appdata.exists() {
+            plugin_dir_appdata
         } else if plugin_dir_root.exists() {
             plugin_dir_root
         } else {
-            anyhow::bail!("Plugin directory does not exist: {:?} or {:?}", plugin_dir_projects, plugin_dir_root);
+            anyhow::bail!("Plugin directory does not exist: {:?} or {:?}", plugin_dir_appdata, plugin_dir_root);
         };
 
         let build_dir = project_root.join("dist").join("plugins").join(plugin_id);
