@@ -454,22 +454,40 @@ pub extern "C" fn plugin_metadata() -> *const u8 {{
     }
 
     fn extract_handlers(&self) -> Result<Vec<String>> {
-        let router_path = self.plugin_dir.join("router.rs");
-        if !router_path.exists() {
-            return Ok(Vec::new());
-        }
-
-        let content = fs::read_to_string(&router_path)?;
         let mut handlers = Vec::new();
 
-        // Look for route! macro usages to extract handler names
-        // Pattern: route!(router, METHOD "/path" => handler_name);
-        // Pattern: route!(router, METHOD "/path", path => handler_name);
-        let re = regex::Regex::new(r"route!\s*\([^,]+,\s*\w+\s+[^=]+(?:,\s*path\s*)?=>\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\)").unwrap();
+        // First check Cargo.toml for routes (preferred method)
+        let cargo_toml_path = self.plugin_dir.join("Cargo.toml");
+        if cargo_toml_path.exists() {
+            let cargo_content = fs::read_to_string(&cargo_toml_path)?;
+            if let Ok(cargo_toml) = cargo_content.parse::<toml::Value>() {
+                // Simple format: [routes] with "METHOD /path" = "handler"
+                if let Some(routes_table) = cargo_toml.get("routes").and_then(|r| r.as_table()) {
+                    for (_, value) in routes_table {
+                        if let Some(handler) = value.as_str() {
+                            if !handlers.contains(&handler.to_string()) {
+                                handlers.push(handler.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
-        for cap in re.captures_iter(&content) {
-            if let Some(handler_name) = cap.get(1) {
-                handlers.push(handler_name.as_str().to_string());
+        // If no handlers found in Cargo.toml, fall back to router.rs parsing
+        if handlers.is_empty() {
+            let router_path = self.plugin_dir.join("router.rs");
+            if router_path.exists() {
+                let content = fs::read_to_string(&router_path)?;
+
+                // Pattern 1: route!(router, METHOD "/path" => handler_name);
+                let re = regex::Regex::new(r"route!\s*\([^,]+,\s*\w+\s+[^=]+(?:,\s*path\s*)?=>\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\)").unwrap();
+
+                for cap in re.captures_iter(&content) {
+                    if let Some(handler_name) = cap.get(1) {
+                        handlers.push(handler_name.as_str().to_string());
+                    }
+                }
             }
         }
 
@@ -618,8 +636,12 @@ pub extern "C" fn plugin_metadata() -> *const u8 {{
 
                         let content = fs::read_to_string(&path)?;
                         let modified_content = if file_name_str == "mod.rs" {
-                            // Make the router module public
-                            content.replace("mod router;", "pub mod router;")
+                            // Make the router module public (only if not already public)
+                            if content.contains("pub mod router;") {
+                                content
+                            } else {
+                                content.replace("mod router;", "pub mod router;")
+                            }
                         } else if file_name_str == "router.rs" {
                             // Make handler functions public (if not already)
                             // Pattern: async fn handler_name(...) -> HttpResponse
@@ -1025,26 +1047,50 @@ For other platforms, you may need to rebuild from source.
     }
 
     fn extract_routes(&self) -> Result<Vec<serde_json::Value>> {
-        let router_path = self.plugin_dir.join("router.rs");
-        if !router_path.exists() {
-            return Ok(Vec::new());
-        }
-
-        let content = fs::read_to_string(&router_path)?;
         let mut routes = Vec::new();
 
-        // Pattern: route!(router, METHOD "/path" => handler_name);
-        // Pattern: route!(router, METHOD "/path", path => handler_name);
-        // The (?:,\s*path\s*)? part is optional to match both variants
-        let re = regex::Regex::new(r#"route!\s*\([^,]+,\s*(\w+)\s+"([^"]+)"\s*(?:,\s*path\s*)?=>\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\)"#).unwrap();
+        // First check Cargo.toml for routes (preferred method)
+        let cargo_toml_path = self.plugin_dir.join("Cargo.toml");
+        if cargo_toml_path.exists() {
+            let cargo_content = fs::read_to_string(&cargo_toml_path)?;
+            if let Ok(cargo_toml) = cargo_content.parse::<toml::Value>() {
+                // Simple format: [routes] with "METHOD /path" = "handler"
+                if let Some(routes_table) = cargo_toml.get("routes").and_then(|r| r.as_table()) {
+                    for (key, value) in routes_table {
+                        if let Some(handler) = value.as_str() {
+                            // Parse "METHOD /path" format
+                            let parts: Vec<&str> = key.splitn(2, ' ').collect();
+                            if parts.len() == 2 {
+                                routes.push(serde_json::json!({
+                                    "method": parts[0],
+                                    "path": parts[1],
+                                    "handler": handler,
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
-        for cap in re.captures_iter(&content) {
-            if let (Some(method), Some(path), Some(handler)) = (cap.get(1), cap.get(2), cap.get(3)) {
-                routes.push(serde_json::json!({
-                    "method": method.as_str(),
-                    "path": path.as_str(),
-                    "handler": handler.as_str(),
-                }));
+        // If no routes found in Cargo.toml, fall back to router.rs parsing
+        if routes.is_empty() {
+            let router_path = self.plugin_dir.join("router.rs");
+            if router_path.exists() {
+                let content = fs::read_to_string(&router_path)?;
+
+                // Pattern 1: route!(router, METHOD "/path" => handler_name);
+                let re = regex::Regex::new(r#"route!\s*\([^,]+,\s*(\w+)\s+"([^"]+)"\s*(?:,\s*path\s*)?=>\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\)"#).unwrap();
+
+                for cap in re.captures_iter(&content) {
+                    if let (Some(method), Some(path), Some(handler)) = (cap.get(1), cap.get(2), cap.get(3)) {
+                        routes.push(serde_json::json!({
+                            "method": method.as_str(),
+                            "path": path.as_str(),
+                            "handler": handler.as_str(),
+                        }));
+                    }
+                }
             }
         }
 

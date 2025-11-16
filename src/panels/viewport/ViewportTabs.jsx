@@ -1,7 +1,8 @@
 import { createSignal, createMemo, For, Show, onMount, onCleanup, createEffect } from 'solid-js';
 import { IconFileText, IconX, IconStar, IconCopy, IconPlayerPlay, IconPlayerPause, IconChairDirector, IconChevronDown } from '@tabler/icons-solidjs';
 import { viewportStore, viewportActions } from "./store";
-import { viewportTypes } from "@/api/plugin";
+import { viewportTypes, propertyTabs } from "@/api/plugin";
+import { editorActions } from '@/layout/stores/EditorStore';
 
 const ViewportTabs = () => {
   const [contextMenu, setContextMenu] = createSignal(null);
@@ -34,8 +35,39 @@ const ViewportTabs = () => {
     }
   };
 
+  const findAssociatedPropertyTab = (viewportId) => {
+    // Find all property tabs from the same viewport
+    const allPropertyTabs = Array.from(propertyTabs().values());
+
+    // Strategy 1: Find tabs that explicitly reference this viewport
+    const matchingTab = allPropertyTabs.find(tab => tab.viewport === viewportId);
+
+    if (matchingTab) {
+      editorActions.setSelectedTool(matchingTab.id);
+      return true;
+    }
+
+    // Strategy 2: Find tabs from the same plugin as the viewport
+    const viewportType = viewportTypes().get(viewportId);
+    if (viewportType && viewportType.plugin) {
+      const pluginTab = allPropertyTabs.find(tab => tab.plugin === viewportType.plugin);
+      if (pluginTab) {
+        editorActions.setSelectedTool(pluginTab.id);
+        return true;
+      }
+    }
+
+    return false;
+  };
+
   const handleTabClick = (tabId) => {
     viewportActions.setActiveViewportTab(tabId);
+
+    // Find the tab's viewport type and switch to associated right panel tab
+    const tab = tabs().find(t => t.id === tabId);
+    if (tab && tab.type) {
+      findAssociatedPropertyTab(tab.type);
+    }
   };
 
   const handleTabClose = (e, tabId) => {

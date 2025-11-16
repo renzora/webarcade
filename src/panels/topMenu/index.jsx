@@ -1,9 +1,10 @@
 import { createSignal, createEffect, onCleanup, createMemo, For, Show } from 'solid-js';
-import { IconChevronRight, IconMinus, IconSquare, IconCopy, IconX, IconBell } from '@tabler/icons-solidjs';
+import { IconChevronRight, IconMinus, IconSquare, IconCopy, IconX, IconBell, IconSettings, IconCheck, IconAlertCircle, IconInfoCircle } from '@tabler/icons-solidjs';
 import { editorStore, editorActions } from '@/layout/stores/EditorStore';
 import { topMenuItems, horizontalMenuButtonsEnabled } from '@/api/plugin';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import ViewportTabs from '@/panels/viewport/ViewportTabs.jsx';
+import SettingsPanel from '@/plugins/settings/SettingsPanel.jsx';
 
 function TopMenu() {
   const [activeMenu, setActiveMenu] = createSignal(null);
@@ -16,7 +17,13 @@ function TopMenu() {
   const [menuPosition, setMenuPosition] = createSignal(null);
   const [isMaximized, setIsMaximized] = createSignal(false);
   const [showNotifications, setShowNotifications] = createSignal(false);
+  const [showSettings, setShowSettings] = createSignal(false);
   const [notificationCount, setNotificationCount] = createSignal(3);
+  const [notifications, setNotifications] = createSignal([
+    { id: 1, type: 'success', message: 'Plugin loaded successfully', time: '2m ago' },
+    { id: 2, type: 'info', message: 'New update available', time: '5m ago' },
+    { id: 3, type: 'warning', message: 'Low memory warning', time: '10m ago' }
+  ]);
 
   // Check initial maximize state and listen for window changes
   createEffect(() => {
@@ -261,7 +268,7 @@ function TopMenu() {
   return (
     <>
       <div
-        class="relative w-full h-8 bg-base-200 backdrop-blur-md shadow-sm border-b border-black/30 flex items-center px-2"
+        class="relative w-full h-8 bg-base-300 backdrop-blur-md shadow-sm flex items-center px-2"
         data-tauri-drag-region
       >
         {/* Viewport Tabs */}
@@ -310,24 +317,51 @@ function TopMenu() {
           </div>
         </Show>
 
-        {/* Notifications Button */}
+        {/* Notifications and Settings Buttons */}
         <div
-          class="flex items-center"
+          class="flex items-center relative"
           style={{
-            '-webkit-app-region': 'no-drag'
+            '-webkit-app-region': 'no-drag',
+            'z-index': 150
           }}
         >
-          <button
-            onClick={() => setShowNotifications(!showNotifications())}
-            class="relative w-8 h-8 flex items-center justify-center text-base-content/60 hover:text-base-content hover:bg-base-300 rounded transition-colors cursor-pointer"
-            title="Notifications"
-            style={{ '-webkit-app-region': 'no-drag' }}
-          >
-            <IconBell class="w-4 h-4" />
-            <Show when={notificationCount() > 0}>
-              <span class="absolute top-1 right-1 w-2 h-2 bg-error rounded-full"></span>
-            </Show>
-          </button>
+          <div class="relative">
+            <button
+              onClick={() => {
+                if (showNotifications()) {
+                  setShowNotifications(false);
+                } else {
+                  setShowNotifications(true);
+                  setShowSettings(false);
+                }
+              }}
+              class="relative w-8 h-8 flex items-center justify-center text-base-content/60 hover:text-base-content hover:bg-base-300 rounded transition-colors cursor-pointer"
+              title="Notifications"
+              style={{ '-webkit-app-region': 'no-drag' }}
+            >
+              <IconBell class="w-4 h-4" />
+              <Show when={notificationCount() > 0}>
+                <span class="absolute top-1 right-1 w-2 h-2 bg-error rounded-full"></span>
+              </Show>
+            </button>
+          </div>
+          <div class="relative">
+            <button
+              onClick={() => {
+                if (showSettings()) {
+                  setShowSettings(false);
+                } else {
+                  setShowSettings(true);
+                  setShowNotifications(false);
+                }
+              }}
+              class="relative w-8 h-8 flex items-center justify-center text-base-content/60 hover:text-base-content hover:bg-base-300 rounded transition-colors cursor-pointer"
+              title="Settings"
+              style={{ '-webkit-app-region': 'no-drag' }}
+            >
+              <IconSettings class="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Tauri Window Controls - Only show in desktop app and hide in background mode */}
@@ -496,12 +530,108 @@ function TopMenu() {
           <div class="bg-base-200 p-6 rounded-xl">
             <h2 class="text-base-content mb-4">Project Manager</h2>
             <p class="text-base-content/80 mb-4">Project manager coming soon...</p>
-            <button 
+            <button
               onClick={() => setShowProjectManager(false)}
               class="px-4 py-2 bg-primary text-primary-content rounded"
             >
               Close
             </button>
+          </div>
+        </div>
+      </Show>
+
+      {/* Notifications Dropdown */}
+      <Show when={showNotifications()}>
+        <div
+          class="fixed left-0 right-0 bottom-0"
+          style={{ top: '32px', 'z-index': 90 }}
+          onClick={() => setShowNotifications(false)}
+        />
+        <div
+          class="fixed w-80 bg-base-300 backdrop-blur-sm rounded-lg shadow-xl border border-base-300 max-h-96 overflow-hidden"
+          style={{ top: '40px', right: '128px', 'z-index': 110 }}
+        >
+          <div class="p-3 border-b border-base-300 flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-base-content">Notifications</h3>
+            <button
+              onClick={() => {
+                setNotifications([]);
+                setNotificationCount(0);
+              }}
+              class="text-xs text-base-content/60 hover:text-base-content"
+            >
+              Clear all
+            </button>
+          </div>
+          <div class="overflow-y-auto max-h-72">
+            <Show
+              when={notifications().length > 0}
+              fallback={
+                <div class="p-4 text-center text-base-content/60 text-sm">
+                  No notifications
+                </div>
+              }
+            >
+              <For each={notifications()}>
+                {(notification) => (
+                  <div class="p-3 border-b border-base-300/50 hover:bg-base-300/30 transition-colors">
+                    <div class="flex items-start gap-2">
+                      <div class="mt-0.5">
+                        <Show when={notification.type === 'success'}>
+                          <IconCheck class="w-4 h-4 text-success" />
+                        </Show>
+                        <Show when={notification.type === 'warning'}>
+                          <IconAlertCircle class="w-4 h-4 text-warning" />
+                        </Show>
+                        <Show when={notification.type === 'info'}>
+                          <IconInfoCircle class="w-4 h-4 text-info" />
+                        </Show>
+                      </div>
+                      <div class="flex-1">
+                        <p class="text-sm text-base-content">{notification.message}</p>
+                        <p class="text-xs text-base-content/50 mt-1">{notification.time}</p>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNotifications(notifications().filter(n => n.id !== notification.id));
+                          setNotificationCount(Math.max(0, notificationCount() - 1));
+                        }}
+                        class="text-base-content/40 hover:text-base-content"
+                      >
+                        <IconX class="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </For>
+            </Show>
+          </div>
+        </div>
+      </Show>
+
+      {/* Settings Dropdown */}
+      <Show when={showSettings()}>
+        <div
+          class="fixed left-0 right-0 bottom-0"
+          style={{ top: '32px', 'z-index': 90 }}
+          onClick={() => setShowSettings(false)}
+        />
+        <div
+          class="fixed w-96 bg-base-300 backdrop-blur-sm rounded-lg shadow-xl border border-base-300 max-h-[80vh] overflow-hidden"
+          style={{ top: '40px', right: '96px', 'z-index': 110 }}
+        >
+          <div class="p-3 border-b border-base-300 flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-base-content">Settings</h3>
+            <button
+              onClick={() => setShowSettings(false)}
+              class="text-base-content/60 hover:text-base-content"
+            >
+              <IconX class="w-4 h-4" />
+            </button>
+          </div>
+          <div class="overflow-y-auto max-h-[calc(80vh-48px)]">
+            <SettingsPanel />
           </div>
         </div>
       </Show>

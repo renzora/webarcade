@@ -1,4 +1,3 @@
-import TabMenu from './TabMenu.jsx';
 import PanelResizer from '@/ui/PanelResizer.jsx';
 import { editorStore, editorActions } from '@/layout/stores/EditorStore';
 import { propertyTabs, propertiesPanelVisible } from '@/api/plugin';
@@ -8,7 +7,6 @@ import { IconBox } from '@tabler/icons-solidjs';
 
 const RightPanel = () => {
   const { showContextMenu } = useViewportContextMenu();
-  const [isCollapsed, setIsCollapsed] = createSignal(false);
 
   // Get reactive store values
   const selection = () => editorStore.selection;
@@ -49,8 +47,8 @@ const RightPanel = () => {
   const handleRightResizeMove = (e) => {
     if (!isResizingRight()) return;
     
-    const minPanelWidth = 220;
-    const maxPanelWidth = 800;
+    const minPanelWidth = 180;
+    const maxPanelWidth = 500;
     
     let newWidth;
     if (isLeftPanel()) {
@@ -93,10 +91,8 @@ const RightPanel = () => {
   };
 
   const handleRightPanelToggle = () => {
-    // Always keep the panel open, just toggle between expanded and collapsed
     if (!isScenePanelOpen()) {
       setScenePanelOpen(true);
-      setIsCollapsed(false);
 
       if (!selectedRightTool() || selectedRightTool() === 'select') {
         // Get the first available tab from property tabs
@@ -108,8 +104,7 @@ const RightPanel = () => {
         setSelectedRightTool(firstTabId);
       }
     } else {
-      // Toggle between expanded and collapsed
-      setIsCollapsed(!isCollapsed());
+      setScenePanelOpen(false);
     }
   };
 
@@ -156,65 +151,36 @@ const RightPanel = () => {
       <div
         className={`relative no-select flex-shrink-0 h-full ${!isResizingRight() ? 'transition-all duration-300' : ''}`}
         style={{
-          width: isScenePanelOpen() ? (isCollapsed() ? '40px' : `${rightPanelWidth()}px`) : '0px'
+          width: isScenePanelOpen() ? `${rightPanelWidth()}px` : '0px'
         }}
       >
         <Show when={isScenePanelOpen()}>
           <div className="relative h-full flex">
-            {/* Resize handle - hide when collapsed */}
-            <Show when={!isCollapsed()}>
-              <PanelResizer
-                type="right"
-                isResizing={isResizingRight}
-                onResizeStart={handleRightResizeStart}
-                onResizeEnd={handleRightResizeEnd}
-                onResize={handleRightResizeMove}
-                isLeftPanel={isLeftPanel()}
-                position={{
-                  left: '-4px',
-                  top: 0,
-                  bottom: 0,
-                  width: '8px',
-                  zIndex: 30
-                }}
-                className="!bg-transparent !opacity-0 hover:!bg-primary/20 hover:!opacity-100"
-              />
-            </Show>
+            {/* Resize handle */}
+            <PanelResizer
+              type="right"
+              isResizing={isResizingRight}
+              onResizeStart={handleRightResizeStart}
+              onResizeEnd={handleRightResizeEnd}
+              onResize={handleRightResizeMove}
+              isLeftPanel={isLeftPanel()}
+              position={{
+                left: '-4px',
+                top: 0,
+                bottom: 0,
+                width: '8px',
+                zIndex: 30
+              }}
+              className="!bg-transparent hover:!bg-transparent"
+            />
 
             <div className="flex-1 min-w-0 overflow-hidden">
               <div className="flex flex-col h-full">
                 {/* Panel content */}
-                <div className="h-full bg-base-300 border-l border-base-300 shadow-lg overflow-hidden flex">
-                  {/* Tab system for properties */}
-                  <div className="flex bg-base-200 w-full h-full">
-                    {/* Vertical toolbar inside right panel */}
-                    <div className="w-auto flex-shrink-0 h-full">
-                      <TabMenu
-                        selectedTool={selectedRightTool()}
-                        onToolSelect={(tool) => {
-                          setSelectedRightTool(tool);
-                          if (isCollapsed()) {
-                            setIsCollapsed(false);
-                          }
-                        }}
-                        scenePanelOpen={isScenePanelOpen()}
-                        onScenePanelToggle={handleRightPanelToggle}
-                        isLeftPanel={isLeftPanel()}
-                        isCollapsed={isCollapsed()}
-                        panelResize={{
-                          handleRightResizeStart,
-                          handleRightResizeMove,
-                          handleRightResizeEnd
-                        }}
-                      />
-                    </div>
-
-                    {/* Tab content - hide when collapsed */}
-                    <Show when={!isCollapsed()}>
-                      <div className="flex-1 min-w-0 overflow-y-auto scrollbar-thin">
-                        {renderTabContent()}
-                      </div>
-                    </Show>
+                <div className="h-full bg-base-300 border-l border-base-300 shadow-lg overflow-hidden">
+                  {/* Tab content */}
+                  <div className="bg-base-200 w-full h-full overflow-y-auto scrollbar-thin">
+                    {renderTabContent()}
                   </div>
                 </div>
               </div>

@@ -303,7 +303,7 @@ export default function DatabaseViewport() {
   return (
     <div class="h-full w-full flex overflow-hidden">
       <div class="flex-1 min-w-0 flex flex-col">
-        <div class="border-b border-base-300 px-4 py-3 flex-shrink-0">
+        <div class="px-4 py-3 flex-shrink-0">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
               <IconDatabase size={20} class="text-primary" />

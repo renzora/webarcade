@@ -394,7 +394,7 @@ const LeftPanelMenu = () => {
       />
 
       {/* Header */}
-      <div className="flex-shrink-0 p-2 border-b border-base-300">
+      <div className="flex-shrink-0 p-2">
         {/* Search bar */}
         <div className="relative">
           <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
@@ -405,7 +405,7 @@ const LeftPanelMenu = () => {
             value={searchQuery()}
             onInput={handleSearchInput}
             placeholder="Search plugins..."
-            className="w-full pl-9 pr-8 py-1.5 text-sm bg-base-300 border border-base-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary text-base-content placeholder-base-content/40"
+            className="w-full pl-9 pr-8 py-1.5 text-sm bg-base-300 rounded-lg text-base-content placeholder-base-content/40"
           />
           <Show when={searchQuery()}>
             <button
