@@ -69,8 +69,17 @@
       ],
       "enabled": true,
       "priority": 1
+    },
+    {
+      "id": "theme",
+      "path": "/src/plugins/theme",
+      "main": "index.jsx",
+      "widget": null,
+      "widgets": null,
+      "enabled": true,
+      "priority": 1
     }
   ],
-  "generatedAt": "2025-11-16T18:14:47.732Z",
+  "generatedAt": "2025-11-19T15:11:33.424Z",
   "generator": "discover-plugins.js"
 }

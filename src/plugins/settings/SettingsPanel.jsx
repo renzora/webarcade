@@ -1,20 +1,7 @@
 import { For } from 'solid-js';
-import { allThemes } from '@/themes';
 import { editorStore, editorActions } from '@/layout/stores/EditorStore.jsx';
 
 const SettingsPanel = () => {
-  // Group themes by category
-  const themesByCategory = () => {
-    const grouped = {};
-    allThemes.forEach(theme => {
-      if (!grouped[theme.category]) {
-        grouped[theme.category] = [];
-      }
-      grouped[theme.category].push(theme);
-    });
-    return grouped;
-  };
-
   // Helper functions to convert between RGB and hex
   const rgbToHex = (rgb) => {
     const toHex = (n) => {
@@ -33,36 +20,9 @@ const SettingsPanel = () => {
     } : { r: 0, g: 0, b: 0 };
   };
 
-  const handleThemeChange = (themeName) => {
-    // Use editor store to manage theme
-    editorActions.setTheme(themeName);
-  };
-
   return (
     <div class="h-full flex flex-col p-4 overflow-y-auto">
       <h2 class="text-lg font-semibold text-base-content mb-4">Application Settings</h2>
-
-      {/* Theme Selection */}
-      <div class="mb-6">
-        <h3 class="text-sm font-semibold text-base-content mb-2">Theme</h3>
-        <select
-          class="select select-bordered w-full"
-          value={editorStore.theme}
-          onChange={(e) => handleThemeChange(e.target.value)}
-        >
-          <For each={Object.entries(themesByCategory())}>
-            {([category, themes]) => (
-              <optgroup label={category}>
-                <For each={themes}>
-                  {(theme) => (
-                    <option value={theme.name}>{theme.label}</option>
-                  )}
-                </For>
-              </optgroup>
-            )}
-          </For>
-        </select>
-      </div>
 
       {/* Glass Theme Settings - Only show when dark-glass theme is active */}
       {editorStore.theme === 'dark-glass' && (
