@@ -22,7 +22,6 @@ export const allThemes = [
 
   // Dark Themes
   { name: 'dark', label: 'Dark', category: 'Dark' },
-  { name: 'dark-glass', label: 'Dark Glass', category: 'Dark' },
   { name: 'synthwave', label: 'Synthwave', category: 'Dark' },
   { name: 'cyberpunk', label: 'Cyberpunk', category: 'Dark' },
   { name: 'halloween', label: 'Halloween', category: 'Dark' },

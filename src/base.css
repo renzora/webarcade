@@ -159,57 +159,6 @@
     transition: opacity 0.3s ease-out 0.4s, visibility 0.3s ease-out 0.4s;
   }
 
-  /* Glass theme backdrop blur */
-  [data-theme="dark-glass"] .bg-base-100,
-  [data-theme="dark-glass"] .bg-base-200,
-  [data-theme="dark-glass"] .bg-base-300 {
-    backdrop-filter: blur(var(--glass-blur, 10px));
-    -webkit-backdrop-filter: blur(var(--glass-blur, 10px));
-  }
-
-  :root[data-theme="dark-glass"],
-  html[data-theme="dark-glass"],
-  body[data-theme="dark-glass"] {
-    background-color: transparent !important;
-  }
-
-  /* Dark glass theme - override DaisyUI colors with transparency using CSS variables */
-  [data-theme="dark-glass"] {
-    background-color: rgba(
-      var(--glass-root-r, 10),
-      var(--glass-root-g, 20),
-      var(--glass-root-b, 39),
-      var(--glass-root-opacity, 0.9)
-    ) !important;
-  }
-
-  [data-theme="dark-glass"] .bg-base-100 {
-    background-color: rgba(
-      var(--glass-base100-r, 10),
-      var(--glass-base100-g, 20),
-      var(--glass-base100-b, 39),
-      var(--glass-base100-opacity, 0.2)
-    ) !important;
-  }
-
-  [data-theme="dark-glass"] .bg-base-200 {
-    background-color: rgba(
-      var(--glass-base200-r, 20),
-      var(--glass-base200-g, 31),
-      var(--glass-base200-b, 49),
-      var(--glass-base200-opacity, 0.2)
-    ) !important;
-  }
-
-  [data-theme="dark-glass"] .bg-base-300 {
-    background-color: rgba(
-      var(--glass-base300-r, 30),
-      var(--glass-base300-g, 41),
-      var(--glass-base300-b, 59),
-      var(--glass-base300-opacity, 0.2)
-    ) !important;
-  }
-
   /* Background Mode - Disable window dragging */
   body.background-mode [data-tauri-drag-region] {
     -webkit-app-region: no-drag !important;

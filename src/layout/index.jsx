@@ -54,13 +54,14 @@ const Layout = () => {
   return (
     <ViewportContextMenuProvider editorActions={editorActions} onAPIReady={setContextMenuAPI}>
       {/* Background Layers - render behind the main UI */}
-      <For each={Array.from(backgroundLayers().values()).sort((a, b) => a.order - b.order)}>
-        {(layer) => {
+      {/* Don't sort - use z-index for stacking instead to avoid re-renders */}
+      <For each={Array.from(backgroundLayers().entries())}>
+        {([layerId, layer]) => {
           const LayerComponent = layer.component;
           return (
             <div
               class="fixed inset-0 pointer-events-auto"
-              style={{ 'z-index': layer.zIndex || 0 }}
+              style={{ 'z-index': layer.zIndex !== undefined ? layer.zIndex : 0 }}
             >
               <LayerComponent />
             </div>

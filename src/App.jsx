@@ -16,9 +16,6 @@ export default function App() {
     const theme = editorStore.theme || 'dark';
     document.documentElement.setAttribute('data-theme', theme);
 
-    // Initialize glass theme CSS variables
-    editorActions.updateGlassThemeCSS();
-
     // Background image/video is now handled by the background plugin via api.bg
 
     // Wait for plugin API to be initialized

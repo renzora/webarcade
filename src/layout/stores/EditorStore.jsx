@@ -32,19 +32,6 @@ const [editorStore, setEditorStore] = createStore({
 
   theme: 'dark',
 
-  glassTheme: {
-    base100Opacity: 0.2,
-    base200Opacity: 0.2,
-    base300Opacity: 0.2,
-    rootOpacity: 0.9,
-    blurAmount: 10,
-    // RGB color values
-    base100Color: { r: 10, g: 20, b: 39 },
-    base200Color: { r: 20, g: 31, b: 49 },
-    base300Color: { r: 30, g: 41, b: 59 },
-    rootColor: { r: 10, g: 20, b: 39 }
-  },
-
   powerMode: {
     enabled: true,
     shake: true,
@@ -221,12 +208,6 @@ export const editorActions = {
     document.documentElement.setAttribute('data-theme', theme);
   },
 
-  updateGlassThemeSetting: (key, value) => {
-    setEditorStore('glassTheme', key, value);
-    editorActions.saveToProject();
-    editorActions.updateGlassThemeCSS();
-  },
-
   updatePowerModeSetting: (key, value) => {
     setEditorStore('powerMode', key, value);
     editorActions.saveToProject();
@@ -262,38 +243,6 @@ export const editorActions = {
         console.error('Failed to toggle background mode:', error);
       }
     }
-  },
-
-  updateGlassThemeCSS: () => {
-    const {
-      base100Opacity, base200Opacity, base300Opacity, rootOpacity, blurAmount,
-      base100Color, base200Color, base300Color, rootColor
-    } = editorStore.glassTheme;
-
-    // Update CSS custom properties
-    const root = document.documentElement;
-    root.style.setProperty('--glass-base100-opacity', base100Opacity);
-    root.style.setProperty('--glass-base200-opacity', base200Opacity);
-    root.style.setProperty('--glass-base300-opacity', base300Opacity);
-    root.style.setProperty('--glass-root-opacity', rootOpacity);
-    root.style.setProperty('--glass-blur', `${blurAmount}px`);
-
-    // Set color values
-    root.style.setProperty('--glass-base100-r', base100Color.r);
-    root.style.setProperty('--glass-base100-g', base100Color.g);
-    root.style.setProperty('--glass-base100-b', base100Color.b);
-
-    root.style.setProperty('--glass-base200-r', base200Color.r);
-    root.style.setProperty('--glass-base200-g', base200Color.g);
-    root.style.setProperty('--glass-base200-b', base200Color.b);
-
-    root.style.setProperty('--glass-base300-r', base300Color.r);
-    root.style.setProperty('--glass-base300-g', base300Color.g);
-    root.style.setProperty('--glass-base300-b', base300Color.b);
-
-    root.style.setProperty('--glass-root-r', rootColor.r);
-    root.style.setProperty('--glass-root-g', rootColor.g);
-    root.style.setProperty('--glass-root-b', rootColor.b);
   },
 
   // Save settings to project file instead of localStorage

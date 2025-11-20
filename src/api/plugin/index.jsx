@@ -1045,13 +1045,24 @@ export class PluginAPI {
     const layer = {
       id,
       component: config.component,
-      order: config.order || 100, // Lower order = further back
-      zIndex: config.zIndex || 0,
+      order: config.order !== undefined ? config.order : 100, // Lower order = further back
+      zIndex: config.zIndex !== undefined ? config.zIndex : 0,
       plugin: config.plugin || this.getCurrentPluginId() || 'unknown'
     };
 
     setBackgroundLayers(prev => new Map(prev.set(id, layer)));
     return true;
+  }
+
+  updateBackgroundLayerZIndex(id, newZIndex) {
+    setBackgroundLayers(prev => {
+      const layer = prev.get(id);
+      if (!layer) return prev;
+
+      const newMap = new Map(prev);
+      newMap.set(id, { ...layer, zIndex: newZIndex });
+      return newMap;
+    });
   }
 
   registerLayoutComponent(region, component) {
