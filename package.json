@@ -6,12 +6,15 @@
   "description": "🚀 High-speed development framework for web and desktop applications",
   "scripts": {
     "dev": "bun run kill && npx tauri dev",
-    "build": "bun run kill && node scripts/prepare-build.js && npx tauri build",
+    "build": "bun run kill && node scripts/prepare-build.js && npx tauri build && node scripts/prepare-build.js --reset",
     "build:debug": "bun run kill && npx tauri build --debug",
     "dev:verbose": "bun run kill && set RUST_LOG=debug&& npx tauri dev",
     "kill": "npx kill-port 3000 3001 || (taskkill /F /IM node.exe 2>nul || pkill -f \"rspack\\|tauri\" 2>/dev/null || echo \"Ports cleared\")",
-    "clean": "bun run kill && rm -rf dist bridge/target src-tauri/target",
-    "lint": "oxlint"
+    "clean": "bun run kill && rm -rf dist bridge/target src-tauri/target cli/target",
+    "lint": "oxlint",
+    "plugin:build": "cd cli && cargo run --release -- build",
+    "plugin:list": "cd cli && cargo run --release -- list",
+    "cli:build": "cd cli && cargo build --release"
   },
   "dependencies": {
     "@tabler/icons-solidjs": "^3.34.1",

@@ -4,8 +4,10 @@ dist
 /node_modules
 
 # Plugin source, compiled output, and build artifacts
-projects/
-plugins/
+projects/*
+!projects/.gitkeep
+plugins/*
+!plugins/.gitkeep
 build/
 
 # Database and data files

@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 /**
- * Pre-build script that dynamically configures Tauri resources
+ * Pre/post build script that dynamically configures Tauri resources
  * based on which plugins exist in the plugins/ directory.
  *
- * Run before `tauri build` to bundle existing plugins.
+ * Usage:
+ *   node prepare-build.js          - Add plugins to resources (before build)
+ *   node prepare-build.js --reset  - Reset resources to empty (after build)
  */
 
 const fs = require('fs');
@@ -23,17 +25,23 @@ function getExistingPlugins() {
     .map(dirent => dirent.name);
 }
 
-function updateTauriConfig() {
-  const plugins = getExistingPlugins();
-  console.log(`[prepare-build] Found ${plugins.length} plugins:`, plugins);
-
+function updateTauriConfig(reset = false) {
   // Read current config
   const config = JSON.parse(fs.readFileSync(TAURI_CONFIG_PATH, 'utf-8'));
 
+  if (reset) {
+    // Reset to empty resources for dev mode
+    config.bundle.resources = {};
+    fs.writeFileSync(TAURI_CONFIG_PATH, JSON.stringify(config, null, 2));
+    console.log('[prepare-build] Reset tauri.conf.json resources to empty');
+    return;
+  }
+
+  const plugins = getExistingPlugins();
+  console.log(`[prepare-build] Found ${plugins.length} plugins:`, plugins);
+
   // Build resources object
-  const resources = {
-    'scripts/build_plugin.js': 'scripts/'
-  };
+  const resources = {};
 
   // Add each plugin directory
   for (const plugin of plugins) {
@@ -49,10 +57,17 @@ function updateTauriConfig() {
 }
 
 function main() {
-  console.log('[prepare-build] Preparing build...');
+  const args = process.argv.slice(2);
+  const reset = args.includes('--reset');
+
+  if (reset) {
+    console.log('[prepare-build] Resetting config...');
+  } else {
+    console.log('[prepare-build] Preparing build...');
+  }
 
   try {
-    updateTauriConfig();
+    updateTauriConfig(reset);
     console.log('[prepare-build] Done!');
   } catch (error) {
     console.error('[prepare-build] Error:', error.message);
