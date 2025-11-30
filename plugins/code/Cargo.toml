@@ -1,0 +1,23 @@
+[package]
+name = "code"
+version = "1.0.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+rfd = "0.15"
+
+[routes]
+"POST /files/list" = "handle_list_files"
+"POST /files/read" = "handle_read_file"
+"POST /files/write" = "handle_write_file"
+"POST /files/pick-folder" = "handle_pick_folder"
+"POST /files/create" = "handle_create_file"
+"POST /files/delete" = "handle_delete_file"
+"POST /files/rename" = "handle_rename_file"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
