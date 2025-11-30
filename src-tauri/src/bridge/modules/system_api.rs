@@ -2,13 +2,14 @@ use hyper::{Response, StatusCode};
 use http_body_util::{Full, combinators::BoxBody};
 use hyper::body::Bytes;
 use std::convert::Infallible;
-use std::fs;
 use std::path::PathBuf;
 
+use crate::bridge::core::dynamic_plugin_loader::DynamicPluginLoader;
+
 /// Get the plugins directory based on environment
-/// - Development: {repo_root}/plugins (detected by checking if exe is in target/debug or target/release)
+/// - Development: {repo_root}/plugins (detected by checking if exe is in target/debug)
 /// - Production: {exe_dir}/plugins (next to the executable)
-fn get_plugins_dir() -> PathBuf {
+pub fn get_plugins_dir() -> PathBuf {
     let exe_path = std::env::current_exe().ok();
     let exe_dir = exe_path.as_ref()
         .and_then(|p| p.parent().map(|p| p.to_path_buf()));
@@ -67,73 +68,26 @@ fn get_plugins_dir() -> PathBuf {
 }
 
 /// Handle /api/plugins/list - list runtime plugins
+/// Now reads plugin info from the global loaded plugins state
 pub fn handle_list_plugins() -> Response<BoxBody<Bytes, Infallible>> {
-    let plugins_dir = get_plugins_dir();
-
-    if !plugins_dir.exists() {
-        let json = serde_json::json!({
-            "plugins": []
-        }).to_string();
-
-        return Response::builder()
-            .status(StatusCode::OK)
-            .header("Content-Type", "application/json")
-            .header("Access-Control-Allow-Origin", "*")
-            .body(full_body(&json))
-            .unwrap();
-    }
+    // Get the loaded plugins from the global state
+    let loaded_plugins = crate::bridge::LOADED_PLUGINS.lock().unwrap();
 
     let mut plugins = Vec::new();
 
-    if let Ok(entries) = fs::read_dir(&plugins_dir) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if path.is_dir() {
-                    let package_path = path.join("package.json");
-                    if let Ok(package_content) = fs::read_to_string(&package_path) {
-                        if let Ok(package_json) = serde_json::from_str::<serde_json::Value>(&package_content) {
-                            // Extract webarcade section and create plugin metadata
-                            if let Some(webarcade) = package_json.get("webarcade") {
-                                let plugin_id = webarcade.get("id")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("");
+    for plugin_info in loaded_plugins.iter() {
+        let plugin_metadata = serde_json::json!({
+            "id": plugin_info.id,
+            "name": plugin_info.id, // Could be enhanced to read from manifest
+            "version": "1.0.0",
+            "description": "",
+            "author": "Unknown",
+            "routes": plugin_info.routes,
+            "has_plugin_js": plugin_info.has_frontend,
+            "has_dll": plugin_info.has_backend
+        });
 
-                                // Check if plugin.js exists (frontend plugin)
-                                let has_plugin_js = path.join("plugin.js").exists();
-
-                                // Check if any native library exists (backend plugin)
-                                // Windows: .dll, Linux: .so, macOS: .dylib
-                                let has_dll = fs::read_dir(&path)
-                                    .map(|entries| {
-                                        entries.filter_map(|e| e.ok())
-                                            .any(|e| {
-                                                e.path().extension()
-                                                    .map(|ext| ext == "dll" || ext == "so" || ext == "dylib")
-                                                    .unwrap_or(false)
-                                            })
-                                    })
-                                    .unwrap_or(false);
-
-                                // Create plugin metadata from package.json
-                                let plugin_metadata = serde_json::json!({
-                                    "id": plugin_id,
-                                    "name": package_json.get("name").and_then(|v| v.as_str()).unwrap_or(plugin_id),
-                                    "version": package_json.get("version").and_then(|v| v.as_str()).unwrap_or("1.0.0"),
-                                    "description": package_json.get("description").and_then(|v| v.as_str()).unwrap_or(""),
-                                    "author": package_json.get("author").and_then(|v| v.as_str()).unwrap_or("Unknown"),
-                                    "routes": webarcade.get("routes").cloned().unwrap_or(serde_json::json!([])),
-                                    "has_plugin_js": has_plugin_js,
-                                    "has_dll": has_dll
-                                });
-
-                                plugins.push(plugin_metadata);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        plugins.push(plugin_metadata);
     }
 
     let json = serde_json::json!({
@@ -149,42 +103,28 @@ pub fn handle_list_plugins() -> Response<BoxBody<Bytes, Infallible>> {
 }
 
 /// Handle /api/plugins/{plugin_id}/{file} - serve plugin files
+/// For plugin.js, retrieves from the embedded DLL content
 pub fn handle_serve_plugin_file(plugin_id: &str, file_path: &str) -> Response<BoxBody<Bytes, Infallible>> {
-    let plugins_dir = get_plugins_dir();
-
-    let plugin_dir = plugins_dir.join(plugin_id);
-    let file = plugin_dir.join(file_path);
-
-    // Security: Ensure the file is within the plugin directory
-    if !file.starts_with(&plugin_dir) {
-        return error_response(StatusCode::FORBIDDEN, "Access denied");
-    }
-
-    if !file.exists() {
-        return error_response(StatusCode::NOT_FOUND, "File not found");
-    }
-
-    match fs::read(&file) {
-        Ok(content) => {
-            let content_type = if file_path.ends_with(".js") {
-                "application/javascript"
-            } else if file_path.ends_with(".json") {
-                "application/json"
-            } else if file_path.ends_with(".css") {
-                "text/css"
-            } else {
-                "application/octet-stream"
-            };
-
-            Response::builder()
-                .status(StatusCode::OK)
-                .header("Content-Type", content_type)
-                .header("Access-Control-Allow-Origin", "*")
-                .body(BoxBody::new(Full::new(Bytes::from(content))))
-                .unwrap()
+    // For plugin.js, serve from the embedded DLL
+    if file_path == "plugin.js" {
+        match DynamicPluginLoader::get_frontend_js(plugin_id) {
+            Ok(js_content) => {
+                return Response::builder()
+                    .status(StatusCode::OK)
+                    .header("Content-Type", "application/javascript")
+                    .header("Access-Control-Allow-Origin", "*")
+                    .body(BoxBody::new(Full::new(Bytes::from(js_content))))
+                    .unwrap();
+            }
+            Err(e) => {
+                log::warn!("Failed to get frontend for plugin {}: {}", plugin_id, e);
+                return error_response(StatusCode::NOT_FOUND, "Plugin frontend not found");
+            }
         }
-        Err(_) => error_response(StatusCode::INTERNAL_SERVER_ERROR, "Failed to read file")
     }
+
+    // For other files, return not found (plugins are now self-contained in DLLs)
+    error_response(StatusCode::NOT_FOUND, "File not found - plugins are now self-contained in DLLs")
 }
 
 fn full_body(s: &str) -> BoxBody<Bytes, Infallible> {

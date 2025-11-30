@@ -2,10 +2,14 @@
 //!
 //! A standalone CLI tool for building WebArcade plugins from source.
 //!
+//! Plugins are stored as source directories in plugins/ and compiled to single .dll files.
+//! The .dll contains everything: compiled Rust, bundled frontend JS, and manifest.
+//!
 //! Usage:
+//!   webarcade new <plugin-id>       Create a new plugin project
 //!   webarcade build <plugin-id>     Build a specific plugin
 //!   webarcade build --all           Build all plugins
-//!   webarcade list                  List available plugins in projects/
+//!   webarcade list                  List available plugins
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -25,6 +29,23 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Create a new plugin project
+    New {
+        /// Plugin ID (e.g., my-plugin)
+        plugin_id: String,
+
+        /// Plugin display name
+        #[arg(short, long)]
+        name: Option<String>,
+
+        /// Plugin author
+        #[arg(short, long)]
+        author: Option<String>,
+
+        /// Create frontend-only plugin (no Rust backend)
+        #[arg(long)]
+        frontend_only: bool,
+    },
     /// Build a plugin from source
     Build {
         /// Plugin ID to build (or --all to build all)
@@ -42,6 +63,12 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::New { plugin_id, name, author, frontend_only } => {
+            if let Err(e) = create_plugin(&plugin_id, name, author, frontend_only) {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
         Commands::Build { plugin_id, all } => {
             if all {
                 if let Err(e) = build_all_plugins() {
@@ -67,20 +94,19 @@ fn main() {
     }
 }
 
-/// Get the repo root directory (where cli, projects, plugins folders are)
+/// Get the repo root directory (where cli, plugins folders are)
 fn get_repo_root() -> Result<PathBuf> {
-    // Try to find repo root by looking for projects/ directory
     let mut current = std::env::current_dir()?;
 
     // Check if we're already at repo root
-    if current.join("projects").exists() && current.join("plugins").exists() {
+    if current.join("plugins").exists() && current.join("src-tauri").exists() {
         return Ok(current);
     }
 
     // Check if we're in cli/ directory
     if current.ends_with("cli") {
         if let Some(parent) = current.parent() {
-            if parent.join("projects").exists() {
+            if parent.join("plugins").exists() {
                 return Ok(parent.to_path_buf());
             }
         }
@@ -88,7 +114,7 @@ fn get_repo_root() -> Result<PathBuf> {
 
     // Walk up the directory tree
     loop {
-        if current.join("projects").exists() && current.join("plugins").exists() {
+        if current.join("plugins").exists() && current.join("src-tauri").exists() {
             return Ok(current);
         }
         if !current.pop() {
@@ -96,11 +122,7 @@ fn get_repo_root() -> Result<PathBuf> {
         }
     }
 
-    anyhow::bail!("Could not find repo root (looking for projects/ and plugins/ directories)")
-}
-
-fn get_projects_dir() -> Result<PathBuf> {
-    Ok(get_repo_root()?.join("projects"))
+    anyhow::bail!("Could not find repo root (looking for plugins/ directory)")
 }
 
 fn get_plugins_dir() -> Result<PathBuf> {
@@ -111,25 +133,247 @@ fn get_build_dir() -> Result<PathBuf> {
     Ok(get_repo_root()?.join("build"))
 }
 
-fn list_plugins() -> Result<()> {
-    let projects_dir = get_projects_dir()?;
+fn create_plugin(plugin_id: &str, name: Option<String>, author: Option<String>, frontend_only: bool) -> Result<()> {
+    let plugins_dir = get_plugins_dir()?;
+    let plugin_dir = plugins_dir.join(plugin_id);
 
-    if !projects_dir.exists() {
-        println!("No projects directory found at: {}", projects_dir.display());
+    // Validate plugin ID
+    if !plugin_id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+        anyhow::bail!("Plugin ID must only contain alphanumeric characters, hyphens, and underscores");
+    }
+
+    if plugin_dir.exists() {
+        anyhow::bail!("Plugin '{}' already exists at {}", plugin_id, plugin_dir.display());
+    }
+
+    // Create plugin directory
+    fs::create_dir_all(&plugin_dir)?;
+
+    let display_name = name.unwrap_or_else(|| {
+        // Convert plugin-id to "Plugin Id"
+        plugin_id
+            .split(|c| c == '-' || c == '_')
+            .map(|s| {
+                let mut chars = s.chars();
+                match chars.next() {
+                    Some(c) => c.to_uppercase().chain(chars).collect(),
+                    None => String::new(),
+                }
+            })
+            .collect::<Vec<String>>()
+            .join(" ")
+    });
+
+    let author_name = author.unwrap_or_else(|| "WebArcade".to_string());
+
+    // Generate struct name from plugin_id (my-plugin -> MyPlugin)
+    let struct_name = plugin_id
+        .split(|c| c == '-' || c == '_')
+        .map(|s| {
+            let mut chars = s.chars();
+            match chars.next() {
+                Some(c) => c.to_uppercase().chain(chars).collect(),
+                None => String::new(),
+            }
+        })
+        .collect::<String>() + "Plugin";
+
+    println!("Creating plugin: {}", plugin_id);
+    println!("  Location: {}", plugin_dir.display());
+    println!("  Name: {}", display_name);
+    println!("  Author: {}", author_name);
+    println!("  Type: {}", if frontend_only { "frontend-only" } else { "full-stack" });
+    println!();
+
+    // Create index.jsx (always required)
+    let index_jsx = if frontend_only {
+        format!(r#"import {{ createPlugin }} from '@/api/plugin';
+
+export default createPlugin({{
+    id: '{plugin_id}',
+    name: '{display_name}',
+    version: '1.0.0',
+    description: '{display_name} plugin',
+    author: '{author_name}',
+
+    async onStart(api) {{
+        console.log('[{display_name}] Started');
+
+        // Register a simple viewport
+        api.viewport('{plugin_id}-viewport', {{
+            label: '{display_name}',
+            component: () => (
+                <div class="p-4">
+                    <h1 class="text-xl font-bold">{display_name}</h1>
+                    <p class="text-base-content/70">Your plugin is ready!</p>
+                </div>
+            )
+        }});
+
+        // Add menu item to open the viewport
+        api.menu('{plugin_id}-menu', {{
+            label: '{display_name}',
+            onClick: () => api.open('{plugin_id}-viewport')
+        }});
+    }},
+
+    async onStop() {{
+        console.log('[{display_name}] Stopped');
+    }}
+}});
+"#)
+    } else {
+        format!(r#"import {{ createPlugin }} from '@/api/plugin';
+import Viewport from './viewport';
+
+export default createPlugin({{
+    id: '{plugin_id}',
+    name: '{display_name}',
+    version: '1.0.0',
+    description: '{display_name} plugin',
+    author: '{author_name}',
+
+    async onStart(api) {{
+        console.log('[{display_name}] Started');
+
+        // Register viewport
+        api.viewport('{plugin_id}-viewport', {{
+            label: '{display_name}',
+            component: Viewport
+        }});
+
+        // Add menu item
+        api.menu('{plugin_id}-menu', {{
+            label: '{display_name}',
+            onClick: () => api.open('{plugin_id}-viewport')
+        }});
+    }},
+
+    async onStop() {{
+        console.log('[{display_name}] Stopped');
+    }}
+}});
+"#)
+    };
+    fs::write(plugin_dir.join("index.jsx"), index_jsx)?;
+    println!("  Created index.jsx");
+
+    if !frontend_only {
+        // Create viewport.jsx
+        let viewport_jsx = format!(r#"import {{ createSignal, onMount }} from 'solid-js';
+import {{ api }} from '@/api/bridge';
+
+export default function Viewport() {{
+    const [message, setMessage] = createSignal('Loading...');
+
+    onMount(async () => {{
+        try {{
+            const response = await api('{plugin_id}/hello');
+            const data = await response.json();
+            setMessage(data.message);
+        }} catch (error) {{
+            setMessage('Error: ' + error.message);
+        }}
+    }});
+
+    return (
+        <div class="p-4">
+            <h1 class="text-xl font-bold mb-4">{display_name}</h1>
+            <p class="text-base-content/70">{{message()}}</p>
+        </div>
+    );
+}}
+"#);
+        fs::write(plugin_dir.join("viewport.jsx"), viewport_jsx)?;
+        println!("  Created viewport.jsx");
+
+        // Create Cargo.toml
+        let cargo_toml = format!(r#"[package]
+name = "{plugin_id}"
+version = "1.0.0"
+edition = "2021"
+
+[routes]
+"GET /hello" = "handle_hello"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+"#);
+        fs::write(plugin_dir.join("Cargo.toml"), cargo_toml)?;
+        println!("  Created Cargo.toml");
+
+        // Create mod.rs
+        let mod_rs = format!(r#"pub mod router;
+
+use api::{{Plugin, PluginMetadata}};
+
+pub struct {struct_name};
+
+impl Plugin for {struct_name} {{
+    fn metadata(&self) -> PluginMetadata {{
+        PluginMetadata {{
+            id: "{plugin_id}".into(),
+            name: "{display_name}".into(),
+            version: "1.0.0".into(),
+            description: "{display_name} plugin".into(),
+            author: "{author_name}".into(),
+            dependencies: vec![],
+        }}
+    }}
+}}
+"#);
+        fs::write(plugin_dir.join("mod.rs"), mod_rs)?;
+        println!("  Created mod.rs");
+
+        // Create router.rs
+        let router_rs = format!(r#"use api::{{HttpRequest, HttpResponse, json, json_response}};
+
+pub async fn handle_hello(_req: HttpRequest) -> HttpResponse {{
+    json_response(&json!({{
+        "message": "Hello from {display_name}!"
+    }}))
+}}
+"#);
+        fs::write(plugin_dir.join("router.rs"), router_rs)?;
+        println!("  Created router.rs");
+    }
+
+    println!();
+    println!("Plugin created successfully!");
+    println!();
+    println!("Next steps:");
+    println!("  1. Edit the plugin files in: {}", plugin_dir.display());
+    println!("  2. Build with: bun run plugin:build {}", plugin_id);
+    println!("  3. Run the app: bun run dev");
+
+    Ok(())
+}
+
+fn list_plugins() -> Result<()> {
+    let plugins_dir = get_plugins_dir()?;
+
+    if !plugins_dir.exists() {
+        println!("No plugins directory found at: {}", plugins_dir.display());
         return Ok(());
     }
 
-    println!("Available plugins in {}:", projects_dir.display());
+    println!("Plugins in {}:", plugins_dir.display());
     println!();
 
-    let mut found = false;
-    for entry in fs::read_dir(&projects_dir)? {
+    let mut sources = Vec::new();
+    let mut compiled = Vec::new();
+
+    for entry in fs::read_dir(&plugins_dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_dir() {
-            let name = entry.file_name();
-            let name_str = name.to_string_lossy();
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
 
+        if path.is_dir() {
+            // Source directory
             let has_backend = path.join("mod.rs").exists() || path.join("Cargo.toml").exists();
             let has_frontend = path.join("index.jsx").exists() || path.join("index.js").exists();
 
@@ -140,12 +384,34 @@ fn list_plugins() -> Result<()> {
                 (false, false) => "empty",
             };
 
-            println!("  {} ({})", name_str, type_str);
-            found = true;
+            sources.push((name_str.to_string(), type_str));
+        } else if path.extension().map(|e| e == "dll" || e == "so" || e == "dylib").unwrap_or(false) {
+            // Compiled plugin
+            let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+            // Remove "lib" prefix on Linux/macOS
+            let plugin_name = stem.strip_prefix("lib").unwrap_or(&stem).to_string();
+            compiled.push(plugin_name);
         }
     }
 
-    if !found {
+    if !sources.is_empty() {
+        println!("  Source (directories):");
+        for (name, type_str) in &sources {
+            let is_built = compiled.iter().any(|c| c == name);
+            let status = if is_built { "built" } else { "not built" };
+            println!("    {} ({}, {})", name, type_str, status);
+        }
+    }
+
+    if !compiled.is_empty() {
+        println!();
+        println!("  Compiled (.dll files):");
+        for name in &compiled {
+            println!("    {}", name);
+        }
+    }
+
+    if sources.is_empty() && compiled.is_empty() {
         println!("  (no plugins found)");
     }
 
@@ -153,23 +419,24 @@ fn list_plugins() -> Result<()> {
 }
 
 fn build_all_plugins() -> Result<()> {
-    let projects_dir = get_projects_dir()?;
+    let plugins_dir = get_plugins_dir()?;
 
-    if !projects_dir.exists() {
-        anyhow::bail!("Projects directory not found: {}", projects_dir.display());
+    if !plugins_dir.exists() {
+        anyhow::bail!("Plugins directory not found: {}", plugins_dir.display());
     }
 
     let mut plugins = Vec::new();
-    for entry in fs::read_dir(&projects_dir)? {
+    for entry in fs::read_dir(&plugins_dir)? {
         let entry = entry?;
         let path = entry.path();
+        // Only build source directories, not .dll files
         if path.is_dir() {
             plugins.push(entry.file_name().to_string_lossy().to_string());
         }
     }
 
     if plugins.is_empty() {
-        println!("No plugins found in {}", projects_dir.display());
+        println!("No plugin source directories found in {}", plugins_dir.display());
         return Ok(());
     }
 
@@ -214,37 +481,39 @@ struct PluginBuilder {
     plugin_id: String,
     plugin_dir: PathBuf,
     build_dir: PathBuf,
-    output_dir: PathBuf,
+    plugins_dir: PathBuf,
     repo_root: PathBuf,
 }
 
 impl PluginBuilder {
     fn new(plugin_id: &str) -> Result<Self> {
         let repo_root = get_repo_root()?;
-        let plugin_dir = get_projects_dir()?.join(plugin_id);
+        let plugins_dir = get_plugins_dir()?;
+        let plugin_dir = plugins_dir.join(plugin_id);
 
         if !plugin_dir.exists() {
-            anyhow::bail!("Plugin not found: {}", plugin_dir.display());
+            anyhow::bail!("Plugin source not found: {}", plugin_dir.display());
+        }
+
+        if !plugin_dir.is_dir() {
+            anyhow::bail!("Plugin source must be a directory: {}", plugin_dir.display());
         }
 
         let build_dir = get_build_dir()?.join(plugin_id);
-        let output_dir = get_plugins_dir()?.join(plugin_id);
-
         fs::create_dir_all(&build_dir)?;
-        fs::create_dir_all(&output_dir)?;
 
         Ok(Self {
             plugin_id: plugin_id.to_string(),
             plugin_dir,
             build_dir,
-            output_dir,
+            plugins_dir,
             repo_root,
         })
     }
 
     fn build(&self) -> Result<()> {
         let has_backend = self.plugin_dir.join("mod.rs").exists()
-            || self.plugin_dir.join("Cargo.toml").exists();
+            && self.plugin_dir.join("Cargo.toml").exists();
         let has_frontend = self.plugin_dir.join("index.jsx").exists()
             || self.plugin_dir.join("index.js").exists();
 
@@ -257,30 +526,191 @@ impl PluginBuilder {
         }
         fs::create_dir_all(&self.build_dir)?;
 
-        // Build backend
-        if has_backend {
-            println!("  Setting up Rust backend...");
-            self.setup_backend_build()?;
-
-            println!("  Compiling Rust backend...");
-            self.compile_backend()?;
-        }
-
-        // Build frontend
+        // Build frontend first (we need plugin.js to embed)
+        let mut frontend_js = String::new();
         if has_frontend {
             println!("  Bundling frontend...");
             self.bundle_frontend()?;
+
+            // Read the bundled plugin.js
+            let plugin_js_path = self.build_dir.join("plugin.js");
+            if plugin_js_path.exists() {
+                frontend_js = fs::read_to_string(&plugin_js_path)?;
+            }
         }
 
-        // Install to plugins directory
-        println!("  Installing to plugins/{}...", self.plugin_id);
-        self.install_plugin()?;
+        // Create package.json / manifest
+        let manifest = self.create_manifest()?;
+
+        // Build DLL (either with backend handlers or frontend-only)
+        if has_backend {
+            println!("  Setting up Rust backend...");
+            self.setup_backend_build(&frontend_js, &manifest)?;
+        } else {
+            println!("  Setting up frontend-only DLL...");
+            self.setup_frontend_only_build(&frontend_js, &manifest)?;
+        }
+
+        println!("  Compiling DLL...");
+        self.compile_backend()?;
+
+        // Copy final DLL to plugin directory
+        println!("  Installing {}.dll to plugins/{}...", self.plugin_id, self.plugin_id);
+        self.install_dll()?;
+
+        // Clean up build directory
+        println!("  Cleaning up build artifacts...");
+        self.cleanup_build_dir()?;
 
         println!("  Done!");
         Ok(())
     }
 
-    fn setup_backend_build(&self) -> Result<()> {
+    /// Clean up the build directory after successful build
+    fn cleanup_build_dir(&self) -> Result<()> {
+        if self.build_dir.exists() {
+            fs::remove_dir_all(&self.build_dir)?;
+        }
+
+        // Also remove the parent build/ directory if it's empty
+        if let Some(parent) = self.build_dir.parent() {
+            if parent.exists() {
+                if let Ok(entries) = fs::read_dir(parent) {
+                    if entries.count() == 0 {
+                        let _ = fs::remove_dir(parent);
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Setup a frontend-only DLL build (no route handlers, just embedded assets)
+    fn setup_frontend_only_build(&self, frontend_js: &str, manifest: &str) -> Result<()> {
+        let rust_build_dir = self.build_dir.join("rust_build");
+        fs::create_dir_all(&rust_build_dir)?;
+
+        // Find API crate for dependencies
+        let api_path = self.repo_root.join("src-tauri").join("api");
+        if !api_path.join("Cargo.toml").exists() {
+            anyhow::bail!("API crate not found at: {}", api_path.display());
+        }
+
+        let api_path_str = api_path.to_string_lossy().replace("\\", "/");
+
+        // Create minimal Cargo.toml
+        let cargo_toml = format!(
+            r#"[package]
+name = "{}"
+version = "1.0.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+path = "lib.rs"
+
+[dependencies]
+api = {{ path = "{}" }}
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+"#,
+            self.plugin_id, api_path_str
+        );
+
+        fs::write(rust_build_dir.join("Cargo.toml"), cargo_toml)?;
+
+        // Create .cargo/config.toml for linker settings
+        let cargo_config_dir = rust_build_dir.join(".cargo");
+        fs::create_dir_all(&cargo_config_dir)?;
+        let cargo_config = r#"[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "link-args=/FORCE:UNRESOLVED"]
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-args=-Wl,--allow-shlib-undefined"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "link-args=-undefined dynamic_lookup"]
+
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "link-args=-undefined dynamic_lookup"]
+"#;
+        fs::write(cargo_config_dir.join("config.toml"), cargo_config)?;
+
+        // Generate minimal lib.rs with only embedded assets (no handlers)
+        self.create_frontend_only_lib_rs(&rust_build_dir, frontend_js, manifest)?;
+
+        Ok(())
+    }
+
+    /// Create lib.rs for frontend-only plugins (no route handlers)
+    fn create_frontend_only_lib_rs(&self, rust_build_dir: &Path, frontend_js: &str, manifest: &str) -> Result<()> {
+        // Escape the embedded strings for Rust
+        let escaped_frontend = frontend_js.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "");
+        let escaped_manifest = manifest.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "");
+
+        let lib_content = format!(r#"// Auto-generated frontend-only plugin library
+// This plugin has no backend handlers, only embedded frontend assets
+
+/// Embedded frontend JavaScript (plugin.js)
+const EMBEDDED_FRONTEND: &str = "{escaped_frontend}";
+
+/// Embedded manifest (package.json)
+const EMBEDDED_MANIFEST: &str = "{escaped_manifest}";
+
+#[no_mangle]
+pub extern "C" fn plugin_init(_ffi_ctx: *const ()) -> i32 {{ 0 }}
+
+#[no_mangle]
+pub extern "C" fn plugin_start(_ffi_ctx: *const ()) -> i32 {{ 0 }}
+
+#[no_mangle]
+pub extern "C" fn plugin_stop() -> i32 {{ 0 }}
+
+/// Returns the embedded manifest (package.json) as a null-terminated string
+#[no_mangle]
+pub extern "C" fn get_plugin_manifest() -> *const u8 {{
+    let manifest = EMBEDDED_MANIFEST.to_string();
+    let leaked = Box::leak(Box::new(manifest));
+    leaked.as_ptr()
+}}
+
+/// Returns the length of the embedded manifest
+#[no_mangle]
+pub extern "C" fn get_plugin_manifest_len() -> usize {{
+    EMBEDDED_MANIFEST.len()
+}}
+
+/// Returns the embedded frontend (plugin.js) as a null-terminated string
+#[no_mangle]
+pub extern "C" fn get_plugin_frontend() -> *const u8 {{
+    let frontend = EMBEDDED_FRONTEND.to_string();
+    let leaked = Box::leak(Box::new(frontend));
+    leaked.as_ptr()
+}}
+
+/// Returns the length of the embedded frontend
+#[no_mangle]
+pub extern "C" fn get_plugin_frontend_len() -> usize {{
+    EMBEDDED_FRONTEND.len()
+}}
+
+/// Returns whether this plugin has a frontend
+#[no_mangle]
+pub extern "C" fn has_frontend() -> bool {{
+    !EMBEDDED_FRONTEND.is_empty()
+}}
+"#);
+
+        fs::write(rust_build_dir.join("lib.rs"), lib_content)?;
+        Ok(())
+    }
+
+    fn setup_backend_build(&self, frontend_js: &str, manifest: &str) -> Result<()> {
         let rust_build_dir = self.build_dir.join("rust_build");
         fs::create_dir_all(&rust_build_dir)?;
 
@@ -370,8 +800,8 @@ rustflags = ["-C", "link-args=-undefined dynamic_lookup"]
 "#;
         fs::write(cargo_config_dir.join("config.toml"), cargo_config)?;
 
-        // Generate lib.rs
-        self.create_lib_rs(&rust_build_dir)?;
+        // Generate lib.rs with embedded assets
+        self.create_lib_rs(&rust_build_dir, frontend_js, manifest)?;
 
         Ok(())
     }
@@ -414,9 +844,13 @@ rustflags = ["-C", "link-args=-undefined dynamic_lookup"]
         Ok(())
     }
 
-    fn create_lib_rs(&self, rust_build_dir: &Path) -> Result<()> {
+    fn create_lib_rs(&self, rust_build_dir: &Path, frontend_js: &str, manifest: &str) -> Result<()> {
         let handlers = self.extract_handlers()?;
         let plugin_struct = self.get_plugin_struct_name();
+
+        // Escape the embedded strings for Rust
+        let escaped_frontend = frontend_js.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "");
+        let escaped_manifest = manifest.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "");
 
         let handler_wrappers = handlers.iter().map(|(handler_name, takes_request)| {
             let handler_call = if *takes_request {
@@ -513,6 +947,12 @@ pub mod plugin_mod;
 pub use plugin_mod::*;
 pub use api::ffi_http::free_string;
 
+/// Embedded frontend JavaScript (plugin.js)
+const EMBEDDED_FRONTEND: &str = "{escaped_frontend}";
+
+/// Embedded manifest (package.json)
+const EMBEDDED_MANIFEST: &str = "{escaped_manifest}";
+
 #[no_mangle]
 pub extern "C" fn plugin_init(_ffi_ctx: *const ()) -> i32 {{ 0 }}
 
@@ -525,14 +965,48 @@ pub extern "C" fn plugin_stop() -> i32 {{ 0 }}
 #[no_mangle]
 pub extern "C" fn plugin_metadata() -> *const u8 {{
     use api::{{Plugin, serde_json}};
-    let plugin = plugin_mod::{};
+    let plugin = plugin_mod::{plugin_struct};
     let metadata = plugin.metadata();
     let json = serde_json::to_string(&metadata).unwrap_or_default();
     Box::leak(Box::new(json)).as_ptr() as *const u8
 }}
 
-{}
-"#, plugin_struct, handler_wrappers);
+/// Returns the embedded manifest (package.json) as a null-terminated string
+#[no_mangle]
+pub extern "C" fn get_plugin_manifest() -> *const u8 {{
+    let manifest = EMBEDDED_MANIFEST.to_string();
+    let leaked = Box::leak(Box::new(manifest));
+    leaked.as_ptr()
+}}
+
+/// Returns the length of the embedded manifest
+#[no_mangle]
+pub extern "C" fn get_plugin_manifest_len() -> usize {{
+    EMBEDDED_MANIFEST.len()
+}}
+
+/// Returns the embedded frontend (plugin.js) as a null-terminated string
+#[no_mangle]
+pub extern "C" fn get_plugin_frontend() -> *const u8 {{
+    let frontend = EMBEDDED_FRONTEND.to_string();
+    let leaked = Box::leak(Box::new(frontend));
+    leaked.as_ptr()
+}}
+
+/// Returns the length of the embedded frontend
+#[no_mangle]
+pub extern "C" fn get_plugin_frontend_len() -> usize {{
+    EMBEDDED_FRONTEND.len()
+}}
+
+/// Returns whether this plugin has a frontend
+#[no_mangle]
+pub extern "C" fn has_frontend() -> bool {{
+    !EMBEDDED_FRONTEND.is_empty()
+}}
+
+{handler_wrappers}
+"#);
 
         fs::write(rust_build_dir.join("lib.rs"), lib_content)?;
         Ok(())
@@ -718,32 +1192,29 @@ pub extern "C" fn plugin_metadata() -> *const u8 {{
         Ok(())
     }
 
-    fn install_plugin(&self) -> Result<()> {
-        // Clean output directory
-        if self.output_dir.exists() {
-            fs::remove_dir_all(&self.output_dir)?;
-        }
-        fs::create_dir_all(&self.output_dir)?;
+    fn install_dll(&self) -> Result<()> {
+        // Find the compiled DLL in build directory
+        let lib_name = if cfg!(target_os = "windows") {
+            format!("{}.dll", self.plugin_id)
+        } else if cfg!(target_os = "macos") {
+            format!("lib{}.dylib", self.plugin_id)
+        } else {
+            format!("lib{}.so", self.plugin_id)
+        };
 
-        // Copy all files from build_dir to output_dir
-        for entry in fs::read_dir(&self.build_dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_file() {
-                let file_name = entry.file_name();
-                let dest_path = self.output_dir.join(&file_name);
-                fs::copy(&path, &dest_path)?;
-            }
+        let src_path = self.build_dir.join(&lib_name);
+        if !src_path.exists() {
+            anyhow::bail!("Compiled library not found: {}", src_path.display());
         }
 
-        // Create package.json with route info
-        let package_json = self.create_package_json()?;
-        fs::write(self.output_dir.join("package.json"), package_json)?;
+        // Copy to plugin source directory (plugins/plugin-id/plugin-id.dll)
+        let dest_path = self.plugin_dir.join(&lib_name);
+        fs::copy(&src_path, &dest_path)?;
 
         Ok(())
     }
 
-    fn create_package_json(&self) -> Result<String> {
+    fn create_manifest(&self) -> Result<String> {
         let package_json_path = self.plugin_dir.join("package.json");
 
         let mut package_json = if package_json_path.exists() {

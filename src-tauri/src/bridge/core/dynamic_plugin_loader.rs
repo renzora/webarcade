@@ -1,6 +1,7 @@
 use libloading::Library;
 use std::path::{Path, PathBuf};
 use std::fs;
+use std::sync::Arc;
 use anyhow::{Result, anyhow};
 
 pub struct DynamicPluginLoader {
@@ -13,8 +14,12 @@ impl DynamicPluginLoader {
     }
 
     /// Discover and load all plugins from the plugins directory
+    ///
+    /// Supports two layouts:
+    /// - Development: plugins/{plugin-name}/{plugin-name}.dll (DLL inside source directory)
+    /// - Production: plugins/{plugin-name}.dll (DLL directly in plugins folder)
     pub fn load_all_plugins(&mut self) -> Result<Vec<PluginInfo>> {
-        log::info!("🔍 Scanning for dynamic plugins in: {:?}", self.plugins_dir);
+        log::info!("🔍 Scanning for plugins in: {:?}", self.plugins_dir);
 
         if !self.plugins_dir.exists() {
             fs::create_dir_all(&self.plugins_dir)?;
@@ -29,79 +34,178 @@ impl DynamicPluginLoader {
             let path = entry.path();
 
             if path.is_dir() {
-                match self.load_plugin_from_dir(&path) {
-                    Ok(plugin_info) => {
-                        plugins.push(plugin_info);
+                // Development mode: DLL inside plugin source directory
+                let dir_name = entry.file_name().to_string_lossy().to_string();
+
+                if let Some(dll_path) = self.find_dll_in_dir(&path, &dir_name) {
+                    match self.load_plugin_from_dll(&dll_path) {
+                        Ok(plugin_info) => {
+                            plugins.push(plugin_info);
+                        }
+                        Err(e) => {
+                            log::warn!("⚠️  Failed to load plugin from {:?}: {}", dll_path, e);
+                        }
                     }
-                    Err(e) => {
-                        log::warn!("⚠️  Failed to load plugin from {:?}: {}", path, e);
+                } else {
+                    // No DLL found - plugin needs to be built
+                    log::info!("⚠️  No DLL found for plugin '{}' - run 'bun run plugin:build {}'", dir_name, dir_name);
+                }
+            } else if path.is_file() {
+                // Production mode: DLL directly in plugins folder
+                if let Some(ext) = path.extension() {
+                    if ext == "dll" || ext == "so" || ext == "dylib" {
+                        match self.load_plugin_from_dll(&path) {
+                            Ok(plugin_info) => {
+                                plugins.push(plugin_info);
+                            }
+                            Err(e) => {
+                                log::warn!("⚠️  Failed to load plugin from {:?}: {}", path, e);
+                            }
+                        }
                     }
                 }
             }
         }
 
-        log::info!("📦 Successfully loaded {} dynamic plugins", plugins.len());
+        log::info!("📦 Successfully loaded {} plugins", plugins.len());
         Ok(plugins)
     }
 
-    fn load_plugin_from_dir(&mut self, plugin_dir: &Path) -> Result<PluginInfo> {
-        let package_json_path = plugin_dir.join("package.json");
-        if !package_json_path.exists() {
-            return Err(anyhow!("No package.json found"));
+    fn find_dll_in_dir(&self, dir: &Path, plugin_id: &str) -> Option<PathBuf> {
+        // Look for platform-specific library
+        #[cfg(target_os = "windows")]
+        let lib_name = format!("{}.dll", plugin_id);
+
+        #[cfg(target_os = "linux")]
+        let lib_name = format!("lib{}.so", plugin_id);
+
+        #[cfg(target_os = "macos")]
+        let lib_name = format!("lib{}.dylib", plugin_id);
+
+        let dll_path = dir.join(&lib_name);
+        if dll_path.exists() {
+            return Some(dll_path);
         }
 
-        let package_str = fs::read_to_string(&package_json_path)?;
-        let package_json: serde_json::Value = serde_json::from_str(&package_str)?;
+        // Fallback: search for any DLL in the directory
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(ext) = path.extension() {
+                    if ext == "dll" || ext == "so" || ext == "dylib" {
+                        return Some(path);
+                    }
+                }
+            }
+        }
 
-        let webarcade_config = package_json.get("webarcade")
-            .ok_or_else(|| anyhow!("package.json missing 'webarcade' section"))?;
+        None
+    }
 
-        let plugin_id = webarcade_config["id"].as_str()
-            .ok_or_else(|| anyhow!("Missing plugin id"))?
-            .to_string();
+    fn load_plugin_from_dll(&mut self, dll_path: &Path) -> Result<PluginInfo> {
+        // Extract plugin ID from filename
+        let stem = dll_path.file_stem()
+            .ok_or_else(|| anyhow!("Invalid DLL filename"))?
+            .to_string_lossy();
 
-        let has_backend = plugin_dir.join(format!("{}.dll", plugin_id)).exists()
-            || plugin_dir.join(format!("lib{}.so", plugin_id)).exists()
-            || plugin_dir.join(format!("lib{}.dylib", plugin_id)).exists();
+        // Remove "lib" prefix on Linux/macOS
+        let plugin_id = stem.strip_prefix("lib").unwrap_or(&stem).to_string();
 
-        let has_frontend = plugin_dir.join("plugin.js").exists();
+        log::info!("📦 Loading plugin DLL: {} from {:?}", plugin_id, dll_path);
+
+        // Load the library
+        let lib = unsafe { Library::new(dll_path)? };
+        let lib_arc = Arc::new(lib);
+
+        // Get manifest from the DLL
+        let manifest = self.get_manifest_from_dll(&lib_arc)?;
+        let webarcade_config = manifest.get("webarcade")
+            .ok_or_else(|| anyhow!("Manifest missing 'webarcade' section"))?;
 
         let routes = webarcade_config.get("routes")
             .and_then(|r| r.as_array())
             .cloned()
             .unwrap_or_default();
 
-        if has_backend {
-            let dll_path = self.find_platform_binary(&plugin_dir, &plugin_id)?;
-            let lib = unsafe { Library::new(&dll_path)? };
-            let lib_arc = std::sync::Arc::new(lib);
-            crate::bridge::core::plugin_exports::register_plugin_library(plugin_id.clone(), lib_arc);
-            log::info!("✅ Loaded plugin: {} ({} routes)", plugin_id, routes.len());
-        }
+        // Check if plugin has frontend
+        let has_frontend = self.check_has_frontend(&lib_arc);
+
+        // Plugin has backend if it has any routes
+        let has_backend = !routes.is_empty();
+
+        // Register the plugin library for FFI calls (needed for both backend handlers and frontend extraction)
+        crate::bridge::core::plugin_exports::register_plugin_library(plugin_id.clone(), lib_arc);
+
+        let plugin_type = if has_backend { "full-stack" } else { "frontend-only" };
+        log::info!("✅ Loaded {} plugin: {} ({} routes, frontend: {})", plugin_type, plugin_id, routes.len(), has_frontend);
 
         Ok(PluginInfo {
             id: plugin_id,
-            dir: plugin_dir.to_path_buf(),
+            dll_path: dll_path.to_path_buf(),
             has_backend,
             has_frontend,
             routes,
         })
     }
 
-    fn find_platform_binary(&self, plugin_dir: &Path, plugin_id: &str) -> Result<PathBuf> {
-        #[cfg(target_os = "windows")]
-        let binary_path = plugin_dir.join(format!("{}.dll", plugin_id));
+    fn get_manifest_from_dll(&self, lib: &Arc<Library>) -> Result<serde_json::Value> {
+        type GetManifestFn = unsafe extern "C" fn() -> *const u8;
+        type GetManifestLenFn = unsafe extern "C" fn() -> usize;
 
-        #[cfg(target_os = "linux")]
-        let binary_path = plugin_dir.join(format!("lib{}.so", plugin_id));
+        unsafe {
+            let get_manifest: libloading::Symbol<GetManifestFn> = lib.get(b"get_plugin_manifest")?;
+            let get_manifest_len: libloading::Symbol<GetManifestLenFn> = lib.get(b"get_plugin_manifest_len")?;
 
-        #[cfg(target_os = "macos")]
-        let binary_path = plugin_dir.join(format!("lib{}.dylib", plugin_id));
+            let ptr = get_manifest();
+            let len = get_manifest_len();
 
-        if binary_path.exists() {
-            Ok(binary_path)
-        } else {
-            Err(anyhow!("Platform binary not found: {:?}", binary_path))
+            if ptr.is_null() || len == 0 {
+                return Err(anyhow!("Plugin returned null/empty manifest"));
+            }
+
+            let slice = std::slice::from_raw_parts(ptr, len);
+            let manifest_str = std::str::from_utf8(slice)?;
+            let manifest: serde_json::Value = serde_json::from_str(manifest_str)?;
+
+            Ok(manifest)
+        }
+    }
+
+    fn check_has_frontend(&self, lib: &Arc<Library>) -> bool {
+        type HasFrontendFn = unsafe extern "C" fn() -> bool;
+
+        unsafe {
+            if let Ok(has_frontend) = lib.get::<HasFrontendFn>(b"has_frontend") {
+                has_frontend()
+            } else {
+                false
+            }
+        }
+    }
+
+    /// Get frontend JavaScript from a loaded plugin
+    pub fn get_frontend_js(plugin_id: &str) -> Result<String> {
+        type GetFrontendFn = unsafe extern "C" fn() -> *const u8;
+        type GetFrontendLenFn = unsafe extern "C" fn() -> usize;
+
+        let lib = crate::bridge::core::plugin_exports::get_plugin_library(plugin_id)
+            .ok_or_else(|| anyhow!("Plugin not loaded: {}", plugin_id))?;
+
+        unsafe {
+            let get_frontend: libloading::Symbol<GetFrontendFn> = lib.get(b"get_plugin_frontend")?;
+            let get_frontend_len: libloading::Symbol<GetFrontendLenFn> = lib.get(b"get_plugin_frontend_len")?;
+
+            let ptr = get_frontend();
+            let len = get_frontend_len();
+
+            if ptr.is_null() || len == 0 {
+                return Err(anyhow!("Plugin has no frontend"));
+            }
+
+            let slice = std::slice::from_raw_parts(ptr, len);
+            let frontend_str = std::str::from_utf8(slice)?;
+
+            Ok(frontend_str.to_string())
         }
     }
 }
@@ -110,7 +214,7 @@ impl DynamicPluginLoader {
 #[derive(Debug, Clone)]
 pub struct PluginInfo {
     pub id: String,
-    pub dir: PathBuf,
+    pub dll_path: PathBuf,
     pub has_backend: bool,
     pub has_frontend: bool,
     pub routes: Vec<serde_json::Value>,

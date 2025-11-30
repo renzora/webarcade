@@ -3,11 +3,10 @@ dist
 .env*.local
 /node_modules
 
-# Plugin source, compiled output, and build artifacts
-projects/*
-!projects/.gitkeep
-plugins/*
-!plugins/.gitkeep
+# Plugin build artifacts (compiled DLLs are auto-generated)
+plugins/**/*.dll
+plugins/**/*.so
+plugins/**/*.dylib
 build/
 
 # Database and data files
@@ -31,10 +30,7 @@ src-tauri/gen
 server/target
 bridge/target
 target/
-*.dll
 *.node
-*.so
-*.dylib
 
 # IDE
 /.idea

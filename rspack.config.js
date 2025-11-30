@@ -3,7 +3,6 @@ import { rspack } from '@rspack/core'
 import { resolve } from 'node:path'
 import fs from 'fs'
 import refresh from 'solid-refresh/babel'
-import { RspackProgressPlugin } from './rspack-progress-plugin.js'
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -110,8 +109,6 @@ const config = {
       '__DEV__': JSON.stringify(!isProduction),
     }),
     !isProduction && new rspack.HotModuleReplacementPlugin(),
-    !isProduction && new RspackProgressPlugin({ backendUrl: 'http://localhost:3001' }),
-    // Bridge server runs standalone on port 3001
   ].filter(Boolean),
   
   optimization: {

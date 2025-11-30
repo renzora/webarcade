@@ -48,6 +48,12 @@ pub fn unload_plugin_library(plugin_id: &str) -> bool {
     }
 }
 
+/// Get a reference to a plugin library by ID
+pub fn get_plugin_library(plugin_id: &str) -> Option<Arc<Library>> {
+    let libs = PLUGIN_LIBRARIES.lock().unwrap();
+    libs.get(plugin_id).cloned()
+}
+
 /// Set the global router registry (called during bridge startup)
 pub fn set_global_router_registry(registry: crate::bridge::core::plugin_router::RouterRegistry) {
     let mut global = GLOBAL_ROUTER_REGISTRY.lock().unwrap();

@@ -19,7 +19,13 @@ use http_body_util::{Full, combinators::BoxBody};
 use std::convert::Infallible;
 
 use crate::bridge::core::{EventBus, WebSocketBridge, RouterRegistry, DynamicPluginLoader};
+use crate::bridge::core::dynamic_plugin_loader::PluginInfo;
 use std::path::PathBuf;
+use std::sync::Mutex;
+use once_cell::sync::Lazy;
+
+/// Global registry of loaded plugins
+pub static LOADED_PLUGINS: Lazy<Mutex<Vec<PluginInfo>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
 /// Get the plugins directory based on environment
 /// - Development: {repo_root}/plugins (detected by checking if exe is in target/debug or target/release)
@@ -123,6 +129,12 @@ pub async fn run_server() -> Result<()> {
     match dynamic_loader.load_all_plugins() {
         Ok(dynamic_plugins) => {
             info!("✅ Discovered {} dynamic plugins", dynamic_plugins.len());
+
+            // Store loaded plugins in global state for API access
+            {
+                let mut loaded = LOADED_PLUGINS.lock().unwrap();
+                *loaded = dynamic_plugins.clone();
+            }
 
             // Register dynamic plugin routes
             for plugin_info in &dynamic_plugins {

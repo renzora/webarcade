@@ -12,6 +12,7 @@
     "kill": "npx kill-port 3000 3001 || (taskkill /F /IM node.exe 2>nul || pkill -f \"rspack\\|tauri\" 2>/dev/null || echo \"Ports cleared\")",
     "clean": "bun run kill && rm -rf dist bridge/target src-tauri/target cli/target",
     "lint": "oxlint",
+    "plugin:new": "cd cli && cargo run --release -- new",
     "plugin:build": "cd cli && cargo run --release -- build",
     "plugin:list": "cd cli && cargo run --release -- list",
     "cli:build": "cd cli && cargo build --release"

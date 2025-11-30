@@ -49,6 +49,7 @@ bun run build
 |--------|-------------|
 | `bun run dev` | Start development server with hot reload |
 | `bun run build` | Build production installer |
+| `bun run plugin:new <id>` | Create a new plugin project |
 | `bun run plugin:build` | Build all plugins |
 | `bun run plugin:list` | List available plugins |
 
@@ -65,21 +66,23 @@ webarcade/
 ├── src-tauri/             # Backend (Rust/Tauri)
 │   ├── src/bridge/        # HTTP bridge and plugin loader
 │   └── api/               # Plugin API crate
-├── projects/              # Plugin source code (development)
-├── plugins/               # Compiled plugins (runtime)
+├── plugins/               # Plugin source AND compiled DLLs
+│   ├── my-plugin/         # Source directory
+│   └── my-plugin.dll      # Compiled plugin (single file)
 ├── cli/                   # Plugin build CLI tool
 └── scripts/               # Build scripts
 ```
 
-### Projects vs Plugins
+### Plugin Layout
 
-| | Projects | Plugins |
-|--|----------|---------|
-| **Location** | `projects/` | `plugins/` |
-| **Contents** | Source files (.rs, .jsx) | Compiled files (.dll, .js) |
-| **Purpose** | Development | Runtime |
+Plugins live in the `plugins/` directory:
 
-**Flow:** Edit in `projects/` → Build with CLI → Output to `plugins/` → Loaded at runtime
+| Type | Example | Description |
+|------|---------|-------------|
+| **Source** | `plugins/my-plugin/` | Directory with source code |
+| **Compiled** | `plugins/my-plugin.dll` | Single DLL with everything embedded |
+
+**Flow:** Edit `plugins/my-plugin/` → Build with CLI → Creates `plugins/my-plugin.dll`
 
 ---
 
@@ -116,20 +119,48 @@ Frontend
 
 ## Plugin Development
 
+### Quick Start
+
+Create a new plugin with the CLI:
+
+```bash
+# Create a full-stack plugin (frontend + Rust backend)
+bun run plugin:new my-plugin
+
+# Create with custom name and author
+bun run plugin:new my-plugin --name "My Plugin" --author "Your Name"
+
+# Create frontend-only plugin (no Rust backend)
+bun run plugin:new my-plugin --frontend-only
+```
+
+This generates all boilerplate files in `plugins/my-plugin/`.
+
 ### Plugin Structure
 
 ```
-my-plugin/
-├── Cargo.toml      # Routes and metadata
-├── mod.rs          # Plugin entry point
-├── router.rs       # HTTP handlers
-├── index.jsx       # Frontend entry (required)
-└── viewport.jsx    # UI component (optional)
+plugins/my-plugin/          # Source directory
+├── Cargo.toml              # Routes and metadata
+├── mod.rs                  # Plugin entry point
+├── router.rs               # HTTP handlers
+├── index.jsx               # Frontend entry (required)
+└── viewport.jsx            # UI component (optional)
+```
+
+After building:
+```
+plugins/
+├── my-plugin/              # Source (keep for development)
+└── my-plugin.dll           # Compiled plugin (everything embedded)
 ```
 
 > **Note:** `index.jsx` is required - it identifies the directory as a plugin.
 
-### Step 1: Create Cargo.toml
+### Manual Setup
+
+If you prefer to create files manually:
+
+#### Step 1: Create Cargo.toml
 
 Define your plugin metadata and routes:
 
@@ -149,7 +180,7 @@ opt-level = "z"
 lto = true
 ```
 
-### Step 2: Create mod.rs
+#### Step 2: Create mod.rs
 
 ```rust
 pub mod router;
@@ -172,7 +203,7 @@ impl Plugin for MyPlugin {
 }
 ```
 
-### Step 3: Create router.rs
+#### Step 3: Create router.rs
 
 ```rust
 use api::{HttpRequest, HttpResponse, json, json_response, error_response};
@@ -193,7 +224,7 @@ pub async fn handle_get_item(req: HttpRequest) -> HttpResponse {
 }
 ```
 
-### Step 4: Create index.jsx
+#### Step 4: Create index.jsx
 
 ```jsx
 import { createPlugin } from '@/api/plugin';
@@ -218,7 +249,7 @@ export default createPlugin({
 });
 ```
 
-### Step 5: Build and Test
+#### Step 5: Build and Test
 
 ```bash
 # Build the plugin
@@ -382,49 +413,65 @@ pub async fn handler_name(req: HttpRequest) -> HttpResponse {
 
 ## How Plugins Work
 
+### Single-DLL Architecture
+
+Each plugin compiles to a **single DLL file** that contains everything:
+- Compiled Rust backend code
+- Bundled frontend JavaScript (`plugin.js`)
+- Plugin manifest (`package.json`)
+
+This makes distribution simple - just copy the `.dll` file.
+
 ### Build Process
 
-1. **Source** (`projects/my-plugin/`)
+1. **Source** (`plugins/my-plugin/`)
    - You write `mod.rs`, `router.rs`, `index.jsx`
    - Define routes in `Cargo.toml`
 
 2. **CLI Build** (`bun run plugin:build my-plugin`)
+   - Bundles frontend with RSpack → `plugin.js`
+   - Generates manifest → `package.json`
    - Generates FFI wrapper code (`lib.rs`)
-   - Compiles Rust to platform binary (.dll/.so/.dylib)
-   - Bundles frontend with RSpack
+   - Embeds frontend + manifest into DLL
+   - Compiles to platform binary (.dll/.so/.dylib)
 
-3. **Output** (`plugins/my-plugin/`)
-   - `my-plugin.dll` - Compiled backend
-   - `plugin.js` - Bundled frontend
-   - `package.json` - Plugin manifest
+3. **Output** (`plugins/my-plugin.dll`)
+   - Single file with everything embedded
+   - Frontend extracted at runtime via FFI
 
 ### Runtime Loading
 
-1. **Backend**: Bridge scans `plugins/` directory
+1. **Backend**: Bridge scans `plugins/` for `.dll` files
    - Loads DLL via `libloading`
-   - Registers routes from `package.json`
-   - FFI calls invoke handler functions
+   - Extracts manifest from DLL via FFI
+   - Registers routes from embedded manifest
 
 2. **Frontend**: Plugin loader fetches plugin list
-   - Dynamic imports `plugin.js`
+   - Requests `plugin.js` from bridge
+   - Bridge extracts JS from DLL and serves it
    - Calls `onStart(api)` for initialization
 
-### FFI Bridge
+### FFI Functions
 
-The CLI generates FFI wrappers that:
-- Convert JSON requests to `HttpRequest`
-- Call your async handler functions
-- Convert `HttpResponse` back to JSON
-- Handle errors and panics gracefully
+Each plugin DLL exports:
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `get_plugin_manifest()` | `*const u8` | Embedded package.json |
+| `get_plugin_frontend()` | `*const u8` | Embedded plugin.js |
+| `has_frontend()` | `bool` | Whether plugin has frontend |
+| `{handler_name}()` | Response | Route handlers |
+
+### Request Flow
 
 ```
 Frontend fetch()
     ↓
 HTTP Bridge (port 3001)
     ↓
-Route matching
+Route matching (from embedded manifest)
     ↓
-FFI call to DLL
+FFI call to DLL handler
     ↓
 Your handler function
     ↓
@@ -435,25 +482,29 @@ Response back to frontend
 
 ## CLI Reference
 
-### Build Commands
+### Commands
 
 ```bash
-# Build specific plugin
-cd cli && cargo run --release -- build my-plugin
+# Create a new plugin
+bun run plugin:new my-plugin
+bun run plugin:new my-plugin --name "My Plugin" --author "You"
+bun run plugin:new my-plugin --frontend-only
 
-# Build all plugins
-cd cli && cargo run --release -- build --all
+# Build plugins
+bun run plugin:build my-plugin    # Build specific plugin
+bun run plugin:build --all        # Build all plugins
 
 # List available plugins
-cd cli && cargo run --release -- list
+bun run plugin:list
 ```
 
-### NPM Scripts
+### Direct CLI Usage
 
 ```bash
-bun run plugin:build          # Build all plugins
-bun run plugin:list           # List plugins
-bun run cli:build             # Build CLI binary
+cd cli && cargo run --release -- new my-plugin
+cd cli && cargo run --release -- build my-plugin
+cd cli && cargo run --release -- build --all
+cd cli && cargo run --release -- list
 ```
 
 ---
@@ -463,7 +514,7 @@ bun run cli:build             # Build CLI binary
 ### Common Errors
 
 **"Plugin not detected"**
-- Ensure `index.jsx` exists in the plugin directory
+- Ensure `index.jsx` exists in the plugin source directory
 
 **"Handler not found"**
 - Check route names in `Cargo.toml` match function names exactly
@@ -474,16 +525,18 @@ bun run cli:build             # Build CLI binary
 - Ensure handler signature is correct: `pub async fn name(req: HttpRequest) -> HttpResponse`
 
 **"DLL won't reload"**
-- Restart the app if the file is locked
+- Restart the app - DLLs are locked while loaded
 
 **"Routes not working"**
 - Verify `Cargo.toml` routes format: `"METHOD /path" = "handler_name"`
+- Rebuild the plugin after changes
 
 ### Development Tips
 
 1. Use `bun run dev:verbose` for detailed logs
 2. Check browser DevTools for frontend errors
 3. Plugin changes require rebuild: `bun run plugin:build`
+4. Keep source directories in `plugins/` for development
 
 ---
 

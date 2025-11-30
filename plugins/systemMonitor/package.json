@@ -1,0 +1,6 @@
+{
+  "name": "systemMonitor",
+  "version": "1.0.0",
+  "description": "System resource monitoring (CPU, RAM, GPU)",
+  "author": "WebArcade Team"
+}
