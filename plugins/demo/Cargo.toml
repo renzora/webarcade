@@ -1,0 +1,43 @@
+[package]
+name = "demo"
+version = "1.0.0"
+edition = "2021"
+
+[dependencies]
+notify-rust = "4"
+serde = { version = "1", features = ["derive"] }
+sysinfo = "0.30"
+nvml-wrapper = "0.10"
+raw-cpuid = "11"
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_Devices_Usb",
+    "Win32_System_Registry",
+    "Win32_Media_Audio",
+    "Win32_Media_Audio_Endpoints",
+    "Win32_System_Com",
+    "Win32_Devices_DeviceAndDriverInstallation",
+    "Win32_Devices_Properties",
+    "Win32_Devices_Display",
+] }
+brightness = "0.5"
+futures = "0.3"
+wmi = "0.13"
+cpal = "0.15"
+
+[routes]
+"GET /hello" = "handle_hello"
+"POST /notify" = "handle_notify"
+"GET /cpu" = "handle_cpu_info"
+"GET /gpu" = "handle_gpu_info"
+"GET /ram" = "handle_ram_info"
+"GET /usb" = "handle_usb_devices"
+"GET /audio/level" = "handle_audio_level"
+"GET /brightness" = "handle_get_brightness"
+"POST /brightness" = "handle_set_brightness"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
