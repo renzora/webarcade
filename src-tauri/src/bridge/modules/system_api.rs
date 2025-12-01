@@ -33,7 +33,7 @@ pub fn get_repo_root() -> Option<PathBuf> {
 }
 
 /// Get the plugins directory based on environment
-/// - Development: {repo_root}/dist/plugins (built plugins)
+/// - Development: {repo_root}/build/plugins (built plugins)
 /// - Production: {exe_dir}/plugins (next to the executable)
 pub fn get_plugins_dir() -> PathBuf {
     let exe_path = std::env::current_exe().ok();
@@ -41,18 +41,18 @@ pub fn get_plugins_dir() -> PathBuf {
         .and_then(|p| p.parent().map(|p| p.to_path_buf()));
 
     if is_dev_mode() {
-        // Development: use repo root's dist/plugins/ directory for built plugins
+        // Development: use repo root's build/plugins/ directory for built plugins
         if let Some(repo_root) = get_repo_root() {
-            let dist_plugins_dir = repo_root.join("dist").join("plugins");
-            log::info!("🔍 Dev mode plugins dir: {:?} (exists: {})", dist_plugins_dir, dist_plugins_dir.exists());
-            if dist_plugins_dir.exists() || std::fs::create_dir_all(&dist_plugins_dir).is_ok() {
-                return dist_plugins_dir;
+            let build_plugins_dir = repo_root.join("build").join("plugins");
+            log::info!("🔍 Dev mode plugins dir: {:?} (exists: {})", build_plugins_dir, build_plugins_dir.exists());
+            if build_plugins_dir.exists() || std::fs::create_dir_all(&build_plugins_dir).is_ok() {
+                return build_plugins_dir;
             }
         }
         // Fallback: try current directory
         let fallback = std::env::current_dir()
             .unwrap_or_default()
-            .join("dist")
+            .join("build")
             .join("plugins");
         log::info!("🔍 Dev mode fallback plugins dir: {:?}", fallback);
         fallback

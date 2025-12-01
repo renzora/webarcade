@@ -42,17 +42,17 @@ fn get_plugins_dir() -> PathBuf {
         .unwrap_or(false);
 
     if is_dev {
-        // Development: use repo root's dist/plugins/ directory for built plugins
+        // Development: use repo root's build/plugins/ directory for built plugins
         // Navigate up from src-tauri/target/debug to repo root
         if let Some(exe) = &exe_path {
             if let Some(target_dir) = exe.parent() { // debug or release
                 if let Some(target) = target_dir.parent() { // target
                     if let Some(src_tauri) = target.parent() { // src-tauri
                         if let Some(repo_root) = src_tauri.parent() { // repo root
-                            let dist_plugins_dir = repo_root.join("dist").join("plugins");
-                            if dist_plugins_dir.exists() || std::fs::create_dir_all(&dist_plugins_dir).is_ok() {
-                                log::info!("📁 Development mode: loading plugins from {:?}", dist_plugins_dir);
-                                return dist_plugins_dir;
+                            let build_plugins_dir = repo_root.join("build").join("plugins");
+                            if build_plugins_dir.exists() || std::fs::create_dir_all(&build_plugins_dir).is_ok() {
+                                log::info!("📁 Development mode: loading plugins from {:?}", build_plugins_dir);
+                                return build_plugins_dir;
                             }
                         }
                     }
@@ -62,7 +62,7 @@ fn get_plugins_dir() -> PathBuf {
         // Fallback: try current directory
         let cwd_plugins = std::env::current_dir()
             .unwrap_or_default()
-            .join("dist")
+            .join("build")
             .join("plugins");
         log::info!("📁 Development mode (fallback): loading plugins from {:?}", cwd_plugins);
         cwd_plugins

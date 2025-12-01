@@ -134,7 +134,7 @@ fn get_build_dir() -> Result<PathBuf> {
 }
 
 fn get_dist_plugins_dir() -> Result<PathBuf> {
-    Ok(get_repo_root()?.join("dist").join("plugins"))
+    Ok(get_repo_root()?.join("build").join("plugins"))
 }
 
 fn create_plugin(plugin_id: &str, name: Option<String>, author: Option<String>, frontend_only: bool) -> Result<()> {
@@ -539,10 +539,10 @@ impl PluginBuilder {
             self.bundle_frontend()?;
         }
 
-        // Frontend-only plugins: output JS file to dist/plugins
+        // Frontend-only plugins: output JS file to build/plugins
         if !has_backend {
             let js_name = format!("{}.js", self.plugin_id);
-            println!("  Installing {} to dist/plugins/...", js_name);
+            println!("  Installing {} to build/plugins/...", js_name);
             let src_plugin_js = self.build_dir.join("plugin.js");
             let dest_plugin_js = self.dist_plugins_dir.join(&js_name);
             if src_plugin_js.exists() {
@@ -578,8 +578,8 @@ impl PluginBuilder {
         println!("  Compiling DLL...");
         self.compile_backend()?;
 
-        // Copy final DLL to dist/plugins
-        println!("  Installing {}.dll to dist/plugins/...", self.plugin_id);
+        // Copy final DLL to build/plugins
+        println!("  Installing {}.dll to build/plugins/...", self.plugin_id);
         self.install_dll()?;
 
         // Clean up build directory
@@ -1107,7 +1107,7 @@ pub extern "C" fn has_frontend() -> bool {{
             anyhow::bail!("Compiled library not found: {}", src_path.display());
         }
 
-        // Copy to dist/plugins directory
+        // Copy to build/plugins directory
         let dest_path = self.dist_plugins_dir.join(&lib_name);
         fs::copy(&src_path, &dest_path)?;
 

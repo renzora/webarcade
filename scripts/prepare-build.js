@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Pre/post build script that dynamically configures Tauri resources
- * based on which plugin DLLs exist in the plugins/ directory.
+ * based on which plugin files exist in dist/plugins/.
  *
  * Usage:
  *   node prepare-build.js          - Add plugins to resources (before build)
@@ -12,35 +12,28 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
-const PLUGINS_DIR = path.join(ROOT_DIR, 'plugins');
+const BUILD_PLUGINS_DIR = path.join(ROOT_DIR, 'build', 'plugins');
 const TAURI_CONFIG_PATH = path.join(ROOT_DIR, 'src-tauri', 'tauri.conf.json');
 
-function getPluginDlls() {
-  if (!fs.existsSync(PLUGINS_DIR)) {
+function getPluginFiles() {
+  if (!fs.existsSync(BUILD_PLUGINS_DIR)) {
     return [];
   }
 
-  const dlls = [];
+  const plugins = [];
 
-  // Scan plugin directories for DLLs
-  const entries = fs.readdirSync(PLUGINS_DIR, { withFileTypes: true });
-  for (const dirent of entries) {
-    if (!dirent.isDirectory()) continue;
+  // Scan build/plugins for .js and .dll files
+  const entries = fs.readdirSync(BUILD_PLUGINS_DIR, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
 
-    const pluginDir = path.join(PLUGINS_DIR, dirent.name);
-    const pluginFiles = fs.readdirSync(pluginDir, { withFileTypes: true });
-
-    for (const file of pluginFiles) {
-      if (!file.isFile()) continue;
-      const ext = path.extname(file.name).toLowerCase();
-      if (ext === '.dll' || ext === '.so' || ext === '.dylib') {
-        // Store as { dir: 'plugin-name', file: 'plugin-name.dll' }
-        dlls.push({ dir: dirent.name, file: file.name });
-      }
+    const ext = path.extname(entry.name).toLowerCase();
+    if (ext === '.dll' || ext === '.so' || ext === '.dylib' || ext === '.js') {
+      plugins.push(entry.name);
     }
   }
 
-  return dlls;
+  return plugins;
 }
 
 function updateTauriConfig(reset = false) {
@@ -55,24 +48,22 @@ function updateTauriConfig(reset = false) {
     return;
   }
 
-  const dlls = getPluginDlls();
-  console.log(`[prepare-build] Found ${dlls.length} plugin DLLs:`, dlls.map(d => `${d.dir}/${d.file}`));
+  const plugins = getPluginFiles();
+  console.log(`[prepare-build] Found ${plugins.length} plugin files:`, plugins);
 
-  if (dlls.length === 0) {
-    // No DLLs found, ensure plugins directory exists and set empty resources
+  if (plugins.length === 0) {
     config.bundle.resources = {};
     fs.writeFileSync(TAURI_CONFIG_PATH, JSON.stringify(config, null, 2));
-    console.log('[prepare-build] No plugin DLLs found, resources set to empty');
+    console.log('[prepare-build] No plugin files found, resources set to empty');
     return;
   }
 
-  // Build resources object - copy DLL files directly to plugins/ in the bundle
+  // Build resources object - copy files from build/plugins/ to plugins/ in the bundle
   const resources = {};
 
-  for (const dll of dlls) {
-    // Map DLL file directly to plugins/ (no subdirectory in production)
-    // Source: ../plugins/plugin-name/plugin-name.dll -> Dest: plugins/plugin-name.dll
-    resources[`../plugins/${dll.dir}/${dll.file}`] = `plugins/${dll.file}`;
+  for (const plugin of plugins) {
+    // Source: ../build/plugins/plugin.js -> Dest: plugins/plugin.js
+    resources[`../build/plugins/${plugin}`] = `plugins/${plugin}`;
   }
 
   // Update config
@@ -80,7 +71,7 @@ function updateTauriConfig(reset = false) {
 
   // Write back
   fs.writeFileSync(TAURI_CONFIG_PATH, JSON.stringify(config, null, 2));
-  console.log('[prepare-build] Updated tauri.conf.json with plugin DLL resources');
+  console.log('[prepare-build] Updated tauri.conf.json with plugin resources');
 }
 
 function main() {

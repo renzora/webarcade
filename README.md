@@ -73,7 +73,7 @@ webarcade/
 │   └── api/               # Plugin API crate
 ├── plugins/               # Plugin SOURCE code only
 │   └── my-plugin/         # Source directory (index.jsx, mod.rs, etc.)
-├── dist/
+├── build/
 │   └── plugins/           # Built plugins (development)
 │       ├── my-plugin.js   # Frontend-only plugin
 │       └── other.dll      # Full-stack plugin
@@ -97,9 +97,9 @@ plugins/
     └── index.jsx           # Frontend-only plugin
 ```
 
-**Built Output (dist/plugins/):**
+**Built Output (build/plugins/):**
 ```
-dist/plugins/
+build/plugins/
 ├── my-plugin.dll           # Full-stack plugin (has Rust backend)
 ├── other-plugin.js         # Frontend-only plugin (just JavaScript)
 └── ...
@@ -108,12 +108,12 @@ dist/plugins/
 **Production (bundled app):**
 ```
 {app}/plugins/
-├── my-plugin.dll           # Copied from dist/plugins/
+├── my-plugin.dll           # Copied from build/plugins/
 ├── other-plugin.js
 └── ...
 ```
 
-**Flow:** Edit `plugins/my-plugin/` → `bun run plugin:build my-plugin` → Creates `dist/plugins/my-plugin.js` or `.dll`
+**Flow:** Edit `plugins/my-plugin/` → `bun run plugin:build my-plugin` → Creates `build/plugins/my-plugin.js` or `.dll`
 
 ---
 
@@ -175,7 +175,7 @@ plugins/my-plugin/
 ├── index.jsx               # Frontend entry (required)
 └── viewport.jsx            # UI components (optional)
 ```
-→ Builds to: `dist/plugins/my-plugin.js` (~5-15 KB)
+→ Builds to: `build/plugins/my-plugin.js` (~5-15 KB)
 
 **Full-stack plugin** (with Rust backend):
 ```
@@ -186,7 +186,7 @@ plugins/my-plugin/
 ├── mod.rs                  # Plugin entry point
 └── router.rs               # HTTP handlers
 ```
-→ Builds to: `dist/plugins/my-plugin.dll` (~200+ KB)
+→ Builds to: `build/plugins/my-plugin.dll` (~200+ KB)
 
 > **Note:** `index.jsx` is required - it identifies the directory as a plugin. If `mod.rs` + `Cargo.toml` exist, it's a full-stack plugin; otherwise it's frontend-only.
 
@@ -511,16 +511,16 @@ pub async fn handler_name(req: HttpRequest) -> HttpResponse {
 
 2. **CLI Build** (`bun run plugin:build my-plugin`)
    - Bundles frontend with RSpack
-   - **Frontend-only**: Outputs `dist/plugins/my-plugin.js`
-   - **Full-stack**: Embeds JS into DLL, outputs `dist/plugins/my-plugin.dll`
+   - **Frontend-only**: Outputs `build/plugins/my-plugin.js`
+   - **Full-stack**: Embeds JS into DLL, outputs `build/plugins/my-plugin.dll`
 
 3. **Output Location**
-   - Development: `dist/plugins/` (app loads from here)
-   - Production: `{app}/plugins/` (Tauri bundles from dist/plugins)
+   - Development: `build/plugins/` (app loads from here)
+   - Production: `{app}/plugins/` (Tauri bundles from build/plugins)
 
 ### Runtime Loading
 
-The loader scans `dist/plugins/` (dev) or `plugins/` (prod) for:
+The loader scans `build/plugins/` (dev) or `plugins/` (prod) for:
 
 | File Type | Plugin Type | Loading Method |
 |-----------|-------------|----------------|
@@ -585,8 +585,8 @@ bun run plugin:list
 
 | Plugin Type | Input | Output |
 |-------------|-------|--------|
-| Frontend-only | `plugins/foo/index.jsx` | `dist/plugins/foo.js` |
-| Full-stack | `plugins/foo/` (with mod.rs + Cargo.toml) | `dist/plugins/foo.dll` |
+| Frontend-only | `plugins/foo/index.jsx` | `build/plugins/foo.js` |
+| Full-stack | `plugins/foo/` (with mod.rs + Cargo.toml) | `build/plugins/foo.dll` |
 
 ### Direct CLI Usage
 
@@ -626,8 +626,8 @@ cd cli && cargo run --release -- list
 1. Use `bun run dev:verbose` for detailed logs
 2. Check browser DevTools for frontend errors
 3. Plugin changes require rebuild: `bun run plugin:build <plugin-name>`
-4. Source code stays in `plugins/`, built output goes to `dist/plugins/`
-5. App loads plugins from `dist/plugins/` in dev mode
+4. Source code stays in `plugins/`, built output goes to `build/plugins/`
+5. App loads plugins from `build/plugins/` in dev mode
 6. Frontend-only plugins build instantly (~1s), full-stack takes longer (~10-30s)
 
 ---
