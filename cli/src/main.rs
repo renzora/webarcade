@@ -133,6 +133,10 @@ fn get_build_dir() -> Result<PathBuf> {
     Ok(get_repo_root()?.join("build"))
 }
 
+fn get_dist_plugins_dir() -> Result<PathBuf> {
+    Ok(get_repo_root()?.join("dist").join("plugins"))
+}
+
 fn create_plugin(plugin_id: &str, name: Option<String>, author: Option<String>, frontend_only: bool) -> Result<()> {
     let plugins_dir = get_plugins_dir()?;
     let plugin_dir = plugins_dir.join(plugin_id);
@@ -481,7 +485,7 @@ struct PluginBuilder {
     plugin_id: String,
     plugin_dir: PathBuf,
     build_dir: PathBuf,
-    plugins_dir: PathBuf,
+    dist_plugins_dir: PathBuf,
     repo_root: PathBuf,
 }
 
@@ -502,11 +506,14 @@ impl PluginBuilder {
         let build_dir = get_build_dir()?.join(plugin_id);
         fs::create_dir_all(&build_dir)?;
 
+        let dist_plugins_dir = get_dist_plugins_dir()?;
+        fs::create_dir_all(&dist_plugins_dir)?;
+
         Ok(Self {
             plugin_id: plugin_id.to_string(),
             plugin_dir,
             build_dir,
-            plugins_dir,
+            dist_plugins_dir,
             repo_root,
         })
     }
@@ -526,36 +533,53 @@ impl PluginBuilder {
         }
         fs::create_dir_all(&self.build_dir)?;
 
-        // Build frontend first (we need plugin.js to embed)
-        let mut frontend_js = String::new();
+        // Build frontend first
         if has_frontend {
             println!("  Bundling frontend...");
             self.bundle_frontend()?;
+        }
 
-            // Read the bundled plugin.js
+        // Frontend-only plugins: output JS file to dist/plugins
+        if !has_backend {
+            let js_name = format!("{}.js", self.plugin_id);
+            println!("  Installing {} to dist/plugins/...", js_name);
+            let src_plugin_js = self.build_dir.join("plugin.js");
+            let dest_plugin_js = self.dist_plugins_dir.join(&js_name);
+            if src_plugin_js.exists() {
+                fs::copy(&src_plugin_js, &dest_plugin_js)?;
+            }
+
+            // Clean up build directory
+            println!("  Cleaning up build artifacts...");
+            self.cleanup_build_dir()?;
+
+            println!("  Done!");
+            return Ok(());
+        }
+
+        // Backend plugins: build DLL with embedded frontend
+        let frontend_js = if has_frontend {
             let plugin_js_path = self.build_dir.join("plugin.js");
             if plugin_js_path.exists() {
-                frontend_js = fs::read_to_string(&plugin_js_path)?;
+                fs::read_to_string(&plugin_js_path)?
+            } else {
+                String::new()
             }
-        }
+        } else {
+            String::new()
+        };
 
         // Create package.json / manifest
         let manifest = self.create_manifest()?;
 
-        // Build DLL (either with backend handlers or frontend-only)
-        if has_backend {
-            println!("  Setting up Rust backend...");
-            self.setup_backend_build(&frontend_js, &manifest)?;
-        } else {
-            println!("  Setting up frontend-only DLL...");
-            self.setup_frontend_only_build(&frontend_js, &manifest)?;
-        }
+        println!("  Setting up Rust backend...");
+        self.setup_backend_build(&frontend_js, &manifest)?;
 
         println!("  Compiling DLL...");
         self.compile_backend()?;
 
-        // Copy final DLL to plugin directory
-        println!("  Installing {}.dll to plugins/{}...", self.plugin_id, self.plugin_id);
+        // Copy final DLL to dist/plugins
+        println!("  Installing {}.dll to dist/plugins/...", self.plugin_id);
         self.install_dll()?;
 
         // Clean up build directory
@@ -583,130 +607,6 @@ impl PluginBuilder {
             }
         }
 
-        Ok(())
-    }
-
-    /// Setup a frontend-only DLL build (no route handlers, just embedded assets)
-    fn setup_frontend_only_build(&self, frontend_js: &str, manifest: &str) -> Result<()> {
-        let rust_build_dir = self.build_dir.join("rust_build");
-        fs::create_dir_all(&rust_build_dir)?;
-
-        // Find API crate for dependencies
-        let api_path = self.repo_root.join("src-tauri").join("api");
-        if !api_path.join("Cargo.toml").exists() {
-            anyhow::bail!("API crate not found at: {}", api_path.display());
-        }
-
-        let api_path_str = api_path.to_string_lossy().replace("\\", "/");
-
-        // Create minimal Cargo.toml
-        let cargo_toml = format!(
-            r#"[package]
-name = "{}"
-version = "1.0.0"
-edition = "2021"
-
-[lib]
-crate-type = ["cdylib"]
-path = "lib.rs"
-
-[dependencies]
-api = {{ path = "{}" }}
-
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
-strip = true
-"#,
-            self.plugin_id, api_path_str
-        );
-
-        fs::write(rust_build_dir.join("Cargo.toml"), cargo_toml)?;
-
-        // Create .cargo/config.toml for linker settings
-        let cargo_config_dir = rust_build_dir.join(".cargo");
-        fs::create_dir_all(&cargo_config_dir)?;
-        let cargo_config = r#"[target.x86_64-pc-windows-msvc]
-rustflags = ["-C", "link-args=/FORCE:UNRESOLVED"]
-
-[target.x86_64-unknown-linux-gnu]
-rustflags = ["-C", "link-args=-Wl,--allow-shlib-undefined"]
-
-[target.x86_64-apple-darwin]
-rustflags = ["-C", "link-args=-undefined dynamic_lookup"]
-
-[target.aarch64-apple-darwin]
-rustflags = ["-C", "link-args=-undefined dynamic_lookup"]
-"#;
-        fs::write(cargo_config_dir.join("config.toml"), cargo_config)?;
-
-        // Generate minimal lib.rs with only embedded assets (no handlers)
-        self.create_frontend_only_lib_rs(&rust_build_dir, frontend_js, manifest)?;
-
-        Ok(())
-    }
-
-    /// Create lib.rs for frontend-only plugins (no route handlers)
-    fn create_frontend_only_lib_rs(&self, rust_build_dir: &Path, frontend_js: &str, manifest: &str) -> Result<()> {
-        // Escape the embedded strings for Rust
-        let escaped_frontend = frontend_js.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "");
-        let escaped_manifest = manifest.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "");
-
-        let lib_content = format!(r#"// Auto-generated frontend-only plugin library
-// This plugin has no backend handlers, only embedded frontend assets
-
-/// Embedded frontend JavaScript (plugin.js)
-const EMBEDDED_FRONTEND: &str = "{escaped_frontend}";
-
-/// Embedded manifest (package.json)
-const EMBEDDED_MANIFEST: &str = "{escaped_manifest}";
-
-#[no_mangle]
-pub extern "C" fn plugin_init(_ffi_ctx: *const ()) -> i32 {{ 0 }}
-
-#[no_mangle]
-pub extern "C" fn plugin_start(_ffi_ctx: *const ()) -> i32 {{ 0 }}
-
-#[no_mangle]
-pub extern "C" fn plugin_stop() -> i32 {{ 0 }}
-
-/// Returns the embedded manifest (package.json) as a null-terminated string
-#[no_mangle]
-pub extern "C" fn get_plugin_manifest() -> *const u8 {{
-    let manifest = EMBEDDED_MANIFEST.to_string();
-    let leaked = Box::leak(Box::new(manifest));
-    leaked.as_ptr()
-}}
-
-/// Returns the length of the embedded manifest
-#[no_mangle]
-pub extern "C" fn get_plugin_manifest_len() -> usize {{
-    EMBEDDED_MANIFEST.len()
-}}
-
-/// Returns the embedded frontend (plugin.js) as a null-terminated string
-#[no_mangle]
-pub extern "C" fn get_plugin_frontend() -> *const u8 {{
-    let frontend = EMBEDDED_FRONTEND.to_string();
-    let leaked = Box::leak(Box::new(frontend));
-    leaked.as_ptr()
-}}
-
-/// Returns the length of the embedded frontend
-#[no_mangle]
-pub extern "C" fn get_plugin_frontend_len() -> usize {{
-    EMBEDDED_FRONTEND.len()
-}}
-
-/// Returns whether this plugin has a frontend
-#[no_mangle]
-pub extern "C" fn has_frontend() -> bool {{
-    !EMBEDDED_FRONTEND.is_empty()
-}}
-"#);
-
-        fs::write(rust_build_dir.join("lib.rs"), lib_content)?;
         Ok(())
     }
 
@@ -1207,8 +1107,8 @@ pub extern "C" fn has_frontend() -> bool {{
             anyhow::bail!("Compiled library not found: {}", src_path.display());
         }
 
-        // Copy to plugin source directory (plugins/plugin-id/plugin-id.dll)
-        let dest_path = self.plugin_dir.join(&lib_name);
+        // Copy to dist/plugins directory
+        let dest_path = self.dist_plugins_dir.join(&lib_name);
         fs::copy(&src_path, &dest_path)?;
 
         Ok(())

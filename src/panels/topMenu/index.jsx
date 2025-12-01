@@ -1,6 +1,6 @@
 import { createSignal, createEffect, onCleanup, createMemo, For, Show } from 'solid-js';
 import { IconChevronRight, IconMinus, IconSquare, IconCopy, IconX } from '@tabler/icons-solidjs';
-import { topMenuItems, topMenuButtons, horizontalMenuButtonsEnabled } from '@/api/plugin';
+import { topMenuItems, topMenuButtons, horizontalMenuButtonsEnabled, viewportTabsVisible } from '@/api/plugin';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import ViewportTabs from '@/panels/viewport/ViewportTabs.jsx';
 import { viewportStore } from '@/panels/viewport/store';
@@ -311,9 +311,11 @@ function TopMenu() {
       </Show>
 
       {/* Second row: Viewport Tabs - pass whether to show window controls */}
-      <div class="w-full bg-base-200">
-        <ViewportTabs showWindowControls={!hasMenus()} />
-      </div>
+      <Show when={viewportTabsVisible()}>
+        <div class="w-full bg-base-200">
+          <ViewportTabs showWindowControls={!hasMenus()} />
+        </div>
+      </Show>
 
       <Show when={horizontalMenuButtonsEnabled() && activeMenu() && menuPosition()}>
         <div

@@ -20,8 +20,8 @@
   "dependencies": {
     "@tabler/icons-solidjs": "^3.34.1",
     "daisyui": "^5.0.50",
+    "highlight.js": "^11.11.1",
     "kill-port": "^2.0.1",
-    "leaflet": "^1.9.4",
     "solid-js": "^1.9.7",
     "solid-refresh": "^0.7.5"
   },

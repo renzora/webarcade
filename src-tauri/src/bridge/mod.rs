@@ -28,7 +28,7 @@ use once_cell::sync::Lazy;
 pub static LOADED_PLUGINS: Lazy<Mutex<Vec<PluginInfo>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
 /// Get the plugins directory based on environment
-/// - Development: {repo_root}/plugins (detected by checking if exe is in target/debug or target/release)
+/// - Development: {repo_root}/dist/plugins (built plugins)
 /// - Production: {exe_dir}/plugins (next to the executable)
 fn get_plugins_dir() -> PathBuf {
     let exe_path = std::env::current_exe().ok();
@@ -36,24 +36,23 @@ fn get_plugins_dir() -> PathBuf {
         .and_then(|p| p.parent().map(|p| p.to_path_buf()));
 
     // Check if we're in development mode by looking for "target\debug" in path
-    // Note: target\release is NOT dev mode - it's a production build being tested
     let is_dev = exe_path.as_ref()
         .and_then(|p| p.to_str())
         .map(|s| s.contains("target\\debug") || s.contains("target/debug"))
         .unwrap_or(false);
 
     if is_dev {
-        // Development: use repo root's plugins/ directory
+        // Development: use repo root's dist/plugins/ directory for built plugins
         // Navigate up from src-tauri/target/debug to repo root
         if let Some(exe) = &exe_path {
             if let Some(target_dir) = exe.parent() { // debug or release
                 if let Some(target) = target_dir.parent() { // target
                     if let Some(src_tauri) = target.parent() { // src-tauri
                         if let Some(repo_root) = src_tauri.parent() { // repo root
-                            let plugins_dir = repo_root.join("plugins");
-                            if plugins_dir.exists() || std::fs::create_dir_all(&plugins_dir).is_ok() {
-                                log::info!("📁 Development mode: loading plugins from {:?}", plugins_dir);
-                                return plugins_dir;
+                            let dist_plugins_dir = repo_root.join("dist").join("plugins");
+                            if dist_plugins_dir.exists() || std::fs::create_dir_all(&dist_plugins_dir).is_ok() {
+                                log::info!("📁 Development mode: loading plugins from {:?}", dist_plugins_dir);
+                                return dist_plugins_dir;
                             }
                         }
                     }
@@ -63,6 +62,7 @@ fn get_plugins_dir() -> PathBuf {
         // Fallback: try current directory
         let cwd_plugins = std::env::current_dir()
             .unwrap_or_default()
+            .join("dist")
             .join("plugins");
         log::info!("📁 Development mode (fallback): loading plugins from {:?}", cwd_plugins);
         cwd_plugins

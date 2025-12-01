@@ -71,37 +71,49 @@ webarcade/
 ├── src-tauri/             # Backend (Rust/Tauri)
 │   ├── src/bridge/        # HTTP bridge and plugin loader
 │   └── api/               # Plugin API crate
-├── plugins/               # Plugin source AND compiled DLLs
-│   ├── my-plugin/         # Source directory
-│   └── my-plugin.dll      # Compiled plugin (single file)
+├── plugins/               # Plugin SOURCE code only
+│   └── my-plugin/         # Source directory (index.jsx, mod.rs, etc.)
+├── dist/
+│   └── plugins/           # Built plugins (development)
+│       ├── my-plugin.js   # Frontend-only plugin
+│       └── other.dll      # Full-stack plugin
 ├── cli/                   # Plugin build CLI tool
 └── scripts/               # Build scripts
 ```
 
 ### Plugin Layout
 
-Plugins live in the `plugins/` directory with different layouts for development and production:
+Source code and built output are now **separated**:
 
-**Development:**
+**Source (plugins/):**
 ```
 plugins/
 ├── my-plugin/              # Source directory
-│   ├── index.jsx           # Frontend entry
-│   ├── mod.rs              # Backend entry
-│   └── my-plugin.dll       # Compiled DLL (inside source dir)
+│   ├── index.jsx           # Frontend entry (required)
+│   ├── mod.rs              # Backend entry (optional)
+│   ├── router.rs           # Route handlers (optional)
+│   └── Cargo.toml          # Routes & deps (optional)
 └── other-plugin/
-    └── ...
+    └── index.jsx           # Frontend-only plugin
+```
+
+**Built Output (dist/plugins/):**
+```
+dist/plugins/
+├── my-plugin.dll           # Full-stack plugin (has Rust backend)
+├── other-plugin.js         # Frontend-only plugin (just JavaScript)
+└── ...
 ```
 
 **Production (bundled app):**
 ```
-plugins/
-├── my-plugin.dll           # DLLs directly in plugins/
-├── other-plugin.dll
+{app}/plugins/
+├── my-plugin.dll           # Copied from dist/plugins/
+├── other-plugin.js
 └── ...
 ```
 
-**Flow:** Edit `plugins/my-plugin/` → Build with CLI → Creates `plugins/my-plugin/my-plugin.dll`
+**Flow:** Edit `plugins/my-plugin/` → `bun run plugin:build my-plugin` → Creates `dist/plugins/my-plugin.js` or `.dll`
 
 ---
 
@@ -157,24 +169,26 @@ This generates all boilerplate files in `plugins/my-plugin/`.
 
 ### Plugin Structure
 
-```
-plugins/my-plugin/          # Source directory
-├── Cargo.toml              # Routes and metadata
-├── mod.rs                  # Plugin entry point
-├── router.rs               # HTTP handlers
-├── index.jsx               # Frontend entry (required)
-└── viewport.jsx            # UI component (optional)
-```
-
-After building (development):
+**Frontend-only plugin** (no Rust backend):
 ```
 plugins/my-plugin/
-├── index.jsx               # Source files...
-├── mod.rs
-└── my-plugin.dll           # Compiled DLL inside source dir
+├── index.jsx               # Frontend entry (required)
+└── viewport.jsx            # UI components (optional)
 ```
+→ Builds to: `dist/plugins/my-plugin.js` (~5-15 KB)
 
-> **Note:** `index.jsx` is required - it identifies the directory as a plugin.
+**Full-stack plugin** (with Rust backend):
+```
+plugins/my-plugin/
+├── index.jsx               # Frontend entry (required)
+├── viewport.jsx            # UI components (optional)
+├── Cargo.toml              # Routes and dependencies
+├── mod.rs                  # Plugin entry point
+└── router.rs               # HTTP handlers
+```
+→ Builds to: `dist/plugins/my-plugin.dll` (~200+ KB)
+
+> **Note:** `index.jsx` is required - it identifies the directory as a plugin. If `mod.rs` + `Cargo.toml` exist, it's a full-stack plugin; otherwise it's frontend-only.
 
 ### Manual Setup
 
@@ -335,7 +349,51 @@ api.showFooter(true);       // Footer bar
 api.showTabs(true);         // Viewport tabs
 api.showBottomPanel(true);  // Bottom panel
 api.showToolbar(true);      // Toolbar
+
+// App fullscreen mode (hides UI elements)
+api.showFullscreen(true);   // Enter app fullscreen
+api.hideFullscreen();       // Exit app fullscreen
+api.toggleFullscreen();     // Toggle app fullscreen
+api.getFullscreen();        // Get current state
+
+// Bulk visibility controls
+api.showAll();              // Show all panels
+api.hideAll();              // Hide all panels
 ```
+
+> **Note:** When switching viewports, all panels are hidden by default. Use `onActivate` in your viewport registration to show the panels your plugin needs.
+
+#### Window Controls
+
+```jsx
+// Window size
+await api.setWindowSize(1280, 720);          // Set window dimensions
+const size = await api.getWindowSize();       // Returns { width, height }
+
+// Window position
+await api.setWindowPosition(100, 100);        // Set window position
+const pos = await api.getWindowPosition();    // Returns { x, y }
+
+// Size constraints
+await api.setWindowMinSize(800, 600);         // Set minimum size
+await api.setWindowMaxSize(1920, 1080);       // Set maximum size
+
+// Window state
+await api.maximizeWindow();                   // Maximize window
+await api.minimizeWindow();                   // Minimize window
+await api.unmaximizeWindow();                 // Restore from maximized
+await api.centerWindow();                     // Center on screen
+await api.fullscreen(true);                   // Enter fullscreen
+await api.fullscreen(false);                  // Exit fullscreen
+
+// Window title
+await api.setWindowTitle('My App - Untitled');
+
+// Exit application
+await api.exit();                             // Close the Tauri app
+```
+
+> **Note:** Window control methods are async and interact with Tauri's window API. They only work when running in the Tauri desktop environment.
 
 ### Calling Backend from Frontend
 
@@ -433,52 +491,52 @@ pub async fn handler_name(req: HttpRequest) -> HttpResponse {
 
 ## How Plugins Work
 
-### Single-DLL Architecture
+### Plugin Types
 
-Each plugin compiles to a **single DLL file** that contains everything:
+**Frontend-only plugins** compile to a single `.js` file:
+- Just bundled JavaScript (~5-15 KB)
+- No Rust compilation needed
+- Fast builds (~1 second)
+
+**Full-stack plugins** compile to a single `.dll` file containing:
 - Compiled Rust backend code
-- Bundled frontend JavaScript (`plugin.js`)
-- Plugin manifest (`package.json`)
-
-This makes distribution simple - just copy the `.dll` file.
+- Bundled frontend JavaScript (embedded)
+- Plugin manifest (embedded)
 
 ### Build Process
 
 1. **Source** (`plugins/my-plugin/`)
-   - You write `mod.rs`, `router.rs`, `index.jsx`
-   - Define routes in `Cargo.toml`
+   - Write `index.jsx` (required)
+   - Optionally add `mod.rs`, `router.rs`, `Cargo.toml` for backend
 
 2. **CLI Build** (`bun run plugin:build my-plugin`)
-   - Bundles frontend with RSpack → `plugin.js`
-   - Generates manifest → `package.json`
-   - Generates FFI wrapper code (`lib.rs`)
-   - Embeds frontend + manifest into DLL
-   - Compiles to platform binary (.dll/.so/.dylib)
-   - Cleans up temporary build artifacts
+   - Bundles frontend with RSpack
+   - **Frontend-only**: Outputs `dist/plugins/my-plugin.js`
+   - **Full-stack**: Embeds JS into DLL, outputs `dist/plugins/my-plugin.dll`
 
-3. **Output**
-   - Development: `plugins/my-plugin/my-plugin.dll` (inside source dir)
-   - Production: `plugins/my-plugin.dll` (flat structure, no source)
+3. **Output Location**
+   - Development: `dist/plugins/` (app loads from here)
+   - Production: `{app}/plugins/` (Tauri bundles from dist/plugins)
 
 ### Runtime Loading
 
-The loader supports both development and production layouts:
+The loader scans `dist/plugins/` (dev) or `plugins/` (prod) for:
 
-1. **Backend**: Bridge scans `plugins/` directory
-   - Development: Looks for DLLs inside subdirectories (`plugins/name/name.dll`)
-   - Production: Looks for DLLs directly in folder (`plugins/name.dll`)
-   - Loads DLL via `libloading`
-   - Extracts manifest from DLL via FFI
-   - Registers routes from embedded manifest
+| File Type | Plugin Type | Loading Method |
+|-----------|-------------|----------------|
+| `*.js` | Frontend-only | Direct file read |
+| `*.dll` | Full-stack | FFI extraction from DLL |
+
+1. **Backend**: Bridge scans plugins directory
+   - Finds `.js` files → registers as frontend-only
+   - Finds `.dll` files → loads via FFI, extracts manifest & routes
 
 2. **Frontend**: Plugin loader fetches plugin list
-   - Requests `plugin.js` from bridge
-   - Bridge extracts JS from DLL and serves it
+   - Frontend-only: Serves JS file directly
+   - Full-stack: Extracts JS from DLL and serves it
    - Calls `onStart(api)` for initialization
 
-### FFI Functions
-
-Each plugin DLL exports:
+### FFI Functions (DLL plugins only)
 
 | Function | Returns | Description |
 |----------|---------|-------------|
@@ -487,7 +545,7 @@ Each plugin DLL exports:
 | `has_frontend()` | `bool` | Whether plugin has frontend |
 | `{handler_name}()` | Response | Route handlers |
 
-### Request Flow
+### Request Flow (Full-stack plugins)
 
 ```
 Frontend fetch()
@@ -515,13 +573,20 @@ bun run plugin:new my-plugin
 bun run plugin:new my-plugin --name "My Plugin" --author "You"
 bun run plugin:new my-plugin --frontend-only
 
-# Build plugins
+# Build plugins (outputs to dist/plugins/)
 bun run plugin:build my-plugin    # Build specific plugin
 bun run plugin:build --all        # Build all plugins
 
 # List available plugins
 bun run plugin:list
 ```
+
+### Build Output
+
+| Plugin Type | Input | Output |
+|-------------|-------|--------|
+| Frontend-only | `plugins/foo/index.jsx` | `dist/plugins/foo.js` |
+| Full-stack | `plugins/foo/` (with mod.rs + Cargo.toml) | `dist/plugins/foo.dll` |
 
 ### Direct CLI Usage
 
@@ -560,8 +625,10 @@ cd cli && cargo run --release -- list
 
 1. Use `bun run dev:verbose` for detailed logs
 2. Check browser DevTools for frontend errors
-3. Plugin changes require rebuild: `bun run plugin:build`
-4. Keep source directories in `plugins/` for development
+3. Plugin changes require rebuild: `bun run plugin:build <plugin-name>`
+4. Source code stays in `plugins/`, built output goes to `dist/plugins/`
+5. App loads plugins from `dist/plugins/` in dev mode
+6. Frontend-only plugins build instantly (~1s), full-stack takes longer (~10-30s)
 
 ---
 

@@ -17,10 +17,11 @@ const [activeViewportType, setActiveViewportType] = createSignal(null); // Track
 const [propertiesPanelVisible, setPropertiesPanelVisible] = createSignal(true);
 const [leftPanelVisible, setLeftPanelVisible] = createSignal(true);
 const [horizontalMenuButtonsEnabled, setHorizontalMenuButtonsEnabled] = createSignal(true);
-const [footerVisible, setFooterVisible] = createSignal(true);
-const [viewportTabsVisible, setViewportTabsVisible] = createSignal(true);
+const [footerVisible, setFooterVisible] = createSignal(false);
+const [viewportTabsVisible, setViewportTabsVisible] = createSignal(false);
 const [bottomPanelVisible, setBottomPanelVisible] = createSignal(false);
 const [toolbarVisible, setToolbarVisible] = createSignal(true);
+const [fullscreenMode, setFullscreenMode] = createSignal(false);
 const [layoutComponents, setLayoutComponents] = createSignal(new Map());
 
 class PluginLoader {
@@ -521,6 +522,15 @@ export class PluginAPI {
         const { viewportStore } = await import('@/panels/viewport/store');
         const tab = viewportStore.tabs.find(t => t.id === tabId);
         if (tab) {
+          // Reset all UI visibility to hidden by default when switching viewports
+          // Plugins must explicitly show panels/footer/tabs in their onActivate or onStart
+          setFooterVisible(false);
+          setViewportTabsVisible(false);
+          setBottomPanelVisible(false);
+          setLeftPanelVisible(false);
+          setPropertiesPanelVisible(false);
+          setToolbarVisible(false);
+
           setActiveViewportType(tab.type);
         }
       } catch (err) {
@@ -1143,7 +1153,233 @@ export class PluginAPI {
   showTabs(visible = true) { return this.setViewportTabsVisible(visible); }
   hideTabs() { return this.setViewportTabsVisible(false); }
 
+  setFullscreen(enabled) {
+    setFullscreenMode(enabled);
+  }
 
+  showFullscreen(enabled = true) { return this.setFullscreen(enabled); }
+  hideFullscreen() { return this.setFullscreen(false); }
+  toggleFullscreen() { return this.setFullscreen(!fullscreenMode()); }
+
+  getFullscreen() {
+    return fullscreenMode();
+  }
+
+  async exit() {
+    try {
+      // Check if we're running in Tauri
+      if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
+        const { emit } = await import('@tauri-apps/api/event');
+        await emit('proceed-with-close');
+      } else {
+        // Fallback for non-Tauri environments (e.g., browser development)
+        console.warn('[PluginAPI] exit() called but not running in Tauri environment');
+      }
+    } catch (error) {
+      console.error('[PluginAPI] Failed to exit application:', error);
+      // Try alternative close method
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const window = getCurrentWindow();
+        await window.close();
+      } catch (closeError) {
+        console.error('[PluginAPI] Failed to close window:', closeError);
+      }
+    }
+  }
+
+  async fullscreen(enabled = true) {
+    try {
+      if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const appWindow = getCurrentWindow();
+        await appWindow.setFullscreen(enabled);
+      } else {
+        console.warn('[PluginAPI] fullscreen() called but not running in Tauri environment');
+      }
+    } catch (error) {
+      console.error('[PluginAPI] Failed to set fullscreen:', error);
+    }
+  }
+
+  async setWindowSize(width, height) {
+    try {
+      if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const { LogicalSize } = await import('@tauri-apps/api/dpi');
+        const appWindow = getCurrentWindow();
+        await appWindow.setSize(new LogicalSize(width, height));
+      } else {
+        console.warn('[PluginAPI] setWindowSize() called but not running in Tauri environment');
+      }
+    } catch (error) {
+      console.error('[PluginAPI] Failed to set window size:', error);
+    }
+  }
+
+  async getWindowSize() {
+    try {
+      if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const appWindow = getCurrentWindow();
+        const size = await appWindow.innerSize();
+        return { width: size.width, height: size.height };
+      } else {
+        console.warn('[PluginAPI] getWindowSize() called but not running in Tauri environment');
+        return { width: window.innerWidth, height: window.innerHeight };
+      }
+    } catch (error) {
+      console.error('[PluginAPI] Failed to get window size:', error);
+      return { width: 0, height: 0 };
+    }
+  }
+
+  async setWindowPosition(x, y) {
+    try {
+      if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const { LogicalPosition } = await import('@tauri-apps/api/dpi');
+        const appWindow = getCurrentWindow();
+        await appWindow.setPosition(new LogicalPosition(x, y));
+      } else {
+        console.warn('[PluginAPI] setWindowPosition() called but not running in Tauri environment');
+      }
+    } catch (error) {
+      console.error('[PluginAPI] Failed to set window position:', error);
+    }
+  }
+
+  async getWindowPosition() {
+    try {
+      if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const appWindow = getCurrentWindow();
+        const position = await appWindow.outerPosition();
+        return { x: position.x, y: position.y };
+      } else {
+        console.warn('[PluginAPI] getWindowPosition() called but not running in Tauri environment');
+        return { x: 0, y: 0 };
+      }
+    } catch (error) {
+      console.error('[PluginAPI] Failed to get window position:', error);
+      return { x: 0, y: 0 };
+    }
+  }
+
+  async setWindowMinSize(width, height) {
+    try {
+      if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const { LogicalSize } = await import('@tauri-apps/api/dpi');
+        const appWindow = getCurrentWindow();
+        await appWindow.setMinSize(new LogicalSize(width, height));
+      } else {
+        console.warn('[PluginAPI] setWindowMinSize() called but not running in Tauri environment');
+      }
+    } catch (error) {
+      console.error('[PluginAPI] Failed to set window min size:', error);
+    }
+  }
+
+  async setWindowMaxSize(width, height) {
+    try {
+      if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const { LogicalSize } = await import('@tauri-apps/api/dpi');
+        const appWindow = getCurrentWindow();
+        await appWindow.setMaxSize(new LogicalSize(width, height));
+      } else {
+        console.warn('[PluginAPI] setWindowMaxSize() called but not running in Tauri environment');
+      }
+    } catch (error) {
+      console.error('[PluginAPI] Failed to set window max size:', error);
+    }
+  }
+
+  async centerWindow() {
+    try {
+      if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const appWindow = getCurrentWindow();
+        await appWindow.center();
+      } else {
+        console.warn('[PluginAPI] centerWindow() called but not running in Tauri environment');
+      }
+    } catch (error) {
+      console.error('[PluginAPI] Failed to center window:', error);
+    }
+  }
+
+  async maximizeWindow() {
+    try {
+      if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const appWindow = getCurrentWindow();
+        await appWindow.maximize();
+      } else {
+        console.warn('[PluginAPI] maximizeWindow() called but not running in Tauri environment');
+      }
+    } catch (error) {
+      console.error('[PluginAPI] Failed to maximize window:', error);
+    }
+  }
+
+  async minimizeWindow() {
+    try {
+      if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const appWindow = getCurrentWindow();
+        await appWindow.minimize();
+      } else {
+        console.warn('[PluginAPI] minimizeWindow() called but not running in Tauri environment');
+      }
+    } catch (error) {
+      console.error('[PluginAPI] Failed to minimize window:', error);
+    }
+  }
+
+  async unmaximizeWindow() {
+    try {
+      if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const appWindow = getCurrentWindow();
+        await appWindow.unmaximize();
+      } else {
+        console.warn('[PluginAPI] unmaximizeWindow() called but not running in Tauri environment');
+      }
+    } catch (error) {
+      console.error('[PluginAPI] Failed to unmaximize window:', error);
+    }
+  }
+
+  async setWindowTitle(title) {
+    try {
+      if (typeof window !== 'undefined' && window.__TAURI_INTERNALS__) {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const appWindow = getCurrentWindow();
+        await appWindow.setTitle(title);
+      } else {
+        console.warn('[PluginAPI] setWindowTitle() called but not running in Tauri environment');
+        document.title = title;
+      }
+    } catch (error) {
+      console.error('[PluginAPI] Failed to set window title:', error);
+    }
+  }
+
+  showAll(visible = true) {
+    setFooterVisible(visible);
+    setViewportTabsVisible(visible);
+    setBottomPanelVisible(visible);
+    setLeftPanelVisible(visible);
+    setPropertiesPanelVisible(visible);
+    setToolbarVisible(visible);
+    setHorizontalMenuButtonsEnabled(visible);
+  }
+
+  hideAll() {
+    return this.showAll(false);
+  }
 
   getTopMenuItems() {
     return Array.from(topMenuItems().values()).sort((a, b) => a.order - b.order);
@@ -1451,6 +1687,7 @@ export {
   viewportTabsVisible,
   bottomPanelVisible,
   toolbarVisible,
+  fullscreenMode,
   layoutComponents,
   activeViewportType,
   PLUGIN_STATES

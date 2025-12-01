@@ -1,5 +1,5 @@
 import { viewportStore } from "./store";
-import { viewportTypes } from "@/api/plugin";
+import { viewportTypes, pluginAPI } from "@/api/plugin";
 import { For, Show } from 'solid-js';
 
 const Viewport = () => {
@@ -17,7 +17,7 @@ const Viewport = () => {
           className="absolute inset-0 bg-base-100"
           style={{ display: viewportStore.activeTabId === tab.id ? 'block' : 'none' }}
         >
-          <PluginComponent tab={tab} />
+          <PluginComponent tab={tab} api={pluginAPI} />
         </div>
       );
     }

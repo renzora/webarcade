@@ -15,9 +15,9 @@ impl DynamicPluginLoader {
 
     /// Discover and load all plugins from the plugins directory
     ///
-    /// Supports two layouts:
-    /// - Development: plugins/{plugin-name}/{plugin-name}.dll (DLL inside source directory)
-    /// - Production: plugins/{plugin-name}.dll (DLL directly in plugins folder)
+    /// Supports multiple layouts:
+    /// - Development (dist/plugins): {plugin-name}.js or {plugin-name}.dll (flat files)
+    /// - Production (plugins): {plugin-name}.dll or {plugin-name}.js (flat files)
     pub fn load_all_plugins(&mut self) -> Result<Vec<PluginInfo>> {
         log::info!("🔍 Scanning for plugins in: {:?}", self.plugins_dir);
 
@@ -28,40 +28,53 @@ impl DynamicPluginLoader {
 
         let entries = fs::read_dir(&self.plugins_dir)?;
         let mut plugins = Vec::new();
+        let mut loaded_ids = std::collections::HashSet::new();
 
         for entry in entries {
             let entry = entry?;
             let path = entry.path();
 
-            if path.is_dir() {
-                // Development mode: DLL inside plugin source directory
-                let dir_name = entry.file_name().to_string_lossy().to_string();
-
-                if let Some(dll_path) = self.find_dll_in_dir(&path, &dir_name) {
-                    match self.load_plugin_from_dll(&dll_path) {
-                        Ok(plugin_info) => {
-                            plugins.push(plugin_info);
-                        }
-                        Err(e) => {
-                            log::warn!("⚠️  Failed to load plugin from {:?}: {}", dll_path, e);
-                        }
-                    }
-                } else {
-                    // No DLL found - plugin needs to be built
-                    log::info!("⚠️  No DLL found for plugin '{}' - run 'bun run plugin:build {}'", dir_name, dir_name);
-                }
-            } else if path.is_file() {
-                // Production mode: DLL directly in plugins folder
+            if path.is_file() {
                 if let Some(ext) = path.extension() {
-                    if ext == "dll" || ext == "so" || ext == "dylib" {
+                    let ext_str = ext.to_string_lossy().to_lowercase();
+
+                    // Get plugin ID from filename
+                    let stem = path.file_stem()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or_default();
+
+                    // Remove "lib" prefix on Linux/macOS
+                    let plugin_id = stem.strip_prefix("lib").unwrap_or(&stem).to_string();
+
+                    // Skip if we already loaded this plugin (DLL takes precedence over JS)
+                    if loaded_ids.contains(&plugin_id) {
+                        continue;
+                    }
+
+                    if ext_str == "dll" || ext_str == "so" || ext_str == "dylib" {
+                        // DLL plugin (has backend)
                         match self.load_plugin_from_dll(&path) {
                             Ok(plugin_info) => {
+                                loaded_ids.insert(plugin_info.id.clone());
                                 plugins.push(plugin_info);
                             }
                             Err(e) => {
                                 log::warn!("⚠️  Failed to load plugin from {:?}: {}", path, e);
                             }
                         }
+                    } else if ext_str == "js" {
+                        // Frontend-only JS plugin
+                        log::info!("📦 Loading frontend-only plugin: {} from {:?}", plugin_id, path);
+                        loaded_ids.insert(plugin_id.clone());
+                        plugins.push(PluginInfo {
+                            id: plugin_id.clone(),
+                            dll_path: PathBuf::new(), // No DLL
+                            has_backend: false,
+                            has_frontend: true,
+                            routes: vec![],
+                            frontend_path: Some(path.clone()),
+                        });
+                        log::info!("✅ Loaded frontend-only plugin: {}", plugin_id);
                     }
                 }
             }
@@ -145,6 +158,7 @@ impl DynamicPluginLoader {
             has_backend,
             has_frontend,
             routes,
+            frontend_path: None, // Frontend is embedded in DLL
         })
     }
 
@@ -218,4 +232,6 @@ pub struct PluginInfo {
     pub has_backend: bool,
     pub has_frontend: bool,
     pub routes: Vec<serde_json::Value>,
+    /// Path to plugin.js for frontend-only plugins (no DLL)
+    pub frontend_path: Option<PathBuf>,
 }

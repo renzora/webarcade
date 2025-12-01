@@ -6,42 +6,56 @@ use std::path::PathBuf;
 
 use crate::bridge::core::dynamic_plugin_loader::DynamicPluginLoader;
 
+/// Check if we're running in development mode
+pub fn is_dev_mode() -> bool {
+    let exe_path = std::env::current_exe().ok();
+    let is_dev = exe_path.as_ref()
+        .and_then(|p| p.to_str())
+        .map(|s| s.contains("target\\debug") || s.contains("target/debug"))
+        .unwrap_or(false);
+    log::info!("🔍 is_dev_mode: {} (exe: {:?})", is_dev, exe_path);
+    is_dev
+}
+
+/// Get the repo root directory (only valid in dev mode)
+pub fn get_repo_root() -> Option<PathBuf> {
+    let exe_path = std::env::current_exe().ok()?;
+    log::info!("🔍 get_repo_root: exe_path = {:?}", exe_path);
+    let target_dir = exe_path.parent()?; // debug or release
+    log::info!("🔍 get_repo_root: target_dir (debug/release) = {:?}", target_dir);
+    let target = target_dir.parent()?; // target
+    log::info!("🔍 get_repo_root: target = {:?}", target);
+    let src_tauri = target.parent()?; // src-tauri
+    log::info!("🔍 get_repo_root: src_tauri = {:?}", src_tauri);
+    let repo_root = src_tauri.parent()?; // repo root
+    log::info!("🔍 get_repo_root: repo_root = {:?}", repo_root);
+    Some(repo_root.to_path_buf())
+}
+
 /// Get the plugins directory based on environment
-/// - Development: {repo_root}/plugins (detected by checking if exe is in target/debug)
+/// - Development: {repo_root}/dist/plugins (built plugins)
 /// - Production: {exe_dir}/plugins (next to the executable)
 pub fn get_plugins_dir() -> PathBuf {
     let exe_path = std::env::current_exe().ok();
     let exe_dir = exe_path.as_ref()
         .and_then(|p| p.parent().map(|p| p.to_path_buf()));
 
-    // Check if we're in development mode by looking for "target\debug" in path
-    // Note: target\release is NOT dev mode - it's a production build being tested
-    let is_dev = exe_path.as_ref()
-        .and_then(|p| p.to_str())
-        .map(|s| s.contains("target\\debug") || s.contains("target/debug"))
-        .unwrap_or(false);
-
-    if is_dev {
-        // Development: use repo root's plugins/ directory
-        // Navigate up from src-tauri/target/debug to repo root
-        if let Some(exe) = &exe_path {
-            if let Some(target_dir) = exe.parent() { // debug or release
-                if let Some(target) = target_dir.parent() { // target
-                    if let Some(src_tauri) = target.parent() { // src-tauri
-                        if let Some(repo_root) = src_tauri.parent() { // repo root
-                            let plugins_dir = repo_root.join("plugins");
-                            if plugins_dir.exists() || std::fs::create_dir_all(&plugins_dir).is_ok() {
-                                return plugins_dir;
-                            }
-                        }
-                    }
-                }
+    if is_dev_mode() {
+        // Development: use repo root's dist/plugins/ directory for built plugins
+        if let Some(repo_root) = get_repo_root() {
+            let dist_plugins_dir = repo_root.join("dist").join("plugins");
+            log::info!("🔍 Dev mode plugins dir: {:?} (exists: {})", dist_plugins_dir, dist_plugins_dir.exists());
+            if dist_plugins_dir.exists() || std::fs::create_dir_all(&dist_plugins_dir).is_ok() {
+                return dist_plugins_dir;
             }
         }
         // Fallback: try current directory
-        std::env::current_dir()
+        let fallback = std::env::current_dir()
             .unwrap_or_default()
-            .join("plugins")
+            .join("dist")
+            .join("plugins");
+        log::info!("🔍 Dev mode fallback plugins dir: {:?}", fallback);
+        fallback
     } else {
         // Production: try multiple locations
         // 1. First check next to executable (Windows MSI installs here)
@@ -103,10 +117,35 @@ pub fn handle_list_plugins() -> Response<BoxBody<Bytes, Infallible>> {
 }
 
 /// Handle /api/plugins/{plugin_id}/{file} - serve plugin files
-/// For plugin.js, retrieves from the embedded DLL content
+/// For plugin.js, retrieves from file (frontend-only) or embedded DLL content
 pub fn handle_serve_plugin_file(plugin_id: &str, file_path: &str) -> Response<BoxBody<Bytes, Infallible>> {
-    // For plugin.js, serve from the embedded DLL
-    if file_path == "plugin.js" {
+    // For plugin.js (legacy) or {plugin_id}.js, check if it's a frontend-only plugin first
+    let expected_js_name = format!("{}.js", plugin_id);
+    if file_path == "plugin.js" || file_path == expected_js_name {
+        // Check if this is a frontend-only plugin with a file path
+        let loaded_plugins = crate::bridge::LOADED_PLUGINS.lock().unwrap();
+        if let Some(plugin_info) = loaded_plugins.iter().find(|p| p.id == plugin_id) {
+            if let Some(ref frontend_path) = plugin_info.frontend_path {
+                // Frontend-only plugin - serve from file
+                match std::fs::read_to_string(frontend_path) {
+                    Ok(js_content) => {
+                        return Response::builder()
+                            .status(StatusCode::OK)
+                            .header("Content-Type", "application/javascript")
+                            .header("Access-Control-Allow-Origin", "*")
+                            .body(BoxBody::new(Full::new(Bytes::from(js_content))))
+                            .unwrap();
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to read frontend file for plugin {}: {}", plugin_id, e);
+                        return error_response(StatusCode::NOT_FOUND, "Plugin frontend file not found");
+                    }
+                }
+            }
+        }
+        drop(loaded_plugins); // Release lock before calling get_frontend_js
+
+        // DLL-based plugin - serve from embedded content
         match DynamicPluginLoader::get_frontend_js(plugin_id) {
             Ok(js_content) => {
                 return Response::builder()
