@@ -5,13 +5,47 @@ import postcss from 'postcss';
 import tailwindcss from '@tailwindcss/postcss';
 import cssnano from 'cssnano';
 import swc from '@swc/core';
+import pngToIco from 'png-to-ico';
 import { readFileSync, writeFileSync, mkdirSync, cpSync, existsSync, readdirSync, rmSync } from 'fs';
 import { resolve, dirname, basename, relative } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '../..');
+const APP = resolve(ROOT, 'app');
 const isProduction = process.env.NODE_ENV === 'production';
+
+// ============================================================================
+// ICON GENERATION - converts PNG to ICO for Windows executable
+// ============================================================================
+async function generateIcon() {
+  const pngPath = resolve(APP, 'icon.png');
+  const icoPath = resolve(APP, 'icon.ico');
+
+  // Skip if no PNG source
+  if (!existsSync(pngPath)) {
+    console.log('   ⚠️  No icon.png found in app/ - skipping icon generation');
+    return;
+  }
+
+  // Skip if ICO already exists and is newer than PNG
+  if (existsSync(icoPath)) {
+    const pngStat = Bun.file(pngPath);
+    const icoStat = Bun.file(icoPath);
+    const pngTime = (await pngStat.stat()).mtime;
+    const icoTime = (await icoStat.stat()).mtime;
+    if (icoTime > pngTime) {
+      console.log('   ✓ icon.ico is up to date');
+      return;
+    }
+  }
+
+  console.log('   🎨 Generating icon.ico from icon.png...');
+  const pngBuffer = readFileSync(pngPath);
+  const icoBuffer = await pngToIco(pngBuffer);
+  writeFileSync(icoPath, icoBuffer);
+  console.log('   ✅ icon.ico generated');
+}
 
 // Custom plugin for SolidJS JSX transformation
 function createSolidPlugin() {
@@ -188,6 +222,9 @@ async function buildApp() {
       console.log(`   ${relative(DIST, filePath)}: ${(size / 1024).toFixed(1)} KB`);
     }
   }
+
+  // Generate icon for Windows executable
+  await generateIcon();
 
   const elapsed = Date.now() - startTime;
   console.log(`\n✅ Build complete in ${elapsed}ms`);

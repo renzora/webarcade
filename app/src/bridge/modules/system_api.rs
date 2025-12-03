@@ -122,9 +122,23 @@ pub fn handle_serve_plugin_file(plugin_id: &str, file_path: &str) -> Response<Bo
     // For plugin.js (legacy) or {plugin_id}.js, check if it's a frontend-only plugin first
     let expected_js_name = format!("{}.js", plugin_id);
     if file_path == "plugin.js" || file_path == expected_js_name {
-        // Check if this is a frontend-only plugin with a file path
+        // Check if this is a frontend-only plugin with a file path or embedded JS
         let loaded_plugins = crate::bridge::LOADED_PLUGINS.lock().unwrap();
         if let Some(plugin_info) = loaded_plugins.iter().find(|p| p.id == plugin_id) {
+            // Check for embedded JS first (locked-plugins mode)
+            #[cfg(feature = "locked-plugins")]
+            if let Some(ref _embedded_key) = plugin_info.embedded_js {
+                if let Some(js_content) = crate::bridge::core::plugin_exports::get_embedded_js(plugin_id) {
+                    return Response::builder()
+                        .status(StatusCode::OK)
+                        .header("Content-Type", "application/javascript")
+                        .header("Access-Control-Allow-Origin", "*")
+                        .body(BoxBody::new(Full::new(Bytes::from(js_content))))
+                        .unwrap();
+                }
+            }
+
+            // Check for file-based frontend (unlocked mode)
             if let Some(ref frontend_path) = plugin_info.frontend_path {
                 // Frontend-only plugin - serve from file
                 match std::fs::read_to_string(frontend_path) {

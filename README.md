@@ -1,18 +1,20 @@
 # WebArcade
 
-A full-stack plugin platform for building native desktop applications with **SolidJS** (frontend) and **Rust** (backend).
+A lightweight plugin platform for building native desktop applications with **SolidJS** (frontend) and **Rust** (backend). Uses [Wry](https://github.com/nicefart-nicefart/nicefart) and [Tao](https://github.com/nicefart-nicefart/tao) for a minimal, fast runtime.
 
 ## Table of Contents
 
 1. [Getting Started](#getting-started)
-2. [Project Structure](#project-structure)
-3. [Core Development](#core-development)
-4. [Plugin Development](#plugin-development)
-5. [Plugin API Reference](#plugin-api-reference)
-6. [Bridge API Reference](#bridge-api-reference)
-7. [How Plugins Work](#how-plugins-work)
-8. [CLI Reference](#cli-reference)
-9. [Troubleshooting](#troubleshooting)
+2. [Plugin Modes](#plugin-modes)
+3. [App Configuration](#app-configuration)
+4. [Project Structure](#project-structure)
+5. [Core Development](#core-development)
+6. [Plugin Development](#plugin-development)
+7. [Plugin API Reference](#plugin-api-reference)
+8. [Bridge API Reference](#bridge-api-reference)
+9. [How Plugins Work](#how-plugins-work)
+10. [CLI Reference](#cli-reference)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -36,27 +38,111 @@ bun install
 ### Running the App
 
 ```bash
-# Development mode (hot reload)
-bun run dev
-
-# Production build
+# Build frontend only
 bun run build
+
+# Build production app with installer (plugins loaded from disk)
+bun run app
+
+# Build locked app with installer (plugins embedded in binary)
+bun run app:locked
+
+# Run the built app
+bun run app:run
 ```
 
 After building, you'll find:
-- **Installer:** `src-tauri/target/release/bundle/nsis/` (Windows `.exe` installer)
-- **Binary:** `src-tauri/target/release/Webarcade.exe` (standalone executable)
-- **Plugins:** `src-tauri/target/release/plugins/` (bundled DLLs)
+- **Binary:** `app/target/release/Emils.exe` (standalone executable)
+- **Installer:** `app/target/release/Emils_x.x.x_x64-setup.exe` (NSIS installer)
+- **Frontend:** `app/dist/` (bundled HTML/JS/CSS, embedded in binary)
+- **Plugins:** `app/plugins/` (bundled DLLs and JS files)
 
 ### Available Scripts
 
 | Script | Description |
 |--------|-------------|
-| `bun run dev` | Start development server with hot reload |
-| `bun run build` | Build production installer |
+| `bun run build` | Build frontend to `app/dist/` |
+| `bun run build:prod` | Build frontend for production (minified) |
+| `bun run app` | Build app + installer (unlocked plugins) |
+| `bun run app:locked` | Build app + installer (embedded plugins) |
+| `bun run app:run` | Run the built executable |
 | `bun run plugin:new <id>` | Create a new plugin project |
 | `bun run plugin:build` | Build all plugins |
 | `bun run plugin:list` | List available plugins |
+
+---
+
+## Plugin Modes
+
+The app supports two plugin loading modes:
+
+### Unlocked Mode (Default)
+
+```bash
+bun run app
+```
+
+- Plugins are loaded from the `plugins/` folder next to the executable
+- Users can add, remove, or modify plugins after installation
+- Good for development and extensible applications
+- Plugins folder is bundled with the installer
+
+### Locked Mode
+
+```bash
+bun run app:locked
+```
+
+- All plugins from `app/plugins/` are embedded into the binary at compile time
+- No external plugin loading - everything is self-contained in a single executable
+- Good for distribution when you don't want users modifying plugins
+- Smaller installer (no separate plugin files)
+
+---
+
+## App Configuration
+
+### Customizing the App
+
+Edit `app/Cargo.toml` to configure your app:
+
+```toml
+[package]
+name = "MyApp"              # Executable filename (MyApp.exe)
+version = "1.0.0"           # App version
+description = "My App"      # Shown in Windows file properties
+
+[package.metadata.packager]
+product-name = "My App"     # Display name in installer
+identifier = "com.myapp"    # Unique app identifier
+icons = ["icon.ico", "icon.png"]
+```
+
+### App Icon
+
+1. Place `icon.png` in `app/` directory (any size, 256x256 recommended)
+2. The build script automatically converts it to `icon.ico`
+3. The icon is embedded in both the executable and installer
+
+Alternatively, place `icon.ico` directly in `app/` to skip conversion.
+
+### Window Title
+
+Edit the window title in `app/src/main.rs`:
+
+```rust
+.with_title("My App")
+```
+
+### Installer Options
+
+Configure NSIS installer in `app/Cargo.toml`:
+
+```toml
+[package.metadata.packager.nsis]
+display-language-selector = false
+appdata-paths = ["$LOCALAPPDATA\\MyApp"]  # Cleaned up on uninstall
+```
 
 ---
 
@@ -68,9 +154,14 @@ webarcade/
 │   ├── api/               # Bridge and plugin APIs
 │   ├── components/        # UI components
 │   └── panels/            # Panel components
-├── src-tauri/             # Backend (Rust/Tauri)
-│   ├── src/bridge/        # HTTP bridge and plugin loader
-│   └── api/               # Plugin API crate
+├── app/                    # Desktop runtime (Rust)
+│   ├── src/               # Runtime source code
+│   │   ├── main.rs        # Window and IPC handling
+│   │   ├── bridge/        # HTTP bridge and plugin loader
+│   │   └── ipc.rs         # Frontend-backend communication
+│   ├── dist/              # Built frontend (embedded in binary)
+│   ├── plugins/           # Runtime plugins directory
+│   └── Cargo.toml         # Runtime dependencies
 ├── plugins/               # Plugin SOURCE code only
 │   └── my-plugin/         # Source directory (index.jsx, mod.rs, etc.)
 ├── build/
@@ -78,7 +169,7 @@ webarcade/
 │       ├── my-plugin.js   # Frontend-only plugin
 │       └── other.dll      # Full-stack plugin
 ├── cli/                   # Plugin build CLI tool
-└── scripts/               # Build scripts
+└── public/                # Static assets
 ```
 
 ### Plugin Layout
@@ -124,13 +215,15 @@ build/plugins/
 - **SolidJS** - Reactive UI framework
 - **Tailwind CSS** - Styling
 - **DaisyUI** - Component library
-- **RSpack** - Bundler
+- **esbuild** - Bundler (with Babel for SolidJS JSX)
 
 ### Backend Stack
 
-- **Tauri** - Desktop framework
+- **Wry** - WebView library (same core as Tauri)
+- **Tao** - Cross-platform window management
 - **Rust** - System programming
 - **Tokio** - Async runtime
+- **Hyper** - HTTP server for bridge
 
 ### Bridge Architecture
 
@@ -144,6 +237,18 @@ HTTP Bridge (localhost:3001)
 Plugin DLL (FFI call)
     ↓ response
 Frontend
+```
+
+### IPC Architecture
+
+Window controls use a direct IPC channel:
+
+```
+Frontend
+    ↓ window.ipc.invoke()
+IPC Handler (main.rs)
+    ↓ Tao window API
+Window operations
 ```
 
 ---
@@ -390,10 +495,10 @@ await api.fullscreen(false);                  // Exit fullscreen
 await api.setWindowTitle('My App - Untitled');
 
 // Exit application
-await api.exit();                             // Close the Tauri app
+await api.exit();                             // Close the app
 ```
 
-> **Note:** Window control methods are async and interact with Tauri's window API. They only work when running in the Tauri desktop environment.
+> **Note:** Window control methods are async and use IPC to communicate with the Rust runtime. They only work when running in the desktop environment.
 
 ### Calling Backend from Frontend
 
@@ -516,11 +621,14 @@ pub async fn handler_name(req: HttpRequest) -> HttpResponse {
 
 3. **Output Location**
    - Development: `build/plugins/` (app loads from here)
-   - Production: `{app}/plugins/` (Tauri bundles from build/plugins)
+   - Production (unlocked): `{app}/plugins/` (bundled with installer)
+   - Production (locked): Embedded directly in binary
 
 ### Runtime Loading
 
-The loader scans `build/plugins/` (dev) or `plugins/` (prod) for:
+**Unlocked mode** scans `build/plugins/` (dev) or `plugins/` (prod) for:
+
+**Locked mode** loads all plugins from memory (embedded at compile time).
 
 | File Type | Plugin Type | Loading Method |
 |-----------|-------------|----------------|
@@ -623,11 +731,11 @@ cd cli && cargo run --release -- list
 
 ### Development Tips
 
-1. Use `bun run dev:verbose` for detailed logs
-2. Check browser DevTools for frontend errors
+1. Set `RUST_LOG=debug` for detailed logs when running the app
+2. Check browser DevTools for frontend errors (devtools enabled by default)
 3. Plugin changes require rebuild: `bun run plugin:build <plugin-name>`
 4. Source code stays in `plugins/`, built output goes to `build/plugins/`
-5. App loads plugins from `build/plugins/` in dev mode
+5. App loads plugins from `app/plugins/` directory
 6. Frontend-only plugins build instantly (~1s), full-stack takes longer (~10-30s)
 
 ---

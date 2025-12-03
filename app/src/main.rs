@@ -9,7 +9,7 @@ use tao::{
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
     window::{Window, WindowBuilder},
 };
-use wry::WebViewBuilder;
+use wry::{WebViewBuilder, WebContext};
 use serde::{Deserialize, Serialize};
 
 mod ipc;
@@ -95,8 +95,16 @@ fn main() {
     let window = Arc::new(window);
     let window_for_ipc = window.clone();
 
+    // Get WebView2 data directory in AppData (avoids Program Files permission issues)
+    let data_dir = dirs::data_local_dir()
+        .unwrap_or_else(std::env::temp_dir)
+        .join(env!("CARGO_PKG_NAME"));
+
+    // Create web context with custom data directory
+    let mut web_context = WebContext::new(Some(data_dir));
+
     // Create webview with IPC handler
-    let webview = WebViewBuilder::new()
+    let webview = WebViewBuilder::with_web_context(&mut web_context)
         .with_ipc_handler(move |message| {
             let message_str = message.body();
             log::debug!("IPC message received: {}", message_str);

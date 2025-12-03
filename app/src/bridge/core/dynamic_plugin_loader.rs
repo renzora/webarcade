@@ -4,6 +4,12 @@ use std::fs;
 use std::sync::Arc;
 use anyhow::{Result, anyhow};
 
+// Include embedded plugins when feature is enabled
+#[cfg(feature = "locked-plugins")]
+mod embedded {
+    include!(concat!(env!("OUT_DIR"), "/embedded_plugins.rs"));
+}
+
 pub struct DynamicPluginLoader {
     plugins_dir: PathBuf,
 }
@@ -13,13 +19,85 @@ impl DynamicPluginLoader {
         Self { plugins_dir }
     }
 
-    /// Discover and load all plugins from the plugins directory
+    /// Discover and load all plugins
     ///
-    /// Supports multiple layouts:
-    /// - Development (dist/plugins): {plugin-name}.js or {plugin-name}.dll (flat files)
-    /// - Production (plugins): {plugin-name}.dll or {plugin-name}.js (flat files)
+    /// When `locked-plugins` feature is enabled: loads from embedded binary data
+    /// Otherwise: loads from plugins directory on disk
     pub fn load_all_plugins(&mut self) -> Result<Vec<PluginInfo>> {
-        log::info!("🔍 Scanning for plugins in: {:?}", self.plugins_dir);
+        #[cfg(feature = "locked-plugins")]
+        {
+            self.load_embedded_plugins()
+        }
+
+        #[cfg(not(feature = "locked-plugins"))]
+        {
+            self.load_external_plugins()
+        }
+    }
+
+    /// Load plugins embedded in the binary (locked mode)
+    #[cfg(feature = "locked-plugins")]
+    fn load_embedded_plugins(&mut self) -> Result<Vec<PluginInfo>> {
+        log::info!("🔒 Loading embedded plugins (locked mode)");
+
+        let mut plugins = Vec::new();
+
+        for plugin in embedded::EMBEDDED_PLUGINS {
+            log::info!("📦 Loading embedded plugin: {}", plugin.id);
+
+            if plugin.is_dll {
+                // For DLLs, we need to write to a temp file and load it
+                // (libloading requires a file path)
+                match self.load_embedded_dll(plugin.id, plugin.data) {
+                    Ok(plugin_info) => plugins.push(plugin_info),
+                    Err(e) => log::warn!("⚠️  Failed to load embedded plugin {}: {}", plugin.id, e),
+                }
+            } else {
+                // JS plugin - store the data directly
+                let js_content = String::from_utf8_lossy(plugin.data).to_string();
+                crate::bridge::core::plugin_exports::register_embedded_js(plugin.id.to_string(), js_content);
+
+                plugins.push(PluginInfo {
+                    id: plugin.id.to_string(),
+                    dll_path: PathBuf::new(),
+                    has_backend: false,
+                    has_frontend: true,
+                    routes: vec![],
+                    frontend_path: None,
+                    embedded_js: Some(plugin.id.to_string()),
+                });
+                log::info!("✅ Loaded embedded JS plugin: {}", plugin.id);
+            }
+        }
+
+        log::info!("📦 Successfully loaded {} embedded plugins", plugins.len());
+        Ok(plugins)
+    }
+
+    /// Load a DLL from embedded bytes
+    #[cfg(feature = "locked-plugins")]
+    fn load_embedded_dll(&mut self, plugin_id: &str, data: &[u8]) -> Result<PluginInfo> {
+        // Write DLL to temp directory
+        let temp_dir = std::env::temp_dir().join("emils_plugins");
+        fs::create_dir_all(&temp_dir)?;
+
+        #[cfg(target_os = "windows")]
+        let dll_name = format!("{}.dll", plugin_id);
+        #[cfg(target_os = "linux")]
+        let dll_name = format!("lib{}.so", plugin_id);
+        #[cfg(target_os = "macos")]
+        let dll_name = format!("lib{}.dylib", plugin_id);
+
+        let dll_path = temp_dir.join(&dll_name);
+        fs::write(&dll_path, data)?;
+
+        self.load_plugin_from_dll(&dll_path)
+    }
+
+    /// Load plugins from external directory (unlocked mode)
+    #[cfg(not(feature = "locked-plugins"))]
+    fn load_external_plugins(&mut self) -> Result<Vec<PluginInfo>> {
+        log::info!("🔓 Scanning for external plugins in: {:?}", self.plugins_dir);
 
         if !self.plugins_dir.exists() {
             fs::create_dir_all(&self.plugins_dir)?;
@@ -73,6 +151,8 @@ impl DynamicPluginLoader {
                             has_frontend: true,
                             routes: vec![],
                             frontend_path: Some(path.clone()),
+                            #[cfg(feature = "locked-plugins")]
+                            embedded_js: None,
                         });
                         log::info!("✅ Loaded frontend-only plugin: {}", plugin_id);
                     }
@@ -159,6 +239,8 @@ impl DynamicPluginLoader {
             has_frontend,
             routes,
             frontend_path: None, // Frontend is embedded in DLL
+            #[cfg(feature = "locked-plugins")]
+            embedded_js: None,
         })
     }
 
@@ -234,4 +316,7 @@ pub struct PluginInfo {
     pub routes: Vec<serde_json::Value>,
     /// Path to plugin.js for frontend-only plugins (no DLL)
     pub frontend_path: Option<PathBuf>,
+    /// Key for embedded JS content (locked-plugins mode)
+    #[cfg(feature = "locked-plugins")]
+    pub embedded_js: Option<String>,
 }

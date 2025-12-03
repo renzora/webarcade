@@ -1,69 +1,52 @@
 [package]
-name = "webarcade"
+name = "Emils"
 version = "0.1.0"
 edition = "2021"
-description = "Lightweight WebArcade wrapper using wry"
+description = "game"
+
+[features]
+default = []
+locked-plugins = []
 
 [dependencies]
-# Core webview - this is what Tauri uses internally
 wry = "0.47"
-tao = "0.30"  # Window management (also used by Tauri internally)
-
-# Async runtime for bridge server
+tao = "0.30"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "fs", "sync", "time", "macros", "io-util", "process"] }
 tokio-stream = { version = "0.1", features = ["time"] }
-
-# HTTP/WebSocket (bridge server)
 hyper = { version = "1.0", features = ["server", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
 bytes = "1.0"
 futures-util = "0.3"
 tokio-tungstenite = "0.24"
-
-# Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 base64 = "0.22"
-
-# URL parsing
 url = "2.5"
 urlencoding = "2.1"
-
-# Logging
 log = "0.4"
 env_logger = "0.11"
-
-# Error handling
 anyhow = "1.0"
 async-trait = "0.1"
-
-# Utilities
 lazy_static = "1.4"
 once_cell = "1.19"
 regex = "1.0"
 toml = "0.8"
 chrono = "0.4"
-
-# System utilities
 dirs = "5.0"
-
-# File extraction (plugin installer)
 zip = "0.6"
-
-# Dynamic plugin loading
 libloading = "0.8"
-
-# Embed static files in binary
 include_dir = "0.7"
 
 [target.'cfg(windows)'.dependencies]
-# Windows-specific for borderless window handling
 windows = { version = "0.58", features = [
     "Win32_Foundation",
     "Win32_UI_WindowsAndMessaging",
     "Win32_Graphics_Gdi"
 ]}
+
+[build-dependencies]
+winres = "0.1"
 
 [profile.release]
 opt-level = "z"     # Optimize for size
@@ -71,3 +54,16 @@ lto = true          # Link-time optimization
 codegen-units = 1   # Better optimization
 panic = "abort"     # Smaller binary
 strip = true        # Strip symbols
+
+[package.metadata.packager]
+product-name = "Emils"
+identifier = "com.emils.app"
+icons = ["icon.ico", "icon.png"]
+
+[[package.metadata.packager.binaries]]
+path = "Emils"
+main = true
+
+[package.metadata.packager.nsis]
+display-language-selector = false
+appdata-paths = ["$LOCALAPPDATA\\Emils"]

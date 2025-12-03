@@ -7,8 +7,9 @@
   "scripts": {
     "build": "node app/scripts/build.js",
     "build:prod": "cross-env NODE_ENV=production node app/scripts/build.js",
-    "app": "bun run build:prod && cd app && cargo build --release",
-    "app:run": "cd app/target/release && webarcade.exe",
+    "app": "bun run build:prod && cd app && cargo build --release && cargo packager --release",
+    "app:locked": "bun run build:prod && cd app && cargo build --release --features locked-plugins && cargo packager --release",
+    "app:run": "cd app/target/release && Emils.exe",
     "clean": "rm -rf app/dist app/target cli/target",
     "lint": "oxlint",
     "plugin:new": "cd cli && cargo run --release -- new",
@@ -29,6 +30,7 @@
     "cross-env": "^7.0.3",
     "cssnano": "^7.1.2",
     "esbuild": "^0.27.0",
+    "png-to-ico": "^3.0.1",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.12"
   }

@@ -11,6 +11,10 @@ use tokio::runtime::Runtime;
 // Global registry to track plugin_id -> Library mapping
 pub static PLUGIN_LIBRARIES: Lazy<Mutex<HashMap<String, Arc<Library>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
+// Global registry for embedded JS content (locked-plugins mode)
+#[cfg(feature = "locked-plugins")]
+pub static EMBEDDED_JS: Lazy<Mutex<HashMap<String, String>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+
 // Global router registry for dynamic plugin route registration
 pub static GLOBAL_ROUTER_REGISTRY: Lazy<Mutex<Option<crate::bridge::core::plugin_router::RouterRegistry>>> = Lazy::new(|| Mutex::new(None));
 
@@ -52,6 +56,20 @@ pub fn unload_plugin_library(plugin_id: &str) -> bool {
 pub fn get_plugin_library(plugin_id: &str) -> Option<Arc<Library>> {
     let libs = PLUGIN_LIBRARIES.lock().unwrap();
     libs.get(plugin_id).cloned()
+}
+
+/// Register embedded JS content (locked-plugins mode)
+#[cfg(feature = "locked-plugins")]
+pub fn register_embedded_js(plugin_id: String, content: String) {
+    let mut js = EMBEDDED_JS.lock().unwrap();
+    js.insert(plugin_id, content);
+}
+
+/// Get embedded JS content by plugin ID (locked-plugins mode)
+#[cfg(feature = "locked-plugins")]
+pub fn get_embedded_js(plugin_id: &str) -> Option<String> {
+    let js = EMBEDDED_JS.lock().unwrap();
+    js.get(plugin_id).cloned()
 }
 
 /// Set the global router registry (called during bridge startup)
