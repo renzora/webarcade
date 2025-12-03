@@ -1020,7 +1020,7 @@ pub extern "C" fn has_frontend() -> bool {{
         self.install_npm_dependencies()?;
 
         // Find bundler script
-        let bundler_script = self.repo_root.join("app").join("scripts").join("build_plugin.js");
+        let bundler_script = self.repo_root.join("app").join("scripts").join("build.js");
 
         if !bundler_script.exists() {
             println!("    Warning: Frontend bundler not found at {}", bundler_script.display());

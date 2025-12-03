@@ -1,6 +1,6 @@
 import { createPlugin } from '@/api/plugin';
 import { IconBook } from '@tabler/icons-solidjs';
-import GuideViewport from './GuideViewport.jsx';
+import GuideViewport from './viewport.jsx';
 
 export default createPlugin({
   id: 'demo',

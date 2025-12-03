@@ -1,0 +1,348 @@
+import * as esbuild from 'esbuild';
+import { transformAsync } from '@babel/core';
+import solidPreset from 'babel-preset-solid';
+import postcss from 'postcss';
+import tailwindcss from '@tailwindcss/postcss';
+import cssnano from 'cssnano';
+import swc from '@swc/core';
+import { readFileSync, writeFileSync, mkdirSync, cpSync, existsSync, readdirSync, rmSync } from 'fs';
+import { resolve, dirname, basename, relative } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(__dirname, '../..');
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Custom plugin for SolidJS JSX transformation
+function createSolidPlugin() {
+  return {
+    name: 'solid',
+    setup(build) {
+      build.onLoad({ filter: /\.(jsx|tsx)$/ }, async (args) => {
+        const source = readFileSync(args.path, 'utf8');
+        const result = await transformAsync(source, {
+          filename: args.path,
+          presets: [
+            [solidPreset, {
+              generate: 'dom',
+              hydratable: false,
+            }]
+          ],
+        });
+        return { contents: result.code, loader: 'js' };
+      });
+    },
+  };
+}
+
+// Custom plugin for CSS with PostCSS/Tailwind
+function createCssPlugin(distDir) {
+  return {
+    name: 'css',
+    setup(build) {
+      const cssFiles = new Map();
+
+      build.onLoad({ filter: /\.css$/ }, async (args) => {
+        const source = readFileSync(args.path, 'utf8');
+        const result = await postcss([
+          tailwindcss(),
+          {
+            postcssPlugin: 'remove-comments',
+            Once(root) {
+              root.walkComments(comment => comment.remove());
+            }
+          }
+        ]).process(source, { from: args.path });
+
+        cssFiles.set(args.path, result.css);
+        return { contents: `/* CSS: ${basename(args.path)} */`, loader: 'js' };
+      });
+
+      build.onEnd(async () => {
+        if (cssFiles.size > 0) {
+          const combinedCss = Array.from(cssFiles.values()).join('\n');
+          const cssPath = resolve(distDir, 'assets/styles.css');
+          mkdirSync(dirname(cssPath), { recursive: true });
+          writeFileSync(cssPath, combinedCss);
+        }
+      });
+    },
+  };
+}
+
+// ============================================================================
+// APP BUILD - builds the main WebArcade application
+// ============================================================================
+async function buildApp() {
+  const SRC = resolve(ROOT, 'src');
+  const DIST = resolve(ROOT, 'app/dist');
+  const PUBLIC = resolve(ROOT, 'public');
+
+  const startTime = Date.now();
+  console.log(`\n📦 Building WebArcade (${isProduction ? 'production' : 'development'})...\n`);
+
+  // Clean and prepare
+  if (existsSync(DIST)) rmSync(DIST, { recursive: true, force: true });
+  mkdirSync(resolve(DIST, 'assets'), { recursive: true });
+
+  // Build with esbuild (no minification - SWC handles that)
+  const result = await esbuild.build({
+    entryPoints: [resolve(SRC, 'entry-client.jsx')],
+    bundle: true,
+    outfile: resolve(DIST, 'assets', 'app.js'),
+    format: 'esm',
+    minify: false,
+    sourcemap: false,
+    metafile: true,
+    target: ['es2020'],
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(isProduction ? 'production' : 'development'),
+      'import.meta.env.DEV': JSON.stringify(!isProduction),
+      'import.meta.env.PROD': JSON.stringify(isProduction),
+      'import.meta.env.MODE': JSON.stringify(isProduction ? 'production' : 'development'),
+      '__DEV__': JSON.stringify(!isProduction),
+      'import.meta.hot': 'undefined',
+    },
+    drop: isProduction ? ['console', 'debugger'] : [],
+    alias: { '@': SRC },
+    plugins: [createSolidPlugin(), createCssPlugin(DIST)],
+    loader: {
+      '.js': 'js', '.json': 'json',
+      '.png': 'file', '.jpg': 'file', '.jpeg': 'file', '.gif': 'file', '.svg': 'file',
+      '.woff': 'file', '.woff2': 'file', '.ttf': 'file', '.eot': 'file',
+    },
+    logLevel: 'warning',
+  });
+
+  // Minify JS with SWC in production
+  if (isProduction) {
+    for (const [filePath, info] of Object.entries(result.metafile.outputs)) {
+      if (filePath.endsWith('.js')) {
+        const fullPath = resolve(filePath);
+        const code = readFileSync(fullPath, 'utf8');
+        const minified = await swc.minify(code, {
+          compress: {
+            dead_code: true,
+            drop_console: true,
+            drop_debugger: true,
+            unused: true,
+            collapse_vars: true,
+            reduce_vars: true,
+            join_vars: true,
+            passes: 2,
+          },
+          mangle: { toplevel: true },
+          module: true,
+        });
+        writeFileSync(fullPath, minified.code);
+      }
+    }
+  }
+
+  // Process CSS with cssnano in production
+  const cssEntries = [resolve(SRC, 'index.css'), resolve(SRC, 'base.css')].filter(existsSync);
+  let cssOutput = null;
+
+  if (cssEntries.length > 0) {
+    let combinedCss = '';
+    for (const cssFile of cssEntries) {
+      const source = readFileSync(cssFile, 'utf8');
+      const plugins = [tailwindcss()];
+      if (isProduction) {
+        plugins.push(cssnano({ preset: ['default', { discardComments: { removeAll: true } }] }));
+      }
+      const processed = await postcss(plugins).process(source, { from: cssFile });
+      combinedCss += processed.css + '\n';
+    }
+    const cssFilename = isProduction ? `styles-${Date.now().toString(36)}.css` : 'styles.css';
+    writeFileSync(resolve(DIST, 'assets', cssFilename), combinedCss);
+    cssOutput = `assets/${cssFilename}`;
+  }
+
+  // Generate HTML
+  const outputs = Object.keys(result.metafile.outputs)
+    .filter(f => f.endsWith('.js'))
+    .map(f => relative(DIST, f).replace(/\\/g, '/'));
+  const entryFile = outputs.find(f => f.includes('app')) || outputs[0];
+
+  const template = readFileSync(resolve(SRC, 'index.html'), 'utf8');
+  const html = template
+    .replace('<!--app-head-->', cssOutput ? `<link rel="stylesheet" href="/${cssOutput}">` : '')
+    .replace('<!--app-html-->', '')
+    .replace('</body>', `    <script type="module" src="/${entryFile}"></script>\n  </body>`);
+  writeFileSync(resolve(DIST, 'index.html'), html);
+
+  // Copy public folder
+  if (existsSync(PUBLIC)) {
+    for (const file of readdirSync(PUBLIC)) {
+      if (!file.startsWith('.')) cpSync(resolve(PUBLIC, file), resolve(DIST, file), { recursive: true });
+    }
+  }
+
+  // Calculate final sizes
+  let totalJs = 0;
+  for (const [filePath] of Object.entries(result.metafile.outputs)) {
+    if (filePath.endsWith('.js')) {
+      const size = readFileSync(resolve(filePath)).length;
+      totalJs += size;
+      console.log(`   ${relative(DIST, filePath)}: ${(size / 1024).toFixed(1)} KB`);
+    }
+  }
+
+  const elapsed = Date.now() - startTime;
+  console.log(`\n✅ Build complete in ${elapsed}ms`);
+  console.log(`   Output: ${DIST}`);
+  console.log(`   Total JS: ${(totalJs / 1024).toFixed(1)} KB\n`);
+}
+
+// ============================================================================
+// PLUGIN BUILD - builds a single plugin for the CLI
+// ============================================================================
+
+// Plugin to rewrite external imports to window globals (ESM style)
+function createExternalsPlugin() {
+  return {
+    name: 'externals-to-globals',
+    setup(build) {
+      // Map external modules to their window global names
+      const externals = {
+        'solid-js': 'SolidJS',
+        'solid-js/web': 'SolidJSWeb',
+        'solid-js/store': 'SolidJSStore',
+        '@/api/plugin': 'WebArcadeAPI',
+        '@/api/bridge': 'WebArcadeAPI',
+      };
+
+      // Handle each external module
+      for (const [moduleName, globalName] of Object.entries(externals)) {
+        const filter = new RegExp(`^${moduleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+        build.onResolve({ filter }, args => ({
+          path: args.path,
+          namespace: 'external-global',
+          pluginData: { globalName, moduleName }
+        }));
+      }
+
+      // Return ESM that re-exports from window global
+      build.onLoad({ filter: /.*/, namespace: 'external-global' }, args => {
+        const g = args.pluginData.globalName;
+        const m = args.pluginData.moduleName;
+
+        // Define all known exports for each module
+        const exports = {
+          'solid-js': [
+            'createSignal', 'createEffect', 'createMemo', 'createRoot', 'createContext', 'useContext',
+            'onMount', 'onCleanup', 'onError', 'untrack', 'batch', 'on', 'createDeferred', 'createRenderEffect',
+            'createComputed', 'createReaction', 'createSelector', 'observable', 'from', 'mapArray', 'indexArray',
+            'Show', 'For', 'Switch', 'Match', 'Index', 'ErrorBoundary', 'Suspense', 'SuspenseList',
+            'children', 'lazy', 'createResource', 'createUniqueId', 'splitProps', 'mergeProps',
+            'getOwner', 'runWithOwner', 'DEV', 'enableScheduling', 'enableExternalSource',
+          ],
+          'solid-js/web': [
+            'render', 'hydrate', 'renderToString', 'renderToStream', 'isServer', 'Portal', 'Dynamic',
+            'template', 'insert', 'createComponent', 'memo', 'effect', 'className', 'classList',
+            'style', 'spread', 'assign', 'setAttribute', 'setAttributeNS', 'addEventListener',
+            'delegateEvents', 'clearDelegatedEvents', 'setProperty', 'getNextElement', 'getNextMatch',
+            'getNextMarker', 'runHydrationEvents', 'getHydrationKey', 'Assets', 'HydrationScript',
+            'NoHydration', 'Hydration', 'ssr', 'ssrClassList', 'ssrStyle', 'ssrSpread', 'ssrElement',
+            'escape', 'resolveSSRNode', 'use', 'dynamicProperty', 'SVGElements', 'setStyleProperty',
+          ],
+          'solid-js/store': [
+            'createStore', 'produce', 'reconcile', 'unwrap', 'createMutable', 'modifyMutable', 'DEV',
+          ],
+          '@/api/plugin': [
+            'createPlugin', 'usePluginAPI', 'viewportTypes', 'api', 'BRIDGE_API', 'WEBARCADE_WS',
+          ],
+          '@/api/bridge': [
+            'createPlugin', 'usePluginAPI', 'viewportTypes', 'api', 'BRIDGE_API', 'WEBARCADE_WS',
+          ],
+        };
+
+        const knownExports = exports[m] || [];
+        const exportStatements = knownExports.map(e => `export var ${e} = m.${e};`).join(' ');
+
+        return {
+          contents: `var m = window.${g}; export default m; ${exportStatements}`,
+          loader: 'js'
+        };
+      });
+    }
+  };
+}
+
+async function buildPlugin(pluginDir, outputDir) {
+  const pluginName = basename(pluginDir);
+  const indexPath = existsSync(resolve(pluginDir, 'index.jsx'))
+    ? resolve(pluginDir, 'index.jsx')
+    : resolve(pluginDir, 'index.js');
+
+  if (!existsSync(indexPath)) {
+    console.log(`No frontend files found for ${pluginName}`);
+    return;
+  }
+
+  console.log(`   📦 Bundling frontend for ${pluginName}...`);
+  mkdirSync(outputDir, { recursive: true });
+
+  // Generate Tailwind CSS for plugin (utilities only, minified)
+  // Skip base/preflight since host app already has it
+  const cssContent = `@import "tailwindcss/utilities";
+@source "${pluginDir.replace(/\\/g, '/')}/**/*.{js,jsx,ts,tsx}";
+`;
+  const cssResult = await postcss([
+    tailwindcss(),
+    cssnano({ preset: ['default', { discardComments: { removeAll: true } }] })
+  ]).process(cssContent, { from: undefined });
+  const processedCss = cssResult.css;
+
+  // Build plugin with esbuild
+  await esbuild.build({
+    entryPoints: [indexPath],
+    bundle: true,
+    outfile: resolve(outputDir, 'plugin.js'),
+    format: 'esm',
+    sourcemap: false,
+    treeShaking: true,
+    target: ['es2020'],
+    define: {
+      'process.env.NODE_ENV': JSON.stringify('production'),
+      'import.meta.env.DEV': JSON.stringify(false),
+      'import.meta.env.PROD': JSON.stringify(true),
+      'import.meta.env.MODE': JSON.stringify('production'),
+      '__DEV__': JSON.stringify(false),
+    },
+    drop: ['console', 'debugger'],
+    alias: { '@': resolve(ROOT, 'src') },
+    plugins: [createSolidPlugin(), createExternalsPlugin()],
+    // Keep class names and function names for decorators
+    keepNames: true,
+    logLevel: 'warning',
+  });
+
+  // Add CSS injection (skip minification for now to debug)
+  const pluginJsPath = resolve(outputDir, 'plugin.js');
+  const code = readFileSync(pluginJsPath, 'utf8');
+  const cssInjection = `if(typeof document!=='undefined'){const s=document.createElement('style');s.setAttribute('data-plugin','${pluginName}');s.textContent=${JSON.stringify(processedCss)};document.head.appendChild(s);}\n`;
+  writeFileSync(pluginJsPath, cssInjection + code);
+
+  console.log(`   ✅ Frontend bundled for ${pluginName}`);
+}
+
+// ============================================================================
+// MAIN
+// ============================================================================
+const args = process.argv.slice(2);
+
+if (args.length >= 2) {
+  // Plugin build mode: node build.js <plugin-dir> <output-dir>
+  buildPlugin(args[0], args[1]).catch(err => {
+    console.error('Plugin build failed:', err);
+    process.exit(1);
+  });
+} else {
+  // App build mode: node build.js
+  buildApp().catch(err => {
+    console.error('Build failed:', err);
+    process.exit(1);
+  });
+}

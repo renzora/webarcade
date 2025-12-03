@@ -1,4 +1,317 @@
-if("undefined"!=typeof document){let e=document.createElement("style");e.setAttribute("data-plugin","demo"),e.textContent='/*! tailwindcss v4.1.12 | MIT License | https://tailwindcss.com */\n@layer properties;\n@layer theme, base, components, utilities;\n@layer theme {\n  :root, :host {\n    --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",\n      "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";\n    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",\n      "Courier New", monospace;\n    --spacing: 0.25rem;\n    --container-3xl: 48rem;\n    --text-sm: 0.875rem;\n    --text-sm--line-height: calc(1.25 / 0.875);\n    --text-lg: 1.125rem;\n    --text-lg--line-height: calc(1.75 / 1.125);\n    --text-xl: 1.25rem;\n    --text-xl--line-height: calc(1.75 / 1.25);\n    --text-3xl: 1.875rem;\n    --text-3xl--line-height: calc(2.25 / 1.875);\n    --font-weight-semibold: 600;\n    --font-weight-bold: 700;\n    --radius-lg: 0.5rem;\n    --default-font-family: var(--font-sans);\n    --default-mono-font-family: var(--font-mono);\n  }\n}\n@layer base {\n  *, ::after, ::before, ::backdrop, ::file-selector-button {\n    box-sizing: border-box;\n    margin: 0;\n    padding: 0;\n    border: 0 solid;\n  }\n  html, :host {\n    line-height: 1.5;\n    -webkit-text-size-adjust: 100%;\n    tab-size: 4;\n    font-family: var(--default-font-family, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");\n    font-feature-settings: var(--default-font-feature-settings, normal);\n    font-variation-settings: var(--default-font-variation-settings, normal);\n    -webkit-tap-highlight-color: transparent;\n  }\n  hr {\n    height: 0;\n    color: inherit;\n    border-top-width: 1px;\n  }\n  abbr:where([title]) {\n    -webkit-text-decoration: underline dotted;\n    text-decoration: underline dotted;\n  }\n  h1, h2, h3, h4, h5, h6 {\n    font-size: inherit;\n    font-weight: inherit;\n  }\n  a {\n    color: inherit;\n    -webkit-text-decoration: inherit;\n    text-decoration: inherit;\n  }\n  b, strong {\n    font-weight: bolder;\n  }\n  code, kbd, samp, pre {\n    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);\n    font-feature-settings: var(--default-mono-font-feature-settings, normal);\n    font-variation-settings: var(--default-mono-font-variation-settings, normal);\n    font-size: 1em;\n  }\n  small {\n    font-size: 80%;\n  }\n  sub, sup {\n    font-size: 75%;\n    line-height: 0;\n    position: relative;\n    vertical-align: baseline;\n  }\n  sub {\n    bottom: -0.25em;\n  }\n  sup {\n    top: -0.5em;\n  }\n  table {\n    text-indent: 0;\n    border-color: inherit;\n    border-collapse: collapse;\n  }\n  :-moz-focusring {\n    outline: auto;\n  }\n  progress {\n    vertical-align: baseline;\n  }\n  summary {\n    display: list-item;\n  }\n  ol, ul, menu {\n    list-style: none;\n  }\n  img, svg, video, canvas, audio, iframe, embed, object {\n    display: block;\n    vertical-align: middle;\n  }\n  img, video {\n    max-width: 100%;\n    height: auto;\n  }\n  button, input, select, optgroup, textarea, ::file-selector-button {\n    font: inherit;\n    font-feature-settings: inherit;\n    font-variation-settings: inherit;\n    letter-spacing: inherit;\n    color: inherit;\n    border-radius: 0;\n    background-color: transparent;\n    opacity: 1;\n  }\n  :where(select:is([multiple], [size])) optgroup {\n    font-weight: bolder;\n  }\n  :where(select:is([multiple], [size])) optgroup option {\n    padding-inline-start: 20px;\n  }\n  ::file-selector-button {\n    margin-inline-end: 4px;\n  }\n  ::placeholder {\n    opacity: 1;\n  }\n  @supports (not (-webkit-appearance: -apple-pay-button))  or (contain-intrinsic-size: 1px) {\n    ::placeholder {\n      color: currentcolor;\n      @supports (color: color-mix(in lab, red, red)) {\n        color: color-mix(in oklab, currentcolor 50%, transparent);\n      }\n    }\n  }\n  textarea {\n    resize: vertical;\n  }\n  ::-webkit-search-decoration {\n    -webkit-appearance: none;\n  }\n  ::-webkit-date-and-time-value {\n    min-height: 1lh;\n    text-align: inherit;\n  }\n  ::-webkit-datetime-edit {\n    display: inline-flex;\n  }\n  ::-webkit-datetime-edit-fields-wrapper {\n    padding: 0;\n  }\n  ::-webkit-datetime-edit, ::-webkit-datetime-edit-year-field, ::-webkit-datetime-edit-month-field, ::-webkit-datetime-edit-day-field, ::-webkit-datetime-edit-hour-field, ::-webkit-datetime-edit-minute-field, ::-webkit-datetime-edit-second-field, ::-webkit-datetime-edit-millisecond-field, ::-webkit-datetime-edit-meridiem-field {\n    padding-block: 0;\n  }\n  ::-webkit-calendar-picker-indicator {\n    line-height: 1;\n  }\n  :-moz-ui-invalid {\n    box-shadow: none;\n  }\n  button, input:where([type="button"], [type="reset"], [type="submit"]), ::file-selector-button {\n    appearance: button;\n  }\n  ::-webkit-inner-spin-button, ::-webkit-outer-spin-button {\n    height: auto;\n  }\n  [hidden]:where(:not([hidden="until-found"])) {\n    display: none !important;\n  }\n}\n@layer utilities {\n  .absolute {\n    position: absolute;\n  }\n  .relative {\n    position: relative;\n  }\n  .top-2 {\n    top: calc(var(--spacing) * 2);\n  }\n  .right-2 {\n    right: calc(var(--spacing) * 2);\n  }\n  .mx-auto {\n    margin-inline: auto;\n  }\n  .my-4 {\n    margin-block: calc(var(--spacing) * 4);\n  }\n  .mb-2 {\n    margin-bottom: calc(var(--spacing) * 2);\n  }\n  .mb-4 {\n    margin-bottom: calc(var(--spacing) * 4);\n  }\n  .mb-6 {\n    margin-bottom: calc(var(--spacing) * 6);\n  }\n  .h-3 {\n    height: calc(var(--spacing) * 3);\n  }\n  .h-full {\n    height: 100%;\n  }\n  .w-3 {\n    width: calc(var(--spacing) * 3);\n  }\n  .max-w-3xl {\n    max-width: var(--container-3xl);\n  }\n  .space-y-6 {\n    :where(& > :not(:last-child)) {\n      --tw-space-y-reverse: 0;\n      margin-block-start: calc(calc(var(--spacing) * 6) * var(--tw-space-y-reverse));\n      margin-block-end: calc(calc(var(--spacing) * 6) * calc(1 - var(--tw-space-y-reverse)));\n    }\n  }\n  .overflow-x-auto {\n    overflow-x: auto;\n  }\n  .overflow-y-auto {\n    overflow-y: auto;\n  }\n  .rounded-lg {\n    border-radius: var(--radius-lg);\n  }\n  .p-4 {\n    padding: calc(var(--spacing) * 4);\n  }\n  .p-8 {\n    padding: calc(var(--spacing) * 8);\n  }\n  .font-mono {\n    font-family: var(--font-mono);\n  }\n  .text-3xl {\n    font-size: var(--text-3xl);\n    line-height: var(--tw-leading, var(--text-3xl--line-height));\n  }\n  .text-lg {\n    font-size: var(--text-lg);\n    line-height: var(--tw-leading, var(--text-lg--line-height));\n  }\n  .text-sm {\n    font-size: var(--text-sm);\n    line-height: var(--tw-leading, var(--text-sm--line-height));\n  }\n  .text-xl {\n    font-size: var(--text-xl);\n    line-height: var(--tw-leading, var(--text-xl--line-height));\n  }\n  .font-bold {\n    --tw-font-weight: var(--font-weight-bold);\n    font-weight: var(--font-weight-bold);\n  }\n  .font-semibold {\n    --tw-font-weight: var(--font-weight-semibold);\n    font-weight: var(--font-weight-semibold);\n  }\n  .opacity-0 {\n    opacity: 0%;\n  }\n  .group-hover\\:opacity-100 {\n    &:is(:where(.group):hover *) {\n      @media (hover: hover) {\n        opacity: 100%;\n      }\n    }\n  }\n}\n@property --tw-space-y-reverse {\n  syntax: "*";\n  inherits: false;\n  initial-value: 0;\n}\n@property --tw-font-weight {\n  syntax: "*";\n  inherits: false;\n}\n@layer properties {\n  @supports ((-webkit-hyphens: none) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color:rgb(from red r g b)))) {\n    *, ::before, ::after, ::backdrop {\n      --tw-space-y-reverse: 0;\n      --tw-font-weight: initial;\n    }\n  }\n}\n',document.head.appendChild(e)}var e={};e.d=(n,t)=>{for(var i in t)e.o(t,i)&&!e.o(n,i)&&Object.defineProperty(n,i,{enumerable:!0,get:t[i]})},e.o=(e,n)=>Object.prototype.hasOwnProperty.call(e,n);var n={};e.d(n,{Z:()=>f});let t=window.WebArcadeAPI,i={outline:{xmlns:"http://www.w3.org/2000/svg",width:24,height:24,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor","stroke-width":2,"stroke-linecap":"round","stroke-linejoin":"round"},filled:{xmlns:"http://www.w3.org/2000/svg",width:24,height:24,viewBox:"0 0 24 24",fill:"currentColor",stroke:"none"}},o=window.SolidJS,r=window.SolidJSWeb,l=Symbol("hyper-element"),a=function(e){function n(){let t=[].slice.call(arguments),i,o=[],r=!1;for(;Array.isArray(t[0]);)t=t[0];t[0][l]&&t.unshift(n.Fragment),"string"==typeof t[0]&&function e(n){for(let t=1;t<n.length;t++)if("function"==typeof n[t]){r=!0;return}else Array.isArray(n[t])&&e(n[t])}(t);let a=()=>{for(;t.length;)!function n(a){let s=typeof a;if(null==a);else if("string"===s)i?i.appendChild(document.createTextNode(a)):function(n){let t=n.split(/([\.#]?[^\s#.]+)/);/^\.|#/.test(t[1])&&(i=document.createElement("div"));for(let n=0;n<t.length;n++){let r=t[n],l=r.substring(1,r.length);r&&(i?"."===r[0]?o.push(l):"#"===r[0]&&i.setAttribute("id",l):i=e.SVGElements.has(r)?document.createElementNS("http://www.w3.org/2000/svg",r):document.createElement(r))}}(a);else if("number"===s||"boolean"===s||"bigint"===s||"symbol"===s||a instanceof Date||a instanceof RegExp)i.appendChild(document.createTextNode(a.toString()));else if(Array.isArray(a))for(let e=0;e<a.length;e++)n(a[e]);else if(a instanceof Element)e.insert(i,a,r?null:void 0);else if("object"===s){let n=!1,r=Object.getOwnPropertyDescriptors(a);for(let t in r){if("class"===t&&0!==o.length){let e=o.join(" "),n="function"==typeof r.class.value?()=>e+" "+r.class.value():e+" "+a.class;Object.defineProperty(a,"class",{...r[t],value:n}),o=[]}"ref"!==t&&"on"!==t.slice(0,2)&&"function"==typeof r[t].value?(e.dynamicProperty(a,t),n=!0):r[t].get&&(n=!0)}n?e.spread(i,a,i instanceof SVGElement,!!t.length):e.assign(i,a,i instanceof SVGElement,!!t.length)}else if("function"===s)if(i){for(;a[l];)a=a();e.insert(i,a,r?null:void 0)}else{let n,o=t[0];null!=o&&("object"!=typeof o||Array.isArray(o)||o instanceof Element)||(n=t.shift()),n||(n={}),t.length&&(n.children=t.length>1?t:t[0]);let r=Object.getOwnPropertyDescriptors(n);for(let t in r)if(Array.isArray(r[t].value)){let i=r[t].value;n[t]=()=>{for(let e=0;e<i.length;e++)for(;i[e][l];)i[e]=i[e]();return i},e.dynamicProperty(n,t)}else"function"!=typeof r[t].value||r[t].value.length||e.dynamicProperty(n,t);i=e.createComponent(a,n),t=[]}}(t.shift());return i instanceof Element&&o.length&&i.classList.add(...o),i};return a[l]=!0,a}return n.Fragment=e=>e.children,n}({spread:r.spread,assign:r.assign,insert:r.insert,createComponent:r.createComponent,dynamicProperty:r.dynamicProperty,SVGElements:r.SVGElements}),s=(e,n,t,r)=>{let l=t=>{let[l,s]=(0,o.splitProps)(t,["color","size","stroke","title","children","class"]),c=i[e];return a("svg",[{...c,width:()=>null!=l.size?l.size:c.width,height:()=>null!=l.size?l.size:c.height,title:()=>null!=l.title?l.title:void 0,..."filled"===e?{fill:()=>null!=l.color?l.color:"currentColor"}:{stroke:()=>null!=l.color?l.color:"currentColor","stroke-width":()=>null!=l.stroke?l.stroke:c["stroke-width"]},class:()=>`tabler-icon tabler-icon-${n} ${null!=l.class?l.class:""}`},s],[l.title&&a("title",{},l.title),...r.map(([e,n])=>a(e,n)),l.children])};return l.displayName=`${t}`,l};var c=s("outline","book","Book",[["path",{d:"M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0"}],["path",{d:"M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0"}],["path",{d:"M3 6l0 13"}],["path",{d:"M12 6l0 13"}],["path",{d:"M21 6l0 13"}]]),d=s("outline","check","Check",[["path",{d:"M5 12l5 5l10 -10"}]]),p=s("outline","copy","Copy",[["path",{d:"M7 7m0 2.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667z"}],["path",{d:"M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1"}]]),h=(0,r.template)('<div class="relative group my-4"><pre class="bg-base-300 rounded-lg p-4 overflow-x-auto text-sm font-mono text-base-content"><code></code></pre><button class="absolute top-2 right-2 btn btn-xs btn-ghost opacity-0 group-hover:opacity-100">'),u=(0,r.template)('<div class="h-full overflow-y-auto bg-base-200"><div class="max-w-3xl mx-auto p-8"><h1 class="text-3xl font-bold mb-6">Quick Start</h1><p class="text-base-content/70 mb-6">Create a plugin in under a minute.</p><div class=space-y-6><div><h2 class="text-lg font-semibold mb-2">1. Create Plugin</h2></div><div><h2 class="text-lg font-semibold mb-2">2. Edit index.jsx</h2></div><div><h2 class="text-lg font-semibold mb-2">3. Build & Run');function m(e){var n,t,i,l,a;let[s,c]=(0,o.createSignal)(!1);return i=(t=(n=h()).firstChild).firstChild,l=t.nextSibling,(0,r.insert)(i,()=>e.children.trim()),l.$$click=()=>{navigator.clipboard.writeText(e.children),c(!0),setTimeout(()=>c(!1),2e3)},(0,r.insert)(l,(a=(0,r.memo)(()=>!!s()),()=>a()?(0,r.createComponent)(d,{class:"w-3 h-3"}):(0,r.createComponent)(p,{class:"w-3 h-3"}))),n}function g(){var e,n,t,i;return(((n=(e=u()).firstChild.firstChild.nextSibling.nextSibling.firstChild).firstChild,t=n.nextSibling).firstChild,i=t.nextSibling).firstChild,(0,r.insert)(n,(0,r.createComponent)(m,{lang:"bash",children:"bun run plugin:new my-plugin"}),null),(0,r.insert)(t,(0,r.createComponent)(m,{lang:"jsx",children:`import { createPlugin } from '@/api/plugin';
+if(typeof document!=='undefined'){const s=document.createElement('style');s.setAttribute('data-plugin','demo');s.textContent=".absolute{position:absolute}.relative{position:relative}.mx-auto{margin-inline:auto}.h-full{height:100%}.overflow-x-auto{overflow-x:auto}.overflow-y-auto{overflow-y:auto}.opacity-0{opacity:0}.group-hover\\:opacity-100{&:is(:where(.group):hover *){@media (hover:hover){opacity:100%}}}";document.head.appendChild(s);}
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+
+// external-global:@/api/plugin
+var m = window.WebArcadeAPI;
+var createPlugin = m.createPlugin;
+var usePluginAPI = m.usePluginAPI;
+var viewportTypes = m.viewportTypes;
+var api = m.api;
+var BRIDGE_API = m.BRIDGE_API;
+var WEBARCADE_WS = m.WEBARCADE_WS;
+
+// ../node_modules/@tabler/icons-solidjs/dist/esm/defaultAttributes.js
+var defaultAttributes = {
+  outline: {
+    xmlns: "http://www.w3.org/2000/svg",
+    width: 24,
+    height: 24,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": 2,
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round"
+  },
+  filled: {
+    xmlns: "http://www.w3.org/2000/svg",
+    width: 24,
+    height: 24,
+    viewBox: "0 0 24 24",
+    fill: "currentColor",
+    stroke: "none"
+  }
+};
+
+// external-global:solid-js
+var m2 = window.SolidJS;
+var createSignal = m2.createSignal;
+var createEffect = m2.createEffect;
+var createMemo = m2.createMemo;
+var createRoot = m2.createRoot;
+var createContext = m2.createContext;
+var useContext = m2.useContext;
+var onMount = m2.onMount;
+var onCleanup = m2.onCleanup;
+var onError = m2.onError;
+var untrack = m2.untrack;
+var batch = m2.batch;
+var on = m2.on;
+var createDeferred = m2.createDeferred;
+var createRenderEffect = m2.createRenderEffect;
+var createComputed = m2.createComputed;
+var createReaction = m2.createReaction;
+var createSelector = m2.createSelector;
+var observable = m2.observable;
+var from = m2.from;
+var mapArray = m2.mapArray;
+var indexArray = m2.indexArray;
+var Show = m2.Show;
+var For = m2.For;
+var Switch = m2.Switch;
+var Match = m2.Match;
+var Index = m2.Index;
+var ErrorBoundary = m2.ErrorBoundary;
+var Suspense = m2.Suspense;
+var SuspenseList = m2.SuspenseList;
+var children = m2.children;
+var lazy = m2.lazy;
+var createResource = m2.createResource;
+var createUniqueId = m2.createUniqueId;
+var splitProps = m2.splitProps;
+var mergeProps = m2.mergeProps;
+var getOwner = m2.getOwner;
+var runWithOwner = m2.runWithOwner;
+var DEV = m2.DEV;
+var enableScheduling = m2.enableScheduling;
+var enableExternalSource = m2.enableExternalSource;
+
+// external-global:solid-js/web
+var m3 = window.SolidJSWeb;
+var render = m3.render;
+var hydrate = m3.hydrate;
+var renderToString = m3.renderToString;
+var renderToStream = m3.renderToStream;
+var isServer = m3.isServer;
+var Portal = m3.Portal;
+var Dynamic = m3.Dynamic;
+var template = m3.template;
+var insert = m3.insert;
+var createComponent = m3.createComponent;
+var memo = m3.memo;
+var effect = m3.effect;
+var className = m3.className;
+var classList = m3.classList;
+var style = m3.style;
+var spread = m3.spread;
+var assign = m3.assign;
+var setAttribute = m3.setAttribute;
+var setAttributeNS = m3.setAttributeNS;
+var addEventListener = m3.addEventListener;
+var delegateEvents = m3.delegateEvents;
+var clearDelegatedEvents = m3.clearDelegatedEvents;
+var setProperty = m3.setProperty;
+var getNextElement = m3.getNextElement;
+var getNextMatch = m3.getNextMatch;
+var getNextMarker = m3.getNextMarker;
+var runHydrationEvents = m3.runHydrationEvents;
+var getHydrationKey = m3.getHydrationKey;
+var Assets = m3.Assets;
+var HydrationScript = m3.HydrationScript;
+var NoHydration = m3.NoHydration;
+var Hydration = m3.Hydration;
+var ssr = m3.ssr;
+var ssrClassList = m3.ssrClassList;
+var ssrStyle = m3.ssrStyle;
+var ssrSpread = m3.ssrSpread;
+var ssrElement = m3.ssrElement;
+var escape = m3.escape;
+var resolveSSRNode = m3.resolveSSRNode;
+var use = m3.use;
+var dynamicProperty = m3.dynamicProperty;
+var SVGElements = m3.SVGElements;
+var setStyleProperty = m3.setStyleProperty;
+
+// ../node_modules/solid-js/h/dist/h.js
+var $ELEMENT = Symbol("hyper-element");
+function createHyperScript(r) {
+  function h2() {
+    let args = [].slice.call(arguments), e, classes = [], multiExpression = false;
+    while (Array.isArray(args[0])) args = args[0];
+    if (args[0][$ELEMENT]) args.unshift(h2.Fragment);
+    typeof args[0] === "string" && detectMultiExpression(args);
+    const ret = /* @__PURE__ */ __name(() => {
+      while (args.length) item(args.shift());
+      if (e instanceof Element && classes.length) e.classList.add(...classes);
+      return e;
+    }, "ret");
+    ret[$ELEMENT] = true;
+    return ret;
+    function item(l) {
+      const type = typeof l;
+      if (l == null) ;
+      else if ("string" === type) {
+        if (!e) parseClass(l);
+        else e.appendChild(document.createTextNode(l));
+      } else if ("number" === type || "boolean" === type || "bigint" === type || "symbol" === type || l instanceof Date || l instanceof RegExp) {
+        e.appendChild(document.createTextNode(l.toString()));
+      } else if (Array.isArray(l)) {
+        for (let i = 0; i < l.length; i++) item(l[i]);
+      } else if (l instanceof Element) {
+        r.insert(e, l, multiExpression ? null : void 0);
+      } else if ("object" === type) {
+        let dynamic = false;
+        const d = Object.getOwnPropertyDescriptors(l);
+        for (const k in d) {
+          if (k === "class" && classes.length !== 0) {
+            const fixedClasses = classes.join(" "), value = typeof d["class"].value === "function" ? () => fixedClasses + " " + d["class"].value() : fixedClasses + " " + l["class"];
+            Object.defineProperty(l, "class", {
+              ...d[k],
+              value
+            });
+            classes = [];
+          }
+          if (k !== "ref" && k.slice(0, 2) !== "on" && typeof d[k].value === "function") {
+            r.dynamicProperty(l, k);
+            dynamic = true;
+          } else if (d[k].get) dynamic = true;
+        }
+        dynamic ? r.spread(e, l, e instanceof SVGElement, !!args.length) : r.assign(e, l, e instanceof SVGElement, !!args.length);
+      } else if ("function" === type) {
+        if (!e) {
+          let props, next = args[0];
+          if (next == null || typeof next === "object" && !Array.isArray(next) && !(next instanceof Element)) props = args.shift();
+          props || (props = {});
+          if (args.length) {
+            props.children = args.length > 1 ? args : args[0];
+          }
+          const d = Object.getOwnPropertyDescriptors(props);
+          for (const k in d) {
+            if (Array.isArray(d[k].value)) {
+              const list = d[k].value;
+              props[k] = () => {
+                for (let i = 0; i < list.length; i++) {
+                  while (list[i][$ELEMENT]) list[i] = list[i]();
+                }
+                return list;
+              };
+              r.dynamicProperty(props, k);
+            } else if (typeof d[k].value === "function" && !d[k].value.length) r.dynamicProperty(props, k);
+          }
+          e = r.createComponent(l, props);
+          args = [];
+        } else {
+          while (l[$ELEMENT]) l = l();
+          r.insert(e, l, multiExpression ? null : void 0);
+        }
+      }
+    }
+    __name(item, "item");
+    function parseClass(string) {
+      const m4 = string.split(/([\.#]?[^\s#.]+)/);
+      if (/^\.|#/.test(m4[1])) e = document.createElement("div");
+      for (let i = 0; i < m4.length; i++) {
+        const v = m4[i], s = v.substring(1, v.length);
+        if (!v) continue;
+        if (!e) e = r.SVGElements.has(v) ? document.createElementNS("http://www.w3.org/2000/svg", v) : document.createElement(v);
+        else if (v[0] === ".") classes.push(s);
+        else if (v[0] === "#") e.setAttribute("id", s);
+      }
+    }
+    __name(parseClass, "parseClass");
+    function detectMultiExpression(list) {
+      for (let i = 1; i < list.length; i++) {
+        if (typeof list[i] === "function") {
+          multiExpression = true;
+          return;
+        } else if (Array.isArray(list[i])) {
+          detectMultiExpression(list[i]);
+        }
+      }
+    }
+    __name(detectMultiExpression, "detectMultiExpression");
+  }
+  __name(h2, "h");
+  h2.Fragment = (props) => props.children;
+  return h2;
+}
+__name(createHyperScript, "createHyperScript");
+var h = createHyperScript({
+  spread,
+  assign,
+  insert,
+  createComponent,
+  dynamicProperty,
+  SVGElements
+});
+
+// ../node_modules/@tabler/icons-solidjs/dist/esm/createSolidComponent.js
+var createSolidComponent = /* @__PURE__ */ __name((type, iconName, iconNamePascal, iconNode) => {
+  const Component = /* @__PURE__ */ __name((props) => {
+    const [localProps, rest] = splitProps(props, ["color", "size", "stroke", "title", "children", "class"]), attributes = defaultAttributes[type];
+    const svgProps = {
+      ...attributes,
+      width: /* @__PURE__ */ __name(() => localProps.size != null ? localProps.size : attributes.width, "width"),
+      height: /* @__PURE__ */ __name(() => localProps.size != null ? localProps.size : attributes.height, "height"),
+      title: /* @__PURE__ */ __name(() => localProps.title != null ? localProps.title : void 0, "title"),
+      ...type === "filled" ? {
+        fill: /* @__PURE__ */ __name(() => localProps.color != null ? localProps.color : "currentColor", "fill")
+      } : {
+        stroke: /* @__PURE__ */ __name(() => localProps.color != null ? localProps.color : "currentColor", "stroke"),
+        "stroke-width": /* @__PURE__ */ __name(() => localProps.stroke != null ? localProps.stroke : attributes["stroke-width"], "stroke-width")
+      },
+      class: /* @__PURE__ */ __name(() => `tabler-icon tabler-icon-${iconName} ${localProps.class != null ? localProps.class : ""}`, "class")
+    };
+    return h(
+      "svg",
+      [svgProps, rest],
+      [
+        localProps.title && h("title", {}, localProps.title),
+        ...iconNode.map(([tag, attrs]) => h(tag, attrs)),
+        localProps.children
+      ]
+    );
+  }, "Component");
+  Component.displayName = `${iconNamePascal}`;
+  return Component;
+}, "createSolidComponent");
+
+// ../node_modules/@tabler/icons-solidjs/dist/esm/icons/IconBook.js
+var IconBook = createSolidComponent("outline", "book", "Book", [["path", { "d": "M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0" }], ["path", { "d": "M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0" }], ["path", { "d": "M3 6l0 13" }], ["path", { "d": "M12 6l0 13" }], ["path", { "d": "M21 6l0 13" }]]);
+
+// ../node_modules/@tabler/icons-solidjs/dist/esm/icons/IconCheck.js
+var IconCheck = createSolidComponent("outline", "check", "Check", [["path", { "d": "M5 12l5 5l10 -10" }]]);
+
+// ../node_modules/@tabler/icons-solidjs/dist/esm/icons/IconCopy.js
+var IconCopy = createSolidComponent("outline", "copy", "Copy", [["path", { "d": "M7 7m0 2.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667z" }], ["path", { "d": "M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1" }]]);
+
+// ../plugins/demo/viewport.jsx
+var _tmpl$ = /* @__PURE__ */ template(`<div class="relative group my-4"><pre class="bg-base-300 rounded-lg p-4 overflow-x-auto text-sm font-mono text-base-content"><code></code></pre><button class="absolute top-2 right-2 btn btn-xs btn-ghost opacity-0 group-hover:opacity-100">`);
+var _tmpl$2 = /* @__PURE__ */ template(`<div class="h-full overflow-y-auto bg-base-200"><div class="max-w-3xl mx-auto p-8"><h1 class="text-3xl font-bold mb-6">Quick Start</h1><p class="text-base-content/70 mb-6">Create a plugin in under a minute.</p><div class=space-y-6><div><h2 class="text-lg font-semibold mb-2">1. Create Plugin</h2></div><div><h2 class="text-lg font-semibold mb-2">2. Edit index.jsx</h2></div><div><h2 class="text-lg font-semibold mb-2">3. Build & Run`);
+function Code(props) {
+  const [copied, setCopied] = createSignal(false);
+  const copy = /* @__PURE__ */ __name(() => {
+    navigator.clipboard.writeText(props.children);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2e3);
+  }, "copy");
+  return (() => {
+    var _el$ = _tmpl$(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$2.nextSibling;
+    insert(_el$3, () => props.children.trim());
+    _el$4.$$click = copy;
+    insert(_el$4, (() => {
+      var _c$ = memo(() => !!copied());
+      return () => _c$() ? createComponent(IconCheck, {
+        "class": "w-3 h-3"
+      }) : createComponent(IconCopy, {
+        "class": "w-3 h-3"
+      });
+    })());
+    return _el$;
+  })();
+}
+__name(Code, "Code");
+function GuideViewport() {
+  return (() => {
+    var _el$5 = _tmpl$2(), _el$6 = _el$5.firstChild, _el$7 = _el$6.firstChild, _el$8 = _el$7.nextSibling, _el$9 = _el$8.nextSibling, _el$0 = _el$9.firstChild, _el$1 = _el$0.firstChild, _el$10 = _el$0.nextSibling, _el$11 = _el$10.firstChild, _el$12 = _el$10.nextSibling, _el$13 = _el$12.firstChild;
+    insert(_el$0, createComponent(Code, {
+      lang: "bash",
+      children: `bun run plugin:new my-plugin`
+    }), null);
+    insert(_el$10, createComponent(Code, {
+      lang: "jsx",
+      children: `import { createPlugin } from '@/api/plugin';
 
 export default createPlugin({
   id: 'my-plugin',
@@ -12,4 +325,54 @@ export default createPlugin({
     });
     api.open('main');
   }
-});`}),null),(0,r.insert)(i,(0,r.createComponent)(m,{lang:"bash",children:"bun run plugin:build my-plugin"}),null),e}(0,r.delegateEvents)(["click"]);let f=(0,t.createPlugin)({id:"demo",name:"Plugin Guide",version:"1.0.0",description:"Plugin development documentation",author:"WebArcade Team",async onStart(e){e.viewport("guide",{label:"Quick Start",icon:c,component:g,onActivate:e=>{e.showTabs(!0)}}),await e.setWindowSize(800,700),await e.centerWindow(),e.open("guide")}});var b=n.Z;export{b as default};
+});`
+    }), null);
+    insert(_el$12, createComponent(Code, {
+      lang: "bash",
+      children: `bun run plugin:build my-plugin`
+    }), null);
+    return _el$5;
+  })();
+}
+__name(GuideViewport, "GuideViewport");
+delegateEvents(["click"]);
+
+// ../plugins/demo/index.jsx
+var index_default = createPlugin({
+  id: "demo",
+  name: "Plugin Guide",
+  version: "1.0.0",
+  description: "Plugin development documentation",
+  author: "WebArcade Team",
+  async onStart(api2) {
+    api2.viewport("guide", {
+      label: "Quick Start",
+      icon: IconBook,
+      component: GuideViewport,
+      onActivate: /* @__PURE__ */ __name((api3) => {
+        api3.showTabs(true);
+      }, "onActivate")
+    });
+    await api2.setWindowSize(800, 700);
+    await api2.centerWindow();
+    api2.open("guide");
+  }
+});
+export {
+  index_default as default
+};
+/*! Bundled license information:
+
+@tabler/icons-solidjs/dist/esm/defaultAttributes.js:
+@tabler/icons-solidjs/dist/esm/createSolidComponent.js:
+@tabler/icons-solidjs/dist/esm/icons/IconBook.js:
+@tabler/icons-solidjs/dist/esm/icons/IconCheck.js:
+@tabler/icons-solidjs/dist/esm/icons/IconCopy.js:
+@tabler/icons-solidjs/dist/esm/tabler-icons-solidjs.js:
+  (**
+   * @license @tabler/icons-solidjs v3.34.1 - MIT
+   *
+   * This source code is licensed under the MIT license.
+   * See the LICENSE file in the root directory of this source tree.
+   *)
+*/
