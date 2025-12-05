@@ -1,6 +1,13 @@
 # WebArcade
 
-A lightweight plugin platform for building native desktop applications with **SolidJS** (frontend) and **Rust** (backend).
+A lightweight plugin platform for building native desktop applications with **SolidJS** (frontend) and **Rust** (backend). Build once, distribute plugins as simple JS/DLL files.
+
+**Key Features:**
+- ~2.5 MB binary (uses system WebView)
+- Dynamic plugin loading at runtime
+- Optional Rust backend per plugin (DLL)
+- Panel-based UI composition
+- Cross-plugin component sharing
 
 ## Table of Contents
 
@@ -222,10 +229,34 @@ export default plugin({
     },
 
     stop(api) {
-        // Called when plugin is stopped
+        // Called when plugin is stopped/unloaded
     }
 });
 ```
+
+### Plugin Lifecycle
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Plugin Loaded                                              │
+│    ↓                                                        │
+│  start(api)  ─── Register panels, toolbar, menu, footer    │
+│    ↓                                                        │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  User switches plugins (tab bar)                    │    │
+│  │    ↓                    ↓                           │    │
+│  │  active(api)        inactive(api)                   │    │
+│  │  Show panels        (other plugin now active)       │    │
+│  └─────────────────────────────────────────────────────┘    │
+│    ↓                                                        │
+│  stop(api)  ─── Plugin disabled/unloaded                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+- **start**: Called once when plugin loads. Register all UI components here.
+- **active**: Called each time user switches TO this plugin. Show/configure panels.
+- **inactive**: Called each time user switches AWAY from this plugin.
+- **stop**: Called when plugin is disabled or app closes.
 
 ---
 
@@ -280,7 +311,7 @@ api.toggleBottom();     // Toggle bottom panel
 
 ### Shared Panels
 
-Panels can be shared between plugins:
+Plugins can share components with other plugins:
 
 ```jsx
 // Plugin A - registers a shared panel
@@ -292,7 +323,14 @@ api.add({
     shared: true,  // Other plugins can use this
 });
 
-// Plugin B - uses Plugin A's panel
+// Plugin B - add Plugin A's component to own panels
+api.addShared('plugin-a:file-explorer', {
+    panel: 'left',           // Can put in different panel
+    label: 'My Files',       // Override label
+    order: 1                 // Override order
+});
+
+// Or just get the config without adding
 const sharedPanel = api.useShared('plugin-a:file-explorer');
 ```
 
@@ -302,16 +340,73 @@ const sharedPanel = api.useShared('plugin-a:file-explorer');
 api.remove('component-id');  // Remove by ID
 ```
 
-### Window Controls
+### Toolbar & Menu
 
 ```jsx
-await api.setWindowSize(1280, 720);
-await api.setWindowPosition(100, 100);
-await api.maximizeWindow();
-await api.minimizeWindow();
-await api.fullscreen(true);
-await api.setWindowTitle('My App');
-await api.exit();
+// Register toolbar groups
+api.toolbarGroup('file-group', { label: 'File', order: 1 });
+api.toolbarGroup('edit-group', { label: 'Edit', order: 2 });
+
+// Add toolbar buttons
+api.toolbar('save', {
+    icon: IconSave,
+    tooltip: 'Save file',
+    group: 'file-group',
+    order: 1,
+    onClick: () => saveFile(),
+    active: () => hasChanges(),      // Highlight when active
+    disabled: () => isReadOnly(),    // Disable conditionally
+    separator: true,                  // Add separator after
+});
+
+// Add toolbar with custom component
+api.toolbar('zoom-slider', {
+    component: ZoomSlider,
+    group: 'view-group',
+});
+
+// Register top menu with submenus
+api.menu('file', {
+    label: 'File',
+    order: 1,
+    submenu: [
+        { id: 'new', label: 'New', icon: IconFile, shortcut: 'Ctrl+N', action: () => {} },
+        { id: 'open', label: 'Open', icon: IconFolder, shortcut: 'Ctrl+O', action: () => {} },
+        { divider: true },
+        { id: 'save', label: 'Save', shortcut: 'Ctrl+S', action: () => {} },
+        {
+            id: 'export',
+            label: 'Export',
+            submenu: [  // Nested submenu
+                { id: 'pdf', label: 'As PDF', action: () => {} },
+                { id: 'png', label: 'As PNG', action: () => {} },
+            ]
+        },
+    ]
+});
+```
+
+### Footer
+
+```jsx
+// Add footer component
+api.footer('status', {
+    component: StatusIndicator,
+    order: 1,
+});
+```
+
+### UI Visibility
+
+```jsx
+api.showToolbar(true);      // Show/hide toolbar
+api.showMenu(true);         // Show/hide top menu
+api.showFooter(true);       // Show/hide footer
+api.showTabs(true);         // Show/hide viewport tabs
+api.showPluginTabs(true);   // Show/hide plugin tab bar
+
+api.fullscreen(true);       // Enter fullscreen
+api.toggleFullscreen();     // Toggle fullscreen
 ```
 
 ---
@@ -395,10 +490,12 @@ bun run plugin:list
 
 ### Build Output
 
-| Plugin Type | Output |
-|-------------|--------|
-| Frontend-only | `build/plugins/foo.js` |
-| Full-stack | `build/plugins/foo.dll` |
+| Plugin Type | Build Output | Installed To |
+|-------------|--------------|--------------|
+| Frontend-only | `build/plugins/foo.js` | `app/plugins/foo.js` |
+| Full-stack | `build/plugins/foo.dll` + `foo.js` | `app/plugins/foo.dll` |
+
+**Note:** The CLI automatically installs built plugins to `app/plugins/` for the runtime to load.
 
 ---
 
@@ -425,6 +522,43 @@ bun run plugin:list
 2. Check browser DevTools for frontend errors
 3. Plugin changes require rebuild: `bun run plugin:build <name>`
 4. Frontend-only plugins build in ~1s, full-stack ~10-30s
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     WebArcade Runtime                       │
+│                        (~2.5 MB)                            │
+├─────────────────────────────────────────────────────────────┤
+│  Rust Binary (tao + wry)                                    │
+│  ├── Borderless window + IPC                                │
+│  ├── Bridge server (HTTP localhost:3001)                    │
+│  ├── WebSocket server (localhost:3002)                      │
+│  └── Dynamic DLL loader                                     │
+├─────────────────────────────────────────────────────────────┤
+│  SolidJS Frontend (served from localhost:3000)              │
+│  ├── Plugin API + Panel Store                               │
+│  └── Unified layout system                                  │
+├─────────────────────────────────────────────────────────────┤
+│  Plugins (loaded at runtime from app/plugins/)              │
+│  ├── plugin.js   → UI components                            │
+│  └── plugin.dll  → Rust backend (optional)                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Plugin Distribution
+
+Plugins are self-contained and portable:
+
+```
+my-plugin/
+├── my-plugin.js       # Frontend (required)
+└── my-plugin.dll      # Backend (optional, Windows)
+```
+
+Users install plugins by copying files to the `plugins/` directory. No npm, no compilation required.
 
 ---
 
