@@ -1,8 +1,6 @@
 import { createSignal, createEffect, onCleanup, createMemo, For, Show } from 'solid-js';
 import { IconChevronRight, IconMinus, IconSquare, IconCopy, IconX } from '@tabler/icons-solidjs';
-import { topMenuItems, topMenuButtons, horizontalMenuButtonsEnabled, viewportTabsVisible } from '@/api/plugin';
-import ViewportTabs from '@/panels/viewport/ViewportTabs.jsx';
-import { viewportStore } from '@/panels/viewport/store';
+import { topMenuItems, topMenuButtons, horizontalMenuButtonsEnabled, activePlugin } from '@/api/plugin';
 
 // Signal to track if top menu has items (exported for ViewportTabs to use)
 export const [hasTopMenuItems, setHasTopMenuItems] = createSignal(false);
@@ -120,20 +118,14 @@ function TopMenu() {
     };
   };
 
-  // Get the current viewport type directly from the store
-  const currentViewportType = () => {
-    const activeTab = viewportStore.tabs.find(t => t.id === viewportStore.activeTabId);
-    return activeTab?.type || null;
-  };
-
-  // Create dynamic menu structure from plugin extensions only, filtered by viewport
+  // Create dynamic menu structure from plugin extensions only, filtered by active plugin
   const menuStructure = createMemo(() => {
-    const currentViewport = currentViewportType();
+    const currentPlugin = activePlugin();
     const pluginMenuItems = topMenuItems();
 
-    // Filter menu items by current viewport
+    // Filter menu items by active plugin
     const pluginMenuArray = Array.from(pluginMenuItems.values())
-      .filter(item => item.viewport === currentViewport)
+      .filter(item => item.plugin === currentPlugin)
       .sort((a, b) => (a.order || 0) - (b.order || 0));
 
     const menuStructure = {};
@@ -190,12 +182,11 @@ function TopMenu() {
 
   return (
     <>
-      {/* Top row: Menu items + window controls - only show if there are menus */}
-      <Show when={hasMenus()}>
-        <div
-          class="relative w-full h-8 bg-base-300 backdrop-blur-md shadow-sm flex items-center px-2"
-          data-tauri-drag-region
-        >
+      {/* Top row: Menu items + window controls - always show for drag region */}
+      <div
+        class="relative w-full h-8 bg-base-300 backdrop-blur-md shadow-sm flex items-center px-2"
+        data-tauri-drag-region
+      >
           {/* Show old menu buttons if horizontalMenuButtonsEnabled */}
           <Show when={horizontalMenuButtonsEnabled()}>
             <div
@@ -252,9 +243,8 @@ function TopMenu() {
             </For>
           </div>
 
-          {/* Window Controls - Only show in desktop app */}
-          {typeof window !== 'undefined' && (window.__WEBARCADE__ || window.__TAURI_INTERNALS__) && (
-            <div
+          {/* Window Controls - Always show (functional only in desktop app) */}
+          <div
               class="flex items-center gap-3 text-xs text-gray-500"
               style={{
                 '-webkit-app-region': 'no-drag'
@@ -291,16 +281,7 @@ function TopMenu() {
                 </button>
               </div>
             </div>
-          )}
         </div>
-      </Show>
-
-      {/* Second row: Viewport Tabs - pass whether to show window controls */}
-      <Show when={viewportTabsVisible()}>
-        <div class="w-full bg-base-200">
-          <ViewportTabs showWindowControls={!hasMenus()} />
-        </div>
-      </Show>
 
       <Show when={horizontalMenuButtonsEnabled() && activeMenu() && menuPosition()}>
         <div

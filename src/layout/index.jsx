@@ -1,14 +1,13 @@
 import { createSignal, onMount, onCleanup, Show } from 'solid-js';
 import TopMenu from '@/panels/topMenu';
 import Toolbar from '@/panels/toolbar';
-import Viewport from '@/panels/viewport';
 import Footer from '@/panels/footer';
-import RightPanel from '@/panels/rightPanel';
-import LeftPanel from '@/panels/leftPanel';
-import BottomPanel from '@/panels/bottomPanel';
+import Panel, { LeftPanel, RightPanel, BottomPanel, ViewportPanel } from '@/panels/Panel';
+import PluginTabs from '@/panels/PluginTabs';
 import { ViewportContextMenuProvider } from '@/ui/ViewportContextMenu.jsx';
 import { keyboardShortcuts } from '@/components/KeyboardShortcuts';
-import { propertiesPanelVisible, leftPanelVisible, footerVisible, bottomPanelVisible } from '@/api/plugin';
+import { panelVisibility } from '@/api/plugin/panels';
+import { footerVisible, horizontalMenuButtonsEnabled, bottomPanelVisible, pluginTabsVisible } from '@/api/plugin';
 
 const Layout = () => {
   const [globalTooltip, setGlobalTooltip] = createSignal(null);
@@ -43,42 +42,63 @@ const Layout = () => {
         class="fixed bg-base-100 inset-0 flex flex-col pointer-events-none z-10 transition-opacity duration-300"
         onContextMenu={(e) => e.preventDefault()}
       >
-        <div class="flex-shrink-0 pointer-events-auto z-50">
-          <TopMenu />
-        </div>
+        {/* Top Menu */}
+        <Show when={horizontalMenuButtonsEnabled()}>
+          <div class="flex-shrink-0 pointer-events-auto z-50">
+            <TopMenu />
+          </div>
+        </Show>
 
-        {/* Toolbar - below top menu */}
+        {/* Toolbar */}
         <div class="pointer-events-auto">
           <Toolbar />
         </div>
 
+        {/* Plugin Tabs */}
+        <Show when={pluginTabsVisible()}>
+          <div class="pointer-events-auto">
+            <PluginTabs />
+          </div>
+        </Show>
+
+        {/* Main Content Area */}
         <div
           class="flex-1 flex flex-col overflow-hidden pointer-events-auto"
           style={{
             'padding-bottom': footerVisible() ? '24px' : '0px'
           }}
         >
+          {/* Horizontal layout: Left | Viewport | Right */}
           <div class="flex-1 flex overflow-hidden">
-            <Show when={leftPanelVisible()}>
+            {/* Left Panel */}
+            <Show when={panelVisibility.left}>
               <LeftPanel />
             </Show>
+
+            {/* Main Viewport */}
             <div class="flex-1 relative overflow-hidden min-w-0">
-              <Viewport />
+              <ViewportPanel />
             </div>
-            <Show when={propertiesPanelVisible()}>
+
+            {/* Right Panel */}
+            <Show when={panelVisibility.right}>
               <RightPanel />
             </Show>
           </div>
-          {/* Bottom Panel - above footer, below viewport */}
-          <BottomPanel />
+
+          {/* Bottom Panel */}
+          <Show when={bottomPanelVisible()}>
+            <BottomPanel />
+          </Show>
         </div>
 
+        {/* Footer */}
         <Show when={footerVisible()}>
           <Footer />
         </Show>
       </div>
 
-      {/* Global Tooltip - appears above everything */}
+      {/* Global Tooltip */}
       <Show when={globalTooltip()}>
         <div class="fixed z-[99999] bg-black text-white text-xs p-3 pointer-events-none shadow-xl border border-gray-600 max-w-xs"
              style={`left: ${globalTooltip().x}px; top: ${globalTooltip().y}px;`}>

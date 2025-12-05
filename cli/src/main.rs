@@ -384,69 +384,100 @@ fn create_plugin(plugin_id: &str, name: Option<String>, author: Option<String>, 
 
     // Create index.jsx (always required)
     let index_jsx = if frontend_only {
-        format!(r#"import {{ createPlugin }} from '@/api/plugin';
+        format!(r#"import {{ plugin }} from '@/api/plugin';
 
-export default createPlugin({{
+export default plugin({{
     id: '{plugin_id}',
     name: '{display_name}',
     version: '1.0.0',
     description: '{display_name} plugin',
     author: '{author_name}',
 
-    async onStart(api) {{
-        console.log('[{display_name}] Started');
-
-        // Register a simple viewport
-        api.viewport('{plugin_id}-viewport', {{
+    start(api) {{
+        // Register the plugin tab (shows in main tab bar)
+        api.add({{
+            panel: 'tab',
             label: '{display_name}',
-            component: () => (
-                <div class="p-4">
-                    <h1 class="text-xl font-bold">{display_name}</h1>
-                    <p class="text-base-content/70">Your plugin is ready!</p>
-                </div>
-            )
         }});
 
-        // Add menu item to open the viewport
-        api.menu('{plugin_id}-menu', {{
+        // Register the main viewport
+        api.add({{
+            panel: 'viewport',
+            id: 'main',
             label: '{display_name}',
-            onClick: () => api.open('{plugin_id}-viewport')
+            component: () => (
+                <div class="flex items-center justify-center h-full">
+                    <h1 class="text-4xl font-bold">{display_name}</h1>
+                </div>
+            ),
         }});
     }},
 
-    async onStop() {{
+    active(api) {{
+        console.log('[{display_name}] Activated');
+    }},
+
+    inactive(api) {{
+        console.log('[{display_name}] Deactivated');
+    }},
+
+    stop(api) {{
         console.log('[{display_name}] Stopped');
     }}
 }});
 "#)
     } else {
-        format!(r#"import {{ createPlugin }} from '@/api/plugin';
+        format!(r#"import {{ plugin }} from '@/api/plugin';
 import Viewport from './viewport';
 
-export default createPlugin({{
+export default plugin({{
     id: '{plugin_id}',
     name: '{display_name}',
     version: '1.0.0',
     description: '{display_name} plugin',
     author: '{author_name}',
 
-    async onStart(api) {{
-        console.log('[{display_name}] Started');
-
-        // Register viewport
-        api.viewport('{plugin_id}-viewport', {{
+    start(api) {{
+        // Register the plugin tab (shows in main tab bar)
+        api.add({{
+            panel: 'tab',
             label: '{display_name}',
-            component: Viewport
         }});
 
-        // Add menu item
-        api.menu('{plugin_id}-menu', {{
+        // Register the main viewport
+        api.add({{
+            panel: 'viewport',
+            id: 'main',
             label: '{display_name}',
-            onClick: () => api.open('{plugin_id}-viewport')
+            component: Viewport,
         }});
+
+        // Example: Register left panel tab
+        // api.add({{
+        //     panel: 'left',
+        //     id: 'explorer',
+        //     label: 'Explorer',
+        //     component: ExplorerPanel,
+        // }});
+
+        // Example: Register bottom panel tab
+        // api.add({{
+        //     panel: 'bottom',
+        //     id: 'console',
+        //     label: 'Console',
+        //     component: ConsolePanel,
+        // }});
     }},
 
-    async onStop() {{
+    active(api) {{
+        console.log('[{display_name}] Activated');
+    }},
+
+    inactive(api) {{
+        console.log('[{display_name}] Deactivated');
+    }},
+
+    stop(api) {{
         console.log('[{display_name}] Stopped');
     }}
 }});
@@ -717,8 +748,11 @@ impl PluginBuilder {
         let has_frontend = self.plugin_dir.join("index.jsx").exists()
             || self.plugin_dir.join("index.js").exists();
 
-        println!("Building plugin: {} (backend: {}, frontend: {})",
-            self.plugin_id, has_backend, has_frontend);
+        // Check if plugin has routes (needs bridge feature)
+        let has_routes = self.has_routes();
+
+        println!("Building plugin: {} (backend: {}, frontend: {}, routes: {})",
+            self.plugin_id, has_backend, has_frontend, has_routes);
 
         // Clean build directory
         if self.build_dir.exists() {
@@ -766,7 +800,7 @@ impl PluginBuilder {
         let manifest = self.create_manifest()?;
 
         println!("  Setting up Rust backend...");
-        self.setup_backend_build(&frontend_js, &manifest)?;
+        self.setup_backend_build(&frontend_js, &manifest, has_routes)?;
 
         println!("  Compiling DLL...");
         self.compile_backend()?;
@@ -803,7 +837,24 @@ impl PluginBuilder {
         Ok(())
     }
 
-    fn setup_backend_build(&self, frontend_js: &str, manifest: &str) -> Result<()> {
+    /// Check if the plugin has routes defined in Cargo.toml
+    fn has_routes(&self) -> bool {
+        let cargo_toml_path = self.plugin_dir.join("Cargo.toml");
+        if !cargo_toml_path.exists() {
+            return false;
+        }
+
+        if let Ok(content) = fs::read_to_string(&cargo_toml_path) {
+            if let Ok(cargo_toml) = content.parse::<toml::Value>() {
+                if let Some(routes_table) = cargo_toml.get("routes").and_then(|r| r.as_table()) {
+                    return !routes_table.is_empty();
+                }
+            }
+        }
+        false
+    }
+
+    fn setup_backend_build(&self, frontend_js: &str, manifest: &str, has_routes: bool) -> Result<()> {
         let rust_build_dir = self.build_dir.join("rust_build");
         fs::create_dir_all(&rust_build_dir)?;
 
@@ -819,23 +870,30 @@ impl PluginBuilder {
         let api_path_str = api_path.to_string_lossy().replace("\\", "/");
 
         // Generate Cargo.toml
+        // API dependency with optional bridge feature (only if plugin has routes)
+        let api_dep = if has_routes {
+            format!("api = {{ path = \"{}\", features = [\"bridge\"] }}", api_path_str)
+        } else {
+            format!("api = {{ path = \"{}\" }}", api_path_str)
+        };
+
         let plugin_cargo_toml = self.plugin_dir.join("Cargo.toml");
         let cargo_toml = if plugin_cargo_toml.exists() {
             let mut content = fs::read_to_string(&plugin_cargo_toml)?;
 
-            // Inject API dependency path
-            let re = regex::Regex::new(r#"api\s*=\s*\{[^}]*path\s*=\s*"[^"]*"[^}]*\}"#)?;
+            // Inject API dependency path with appropriate features
+            let re = regex::Regex::new(r#"api\s*=\s*\{[^}]*\}"#)?;
             content = if re.is_match(&content) {
-                re.replace(&content, format!("api = {{ path = \"{}\" }}", api_path_str)).to_string()
+                re.replace(&content, &api_dep).to_string()
             } else {
                 let deps_re = regex::Regex::new(r"(?m)^\[dependencies\]\s*$")?;
                 if let Some(mat) = deps_re.find(&content) {
                     let insert_pos = mat.end();
                     let mut new_content = content.clone();
-                    new_content.insert_str(insert_pos, &format!("\napi = {{ path = \"{}\" }}", api_path_str));
+                    new_content.insert_str(insert_pos, &format!("\n{}", api_dep));
                     new_content
                 } else {
-                    format!("{}\n[dependencies]\napi = {{ path = \"{}\" }}\n", content, api_path_str)
+                    format!("{}\n[dependencies]\n{}\n", content, api_dep)
                 }
             };
 
@@ -862,7 +920,7 @@ crate-type = ["cdylib"]
 path = "lib.rs"
 
 [dependencies]
-api = {{ path = "{}" }}
+{}
 
 [profile.release]
 opt-level = "z"
@@ -870,7 +928,7 @@ lto = true
 codegen-units = 1
 strip = true
 "#,
-                self.plugin_id, api_path_str
+                self.plugin_id, api_dep
             )
         };
 
@@ -894,7 +952,7 @@ rustflags = ["-C", "link-args=-undefined dynamic_lookup"]
         fs::write(cargo_config_dir.join("config.toml"), cargo_config)?;
 
         // Generate lib.rs with embedded assets
-        self.create_lib_rs(&rust_build_dir, frontend_js, manifest)?;
+        self.create_lib_rs(&rust_build_dir, frontend_js, manifest, has_routes)?;
 
         Ok(())
     }
@@ -937,15 +995,19 @@ rustflags = ["-C", "link-args=-undefined dynamic_lookup"]
         Ok(())
     }
 
-    fn create_lib_rs(&self, rust_build_dir: &Path, frontend_js: &str, manifest: &str) -> Result<()> {
-        let handlers = self.extract_handlers()?;
+    fn create_lib_rs(&self, rust_build_dir: &Path, frontend_js: &str, manifest: &str, has_routes: bool) -> Result<()> {
         let plugin_struct = self.get_plugin_struct_name();
 
         // Escape the embedded strings for Rust
         let escaped_frontend = frontend_js.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "");
         let escaped_manifest = manifest.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "");
 
-        let handler_wrappers = handlers.iter().map(|(handler_name, takes_request)| {
+        // Only generate handler wrappers if plugin has routes
+        let handler_wrappers = if !has_routes {
+            String::new()
+        } else {
+            let handlers = self.extract_handlers()?;
+            handlers.iter().map(|(handler_name, takes_request)| {
             let handler_call = if *takes_request {
                 format!("plugin_mod::router::{}(http_request.clone()).await", handler_name)
             } else {
@@ -1037,9 +1099,12 @@ pub extern "C" fn {handler_name}(request_ptr: *const u8, request_len: usize, _ru
     }}
 }}
 "##)
-        }).collect::<Vec<_>>().join("\n");
+            }).collect::<Vec<_>>().join("\n")
+        };
 
-        let lib_content = format!(r#"// Auto-generated plugin library
+        // Generate lib.rs - use minimal version if no routes (no bridge dependencies)
+        let lib_content = if has_routes {
+            format!(r#"// Auto-generated plugin library (with bridge support)
 pub mod plugin_mod;
 pub use plugin_mod::*;
 pub use api::ffi_http::free_string;
@@ -1102,8 +1167,93 @@ pub extern "C" fn has_frontend() -> bool {{
     !EMBEDDED_FRONTEND.is_empty()
 }}
 
+/// Free a string allocated by this plugin
+#[no_mangle]
+pub extern "C" fn free_plugin_string(ptr: *mut u8) {{
+    if !ptr.is_null() {{
+        unsafe {{
+            let _ = std::ffi::CString::from_raw(ptr as *mut i8);
+        }}
+    }}
+}}
+
 {handler_wrappers}
-"#);
+"#)
+        } else {
+            // Minimal version without bridge dependencies (no tokio, http, etc.)
+            format!(r#"// Auto-generated plugin library (minimal - no bridge)
+pub mod plugin_mod;
+pub use plugin_mod::*;
+
+/// Embedded frontend JavaScript (plugin.js)
+const EMBEDDED_FRONTEND: &str = "{escaped_frontend}";
+
+/// Embedded manifest (package.json)
+const EMBEDDED_MANIFEST: &str = "{escaped_manifest}";
+
+#[no_mangle]
+pub extern "C" fn plugin_init(_ffi_ctx: *const ()) -> i32 {{ 0 }}
+
+#[no_mangle]
+pub extern "C" fn plugin_start(_ffi_ctx: *const ()) -> i32 {{ 0 }}
+
+#[no_mangle]
+pub extern "C" fn plugin_stop() -> i32 {{ 0 }}
+
+#[no_mangle]
+pub extern "C" fn plugin_metadata() -> *const u8 {{
+    use api::{{Plugin, serde_json}};
+    let plugin = plugin_mod::{plugin_struct};
+    let metadata = plugin.metadata();
+    let json = serde_json::to_string(&metadata).unwrap_or_default();
+    Box::leak(Box::new(json)).as_ptr() as *const u8
+}}
+
+/// Returns the embedded manifest (package.json) as a null-terminated string
+#[no_mangle]
+pub extern "C" fn get_plugin_manifest() -> *const u8 {{
+    let manifest = EMBEDDED_MANIFEST.to_string();
+    let leaked = Box::leak(Box::new(manifest));
+    leaked.as_ptr()
+}}
+
+/// Returns the length of the embedded manifest
+#[no_mangle]
+pub extern "C" fn get_plugin_manifest_len() -> usize {{
+    EMBEDDED_MANIFEST.len()
+}}
+
+/// Returns the embedded frontend (plugin.js) as a null-terminated string
+#[no_mangle]
+pub extern "C" fn get_plugin_frontend() -> *const u8 {{
+    let frontend = EMBEDDED_FRONTEND.to_string();
+    let leaked = Box::leak(Box::new(frontend));
+    leaked.as_ptr()
+}}
+
+/// Returns the length of the embedded frontend
+#[no_mangle]
+pub extern "C" fn get_plugin_frontend_len() -> usize {{
+    EMBEDDED_FRONTEND.len()
+}}
+
+/// Returns whether this plugin has a frontend
+#[no_mangle]
+pub extern "C" fn has_frontend() -> bool {{
+    !EMBEDDED_FRONTEND.is_empty()
+}}
+
+/// Free a string allocated by this plugin
+#[no_mangle]
+pub extern "C" fn free_plugin_string(ptr: *mut u8) {{
+    if !ptr.is_null() {{
+        unsafe {{
+            let _ = std::ffi::CString::from_raw(ptr as *mut i8);
+        }}
+    }}
+}}
+"#)
+        };
 
         fs::write(rust_build_dir.join("lib.rs"), lib_content)?;
         Ok(())

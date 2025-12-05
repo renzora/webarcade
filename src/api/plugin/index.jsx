@@ -1,5 +1,6 @@
 import { createSignal, createContext, useContext, onMount, onCleanup, createRoot } from 'solid-js';
 import pluginStore, { PLUGIN_STATES, setPluginConfigs } from './store.jsx';
+import { viewportStore, viewportActions } from '@/panels/viewportStore';
 
 const PluginAPIContext = createContext();
 
@@ -18,7 +19,8 @@ const [propertiesPanelVisible, setPropertiesPanelVisible] = createSignal(true);
 const [leftPanelVisible, setLeftPanelVisible] = createSignal(true);
 const [horizontalMenuButtonsEnabled, setHorizontalMenuButtonsEnabled] = createSignal(true);
 const [footerVisible, setFooterVisible] = createSignal(false);
-const [viewportTabsVisible, setViewportTabsVisible] = createSignal(false);
+const [viewportTabsVisible, setViewportTabsVisible] = createSignal(true);
+const [pluginTabsVisible, setPluginTabsVisible] = createSignal(true);
 const [bottomPanelVisible, setBottomPanelVisible] = createSignal(false);
 const [toolbarVisible, setToolbarVisible] = createSignal(true);
 const [fullscreenMode, setFullscreenMode] = createSignal(false);
@@ -516,39 +518,29 @@ export class PluginAPI {
 
   setupViewportTypeTracking() {
     // Track which viewport type is currently active
-    document.addEventListener('viewport:tab-activated', async (event) => {
+    document.addEventListener('viewport:tab-activated', (event) => {
       const { tabId } = event.detail;
-      try {
-        const { viewportStore } = await import('@/panels/viewport/store');
-        const tab = viewportStore.tabs.find(t => t.id === tabId);
-        if (tab) {
-          // Reset all UI visibility to hidden by default when switching viewports
-          // Plugins must explicitly show panels/footer/tabs in their onActivate or onStart
-          setFooterVisible(false);
-          setViewportTabsVisible(false);
-          setBottomPanelVisible(false);
-          setLeftPanelVisible(false);
-          setPropertiesPanelVisible(false);
-          setToolbarVisible(false);
+      // Reset all UI visibility to hidden IMMEDIATELY
+      // Plugins must explicitly show panels/footer/tabs in their onActivate
+      setFooterVisible(false);
+      setViewportTabsVisible(false);
+      setBottomPanelVisible(false);
+      setLeftPanelVisible(false);
+      setPropertiesPanelVisible(false);
+      setToolbarVisible(false);
 
-          setActiveViewportType(tab.type);
-        }
-      } catch (err) {
-        console.error('[PluginAPI] Failed to track viewport type:', err);
+      const tab = viewportStore.tabs.find(t => t.id === tabId);
+      if (tab) {
+        setActiveViewportType(tab.type);
       }
     });
 
     // Also check for existing active tab on init (in case tab was set before listener)
-    setTimeout(async () => {
+    setTimeout(() => {
       if (!activeViewportType()) {
-        try {
-          const { viewportStore } = await import('@/panels/viewport/store');
-          const activeTab = viewportStore.tabs.find(t => t.id === viewportStore.activeTabId);
-          if (activeTab) {
-            setActiveViewportType(activeTab.type);
-          }
-        } catch (err) {
-          // Ignore
+        const activeTab = viewportStore.tabs.find(t => t.id === viewportStore.activeTabId);
+        if (activeTab) {
+          setActiveViewportType(activeTab.type);
         }
       }
     }, 100);
@@ -825,34 +817,22 @@ export class PluginAPI {
   setupViewportLifecycleListeners(viewportTypeId, onActivate, onDeactivate) {
     // Listen for tab activation
     if (onActivate) {
-      document.addEventListener('viewport:tab-activated', async (event) => {
+      document.addEventListener('viewport:tab-activated', (event) => {
         const { tabId } = event.detail;
-        // Dynamically import viewportStore to check tab type
-        try {
-          const { viewportStore } = await import('@/panels/viewport/store');
-          const tab = viewportStore.tabs.find(t => t.id === tabId);
-          if (tab && tab.type === viewportTypeId) {
-            onActivate(this, tab);
-          }
-        } catch (err) {
-          console.error('[PluginAPI] Failed to check tab activation:', err);
+        const tab = viewportStore.tabs.find(t => t.id === tabId);
+        if (tab && tab.type === viewportTypeId) {
+          onActivate(this, tab);
         }
       });
     }
 
     // Listen for tab deactivation
     if (onDeactivate) {
-      document.addEventListener('viewport:tab-deactivated', async (event) => {
+      document.addEventListener('viewport:tab-deactivated', (event) => {
         const { tabId } = event.detail;
-        // Dynamically import viewportStore to check tab type
-        try {
-          const { viewportStore } = await import('@/panels/viewport/store');
-          const tab = viewportStore.tabs.find(t => t.id === tabId);
-          if (tab && tab.type === viewportTypeId) {
-            onDeactivate(this, tab);
-          }
-        } catch (err) {
-          console.error('[PluginAPI] Failed to check tab deactivation:', err);
+        const tab = viewportStore.tabs.find(t => t.id === tabId);
+        if (tab && tab.type === viewportTypeId) {
+          onDeactivate(this, tab);
         }
       });
     }
@@ -1048,48 +1028,39 @@ export class PluginAPI {
   open(typeId, options) { return this.createViewportTab(typeId, options); }
 
   createViewportTab(typeId, options = {}) {
-    // Creating viewport tab for typeId
     const viewportType = viewportTypes().get(typeId);
     if (!viewportType) {
       return false;
     }
 
-    try {
-      import('@/panels/viewport/store').then(({ viewportActions, viewportStore }) => {
-        // Check if a tab with this type already exists
-        const existingTab = viewportStore.tabs.find(tab => tab.type === typeId);
+    // Check if a tab with this type already exists
+    const existingTab = viewportStore.tabs.find(tab => tab.type === typeId);
 
-        if (existingTab) {
-          // Tab already exists, just activate it
-          viewportActions.setActiveViewportTab(existingTab.id);
-          return;
-        }
-
-        // No existing tab found, create a new one
-        const newTabId = `${typeId}_${Date.now()}`;
-        const newTab = {
-          id: newTabId,
-          name: options.label || viewportType.label,
-          label: options.label || viewportType.label,
-          type: typeId,
-          icon: viewportType.icon,
-          component: viewportType.component,
-          ...options
-        };
-
-        // Creating viewport tab with new ID
-        viewportActions.addViewportTab(newTab);
-
-        if (options.setActive !== false) {
-          viewportActions.setActiveViewportTab(newTabId);
-        }
-      }).catch(err => {
-      });
-
+    if (existingTab) {
+      // Tab already exists, just activate it
+      viewportActions.setActiveViewportTab(existingTab.id);
       return true;
-    } catch (error) {
-      return false;
     }
+
+    // No existing tab found, create a new one
+    const newTabId = `${typeId}_${Date.now()}`;
+    const newTab = {
+      id: newTabId,
+      name: options.label || viewportType.label,
+      label: options.label || viewportType.label,
+      type: typeId,
+      icon: viewportType.icon,
+      component: viewportType.component,
+      ...options
+    };
+
+    viewportActions.addViewportTab(newTab);
+
+    if (options.setActive !== false) {
+      viewportActions.setActiveViewportTab(newTabId);
+    }
+
+    return true;
   }
 
   createSceneViewport(options = {}) {
@@ -1152,9 +1123,15 @@ export class PluginAPI {
 
   showTabs(visible = true) { return this.setViewportTabsVisible(visible); }
   hideTabs() { return this.setViewportTabsVisible(false); }
+  toggleTabs() { return this.setViewportTabsVisible(!viewportTabsVisible()); }
+
+  showPluginTabs(visible = true) { setPluginTabsVisible(visible); }
+  hidePluginTabs() { setPluginTabsVisible(false); }
+  togglePluginTabs() { setPluginTabsVisible(!pluginTabsVisible()); }
 
   setFullscreen(enabled) {
     setFullscreenMode(enabled);
+    this.fullscreen(enabled);
   }
 
   showFullscreen(enabled = true) { return this.setFullscreen(enabled); }
@@ -1544,7 +1521,8 @@ export function Engine(props) {
   );
 }
 
-export { createPlugin } from './Plugin.jsx';
+export { createPlugin, plugin } from './Plugin.jsx';
+export { default as panelStore, panels, activePlugin, panelVisibility, PANELS } from './panels.jsx';
 
 // Computed signals that return the correct panel for the active viewport
 const leftPanelComponent = () => {
@@ -1642,6 +1620,7 @@ export {
   horizontalMenuButtonsEnabled,
   footerVisible,
   viewportTabsVisible,
+  pluginTabsVisible,
   bottomPanelVisible,
   toolbarVisible,
   fullscreenMode,

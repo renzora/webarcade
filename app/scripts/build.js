@@ -288,10 +288,18 @@ function createExternalsPlugin() {
             'createStore', 'produce', 'reconcile', 'unwrap', 'createMutable', 'modifyMutable', 'DEV',
           ],
           '@/api/plugin': [
-            'createPlugin', 'usePluginAPI', 'viewportTypes', 'api', 'BRIDGE_API', 'WEBARCADE_WS',
+            'plugin', 'createPlugin', 'usePluginAPI', 'viewportTypes', 'pluginAPI',
+            'panelStore', 'panels', 'activePlugin', 'panelVisibility', 'PANELS',
+            'horizontalMenuButtonsEnabled', 'footerVisible', 'viewportTabsVisible', 'pluginTabsVisible',
+            'leftPanelVisible', 'propertiesPanelVisible', 'bottomPanelVisible', 'toolbarVisible', 'fullscreenMode',
+            'api', 'BRIDGE_API', 'WEBARCADE_WS',
           ],
           '@/api/bridge': [
-            'createPlugin', 'usePluginAPI', 'viewportTypes', 'api', 'BRIDGE_API', 'WEBARCADE_WS',
+            'plugin', 'createPlugin', 'usePluginAPI', 'viewportTypes', 'pluginAPI',
+            'panelStore', 'panels', 'activePlugin', 'panelVisibility', 'PANELS',
+            'horizontalMenuButtonsEnabled', 'footerVisible', 'viewportTabsVisible', 'pluginTabsVisible',
+            'leftPanelVisible', 'propertiesPanelVisible', 'bottomPanelVisible', 'toolbarVisible', 'fullscreenMode',
+            'api', 'BRIDGE_API', 'WEBARCADE_WS',
           ],
         };
 
@@ -340,6 +348,7 @@ async function buildPlugin(pluginDir, outputDir) {
     format: 'esm',
     sourcemap: false,
     treeShaking: true,
+    minify: true,
     target: ['es2020'],
     define: {
       'process.env.NODE_ENV': JSON.stringify('production'),
@@ -348,17 +357,30 @@ async function buildPlugin(pluginDir, outputDir) {
       'import.meta.env.MODE': JSON.stringify('production'),
       '__DEV__': JSON.stringify(false),
     },
-    drop: ['console', 'debugger'],
+    // drop: ['console', 'debugger'], // TEMPORARILY DISABLED FOR DEBUGGING
     alias: { '@': resolve(ROOT, 'src') },
     plugins: [createSolidPlugin(), createExternalsPlugin()],
-    // Keep class names and function names for decorators
-    keepNames: true,
     logLevel: 'warning',
   });
 
-  // Add CSS injection (skip minification for now to debug)
+  // Minify with SWC for better compression
   const pluginJsPath = resolve(outputDir, 'plugin.js');
-  const code = readFileSync(pluginJsPath, 'utf8');
+  let code = readFileSync(pluginJsPath, 'utf8');
+  const minified = await swc.minify(code, {
+    compress: {
+      dead_code: true,
+      drop_console: false, // TEMPORARILY DISABLED FOR DEBUGGING
+      drop_debugger: true,
+      unused: true,
+      collapse_vars: true,
+      reduce_vars: true,
+      join_vars: true,
+      passes: 2,
+    },
+    mangle: { toplevel: true },
+    module: true,
+  });
+  code = minified.code;
   const cssInjection = `if(typeof document!=='undefined'){const s=document.createElement('style');s.setAttribute('data-plugin','${pluginName}');s.textContent=${JSON.stringify(processedCss)};document.head.appendChild(s);}\n`;
   writeFileSync(pluginJsPath, cssInjection + code);
 

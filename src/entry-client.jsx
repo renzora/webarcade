@@ -2,7 +2,12 @@ import { render } from 'solid-js/web'
 import * as SolidJS from 'solid-js'
 import * as SolidJSWeb from 'solid-js/web'
 import * as SolidJSStore from 'solid-js/store'
-import { createPlugin, usePluginAPI, viewportTypes } from './api/plugin'
+import {
+  plugin, createPlugin, usePluginAPI, viewportTypes, pluginAPI,
+  panelStore, panels, activePlugin, panelVisibility, PANELS,
+  horizontalMenuButtonsEnabled, footerVisible, viewportTabsVisible, pluginTabsVisible,
+  leftPanelVisible, propertiesPanelVisible, bottomPanelVisible, toolbarVisible, fullscreenMode
+} from './api/plugin'
 import { api, BRIDGE_API, WEBARCADE_WS } from './api/bridge'
 import App from './App'
 
@@ -14,9 +19,25 @@ window.SolidJSStore = SolidJSStore
 
 // Expose plugin API globally
 window.WebArcadeAPI = {
+  plugin,
   createPlugin,
   usePluginAPI,
   viewportTypes,
+  pluginAPI,
+  panelStore,
+  panels,
+  activePlugin,
+  panelVisibility,
+  PANELS,
+  horizontalMenuButtonsEnabled,
+  footerVisible,
+  viewportTabsVisible,
+  pluginTabsVisible,
+  leftPanelVisible,
+  propertiesPanelVisible,
+  bottomPanelVisible,
+  toolbarVisible,
+  fullscreenMode,
   api,
   BRIDGE_API,
   WEBARCADE_WS

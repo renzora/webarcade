@@ -1,28 +1,21 @@
 import { Show, For, createMemo } from 'solid-js';
-import { toolbarItems, toolbarGroups, toolbarVisible } from '@/api/plugin';
-import { viewportStore } from '@/panels/viewport/store';
+import { toolbarItems, toolbarGroups, toolbarVisible, activePlugin } from '@/api/plugin';
 
 const Toolbar = () => {
-  // Get the current viewport type directly from the store
-  const currentViewportType = () => {
-    const activeTab = viewportStore.tabs.find(t => t.id === viewportStore.activeTabId);
-    return activeTab?.type || null;
-  };
-
-  // Get sorted toolbar items grouped by their group, filtered by active viewport
+  // Get sorted toolbar items grouped by their group, filtered by active plugin
   const groupedItems = createMemo(() => {
-    const currentViewport = currentViewportType();
+    const currentPlugin = activePlugin();
     const allItems = Array.from(toolbarItems().values());
     const allGroups = Array.from(toolbarGroups().values());
 
-    // Filter items by current viewport
+    // Filter items by active plugin
     const items = allItems
-      .filter(item => item.viewport === currentViewport)
+      .filter(item => item.plugin === currentPlugin)
       .sort((a, b) => a.order - b.order);
 
-    // Filter groups by current viewport
+    // Filter groups by active plugin
     const groups = allGroups
-      .filter(group => group.viewport === currentViewport)
+      .filter(group => group.plugin === currentPlugin)
       .sort((a, b) => a.order - b.order);
 
     // Create a map of group id to items

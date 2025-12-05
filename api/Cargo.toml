@@ -5,20 +5,22 @@ edition = "2021"
 description = "WebArcade Plugin API - Lightweight plugin development kit"
 license = "MIT"
 
+[features]
+default = []
+# Enable bridge functionality (HTTP handlers, tokio runtime)
+# Only needed for plugins that define routes in Cargo.toml
+bridge = ["dep:tokio", "dep:http", "dep:bytes", "dep:base64"]
+
 [dependencies]
-# Serialization (required for FFI)
+# Serialization (always required for FFI)
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-# Base64 for binary data encoding
-base64 = "0.22"
-
-# Tokio with multi-thread runtime (must match host app)
-tokio = { version = "1.0", default-features = false, features = ["rt-multi-thread"] }
-
-# HTTP types only - no server/client implementation
-http = "1.0"
-bytes = "1.0"
-
-# Logging
+# Logging (always available)
 log = "0.4"
+
+# Bridge dependencies (optional - only for plugins with HTTP routes)
+base64 = { version = "0.22", optional = true }
+tokio = { version = "1.0", default-features = false, features = ["rt-multi-thread"], optional = true }
+http = { version = "1.0", optional = true }
+bytes = { version = "1.0", optional = true }
