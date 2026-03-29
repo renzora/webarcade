@@ -1,6 +1,6 @@
 [package]
 name = "webarcade"
-version = "1.0.6"
+version = "1.0.7"
 edition = "2021"
 description = "SolidJS + Rust desktop framework"
 license = "MIT"
@@ -19,6 +19,7 @@ wry = "0.47"
 tao = "0.30"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+include_dir = "0.7"
 log = "0.4"
 dirs = "5"
 urlencoding = "2"
