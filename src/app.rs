@@ -183,7 +183,7 @@ impl App {
                 "document.addEventListener('DOMContentLoaded', () => {{ \
                     const meta = document.createElement('meta'); \
                     meta.httpEquiv = 'Content-Security-Policy'; \
-                    meta.content = \"default-src 'self' app: ; script-src 'self' app: 'unsafe-inline'; style-src 'self' app: 'unsafe-inline'; img-src 'self' app: data: blob: https:; font-src 'self' app: data:; connect-src 'self' app:\"; \
+                    meta.content = \"default-src 'self' app: ; script-src 'self' app: 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' app: 'unsafe-inline'; img-src 'self' app: data: blob: https:; font-src 'self' app: data:; connect-src 'self' app: blob:; media-src 'self' app: blob:\"; \
                     document.head.prepend(meta); \
                 }});"
             ))
