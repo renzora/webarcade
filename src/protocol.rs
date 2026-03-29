@@ -1,11 +1,11 @@
 use crate::mime;
 use crate::routing::Router;
 use crate::request::Request;
-use include_dir::Dir;
+use std::path::{Path, PathBuf};
 
 pub fn handle_request(
     router: &Router,
-    frontend: Option<&Dir<'static>>,
+    frontend: Option<&PathBuf>,
     method: &str,
     path: &str,
     query: &str,
@@ -26,7 +26,7 @@ pub fn handle_request(
     (404, "text/plain".to_string(), b"Not found".to_vec(), vec![])
 }
 
-fn serve_static(dir: &Dir<'static>, path: &str) -> Option<(Vec<u8>, &'static str)> {
+fn serve_static(dir: &Path, path: &str) -> Option<(Vec<u8>, &'static str)> {
     let file_path = if path == "/" || path.is_empty() {
         "index.html"
     } else {
@@ -34,14 +34,22 @@ fn serve_static(dir: &Dir<'static>, path: &str) -> Option<(Vec<u8>, &'static str
     };
 
     let mime_type = mime::from_path(file_path);
+    let full_path = dir.join(file_path);
 
-    if let Some(file) = dir.get_file(file_path) {
-        return Some((file.contents().to_vec(), mime_type));
+    // Security: ensure the resolved path is within the frontend directory
+    if let (Ok(canonical_dir), Ok(canonical_file)) = (dir.canonicalize(), full_path.canonicalize()) {
+        if canonical_file.starts_with(&canonical_dir) {
+            if let Ok(contents) = std::fs::read(&canonical_file) {
+                return Some((contents, mime_type));
+            }
+        }
     }
 
+    // SPA fallback — serve index.html for paths without extension
     if !file_path.contains('.') {
-        if let Some(file) = dir.get_file("index.html") {
-            return Some((file.contents().to_vec(), "text/html; charset=utf-8"));
+        let index = dir.join("index.html");
+        if let Ok(contents) = std::fs::read(&index) {
+            return Some((contents, "text/html; charset=utf-8"));
         }
     }
 

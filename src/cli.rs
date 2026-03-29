@@ -53,24 +53,18 @@ edition = "2021"
 
 [dependencies]
 webarcade = "1"
-include_dir = "0.7"
 serde_json = "1"
 "#));
 
     // src/main.rs
     write(root.join("src/main.rs"), &format!(
-r#"#![windows_subsystem = "windows"]
-
-use webarcade::{{App, Request, Response}};
-use include_dir::{{include_dir, Dir}};
-
-static DIST: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/dist");
+r#"use webarcade::{{App, Request, Response}};
 
 fn main() {{
     App::new("{name}", 1280, 720)
         .min_size(800, 600)
         .route("GET", "/api/greet", handle_greet)
-        .frontend(&DIST)
+        .frontend("dist")
         .run();
 }}
 
