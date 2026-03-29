@@ -52,7 +52,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-webarcade = {{ git = "https://github.com/renzora/webarcade" }}
+webarcade = "1"
 include_dir = "0.7"
 serde_json = "1"
 "#));
