@@ -7,3 +7,4 @@ mod mime;
 
 pub use app::App;
 pub use request::{Request, Response};
+pub use include_dir;

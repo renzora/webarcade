@@ -26,6 +26,7 @@ pub struct App {
     decorations: bool,
     router: Router,
     frontend_path: Option<String>,
+    frontend_embedded: Option<&'static include_dir::Dir<'static>>,
 }
 
 impl App {
@@ -39,6 +40,7 @@ impl App {
             decorations: false,
             router: Router::new(),
             frontend_path: None,
+            frontend_embedded: None,
         }
     }
 
@@ -61,9 +63,15 @@ impl App {
         self
     }
 
-    /// Set the frontend directory (relative to the executable)
+    /// Set the frontend directory (relative to the executable, read at runtime)
     pub fn frontend(mut self, path: impl Into<String>) -> Self {
         self.frontend_path = Some(path.into());
+        self
+    }
+
+    /// Embed the frontend at compile time (single binary, no external dist/ needed)
+    pub fn frontend_embed(mut self, dir: &'static include_dir::Dir<'static>) -> Self {
+        self.frontend_embedded = Some(dir);
         self
     }
 
@@ -104,6 +112,7 @@ impl App {
 
         let router = Arc::new(self.router);
         let frontend = Arc::new(frontend);
+        let frontend_embedded = self.frontend_embedded;
 
         let event_loop: EventLoop<UserEvent> = EventLoopBuilder::with_user_event().build();
         let proxy = event_loop.create_proxy();
@@ -147,6 +156,7 @@ impl App {
                     crate::protocol::handle_request(
                         &router_for_protocol,
                         frontend_for_protocol.as_ref().as_ref(),
+                        frontend_embedded,
                         method,
                         path,
                         query,
