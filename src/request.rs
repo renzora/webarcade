@@ -6,11 +6,12 @@ pub struct Request {
     pub method: String,
     pub path: String,
     pub query: HashMap<String, String>,
+    pub headers: HashMap<String, String>,
     pub body: Vec<u8>,
 }
 
 impl Request {
-    pub(crate) fn from_raw(method: &str, path: &str, query: &str, body: &[u8]) -> Self {
+    pub(crate) fn from_raw(method: &str, path: &str, query: &str, headers: HashMap<String, String>, body: &[u8]) -> Self {
         let query_params: HashMap<String, String> = if query.is_empty() {
             HashMap::new()
         } else {
@@ -29,12 +30,17 @@ impl Request {
             method: method.to_string(),
             path: path.to_string(),
             query: query_params,
+            headers,
             body: body.to_vec(),
         }
     }
 
     pub fn query(&self, key: &str) -> Option<&str> {
         self.query.get(key).map(|s| s.as_str())
+    }
+
+    pub fn header(&self, key: &str) -> Option<&str> {
+        self.headers.get(&key.to_lowercase()).map(|s| s.as_str())
     }
 
     pub fn json<T: for<'de> Deserialize<'de>>(&self) -> Result<T, serde_json::Error> {

@@ -136,6 +136,13 @@ impl App {
                 let query = request.uri().query().unwrap_or("");
                 let body = request.body();
 
+                let headers: std::collections::HashMap<String, String> = request.headers()
+                    .iter()
+                    .filter_map(|(k, v)| {
+                        Some((k.as_str().to_lowercase(), v.to_str().ok()?.to_string()))
+                    })
+                    .collect();
+
                 let (status, content_type, response_body, extra_headers) =
                     crate::protocol::handle_request(
                         &router_for_protocol,
@@ -143,6 +150,7 @@ impl App {
                         method,
                         path,
                         query,
+                        headers,
                         body,
                     );
 

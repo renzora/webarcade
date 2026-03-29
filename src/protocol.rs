@@ -1,6 +1,7 @@
 use crate::mime;
 use crate::routing::Router;
 use crate::request::Request;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 pub fn handle_request(
@@ -9,10 +10,11 @@ pub fn handle_request(
     method: &str,
     path: &str,
     query: &str,
+    headers: HashMap<String, String>,
     body: &[u8],
 ) -> (u16, String, Vec<u8>, Vec<(String, String)>) {
     if let Some(handler) = router.match_route(method, path) {
-        let req = Request::from_raw(method, path, query, body);
+        let req = Request::from_raw(method, path, query, headers, body);
         let response = handler(req);
         return (response.status, response.content_type, response.body, response.headers);
     }
